@@ -2,15 +2,33 @@ package kubernetes_clients
 
 import (
 	"context"
+	"fmt"
 
+	"capv-proxy/internal/strategies"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func (c SecretClient) Get(clusterName string) (string, error) {
+	secretName := clusterName + "-kubeconfig"
+	data, err := c.GetSecretData(secretName)
+	if err != nil {
+		return "", err
+	}
+
+	value, ok := data["value"]
+	if !ok {
+		return "", fmt.Errorf("secret %q does not contain key %q", secretName, "value")
+	}
+	return string(value), nil
+}
 
 type SecretClient struct {
 	kubernetesClient client.Client
 	namespace        string
 }
+
+var _ strategies.ForGettingClusterConfig = SecretClient{}
 
 type Secret struct {
 	key, value string

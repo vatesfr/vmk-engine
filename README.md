@@ -285,19 +285,18 @@ HTTP client
     v
 HTTP component (Fuego routes and handlers)
     |
-    v  ForManagingCluster (required interface)
-K8sHTTPAdapter (injected Strategy and Adapter)
+    v  ForManagingClusters
+ClusterManager
     |
-    +-- ClusterClient  --> CAPI Cluster resources
-    +-- MachineClient  --> CAPI Machine resources
-    `-- SecretClient   --> Kubernetes Secrets
+    +-- ForManagingClusterResources --> ClusterClient --> CAPI Cluster resources
+    `-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
 ```
 
 `cmd/http_server/main.go` is the Configurator: it creates the Kubernetes
-clients and the production strategy, then injects that strategy into the HTTP
-component. This follows Alistair Cockburn's **Component + Strategy** pattern;
-the Kubernetes implementation is also an Adapter because it translates and
-delegates calls to an external technology.
+Strategies, injects them into `ClusterManager`, then injects `ClusterManager`
+into the HTTP component. This follows Alistair Cockburn's **Component +
+Strategy** pattern. No Adapter is needed here because the Kubernetes clients
+directly satisfy the required interfaces.
 
 See [architecture.md](architecture.md) for the pattern's mapping to the code,
 runtime request flow, dependency rules, and current architectural gaps.
@@ -306,9 +305,10 @@ Main repository structure:
 
 ```text
 cmd/http_server/                 entry point and CLI configuration
-internal/webserver/              routes, handlers, middleware, and HTTP models
-internal/adapters/               HTTP-to-Kubernetes adapter
-internal/kubernetes_clients/     Kubernetes and CAPI resource access
+internal/components/webserver/   HTTP routes, handlers, validation, and DTOs
+internal/components/cluster_manager/ cluster-management orchestration
+internal/components/kubernetes_clients/ Kubernetes Strategy implementations
+internal/strategies/             shared contracts, one per for_*.go file
 charts/go-capi-client/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use
 Dockerfile                       multi-stage image build

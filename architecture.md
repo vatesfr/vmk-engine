@@ -20,6 +20,22 @@ Cockburn describes a component as a bounded, replaceable unit with:
 - a **Configurator**, outside the component, that creates the objects and
   connects them.
 
+`Component` is an architectural role, not a code identifier. Concrete types
+are named after the capability they provide, following the existing
+`HttpServer` convention: the cluster-management component is therefore named
+`ClusterManager`. Constructors and variables follow the same vocabulary
+(`NewClusterManager`, `clusterManager`).
+
+Strategies are shared contracts declared under `internal/strategies/`. Each
+Strategy and all of its exchange models live in one `for_*.go` file. Components
+are declared under `internal/components/` and may consume or implement any of
+these contracts. A concrete component is injected directly when it satisfies a
+Strategy; an Adapter is introduced only when translation is required.
+
+Transport concerns remain inside the transport component. In particular, JSON
+metadata and HTTP validation tags belong to DTOs under `components/webserver`;
+the shared Strategy models do not contain transport-specific validation.
+
 An Adapter is a particular kind of Strategy: it translates the required
 interface and delegates the work to another service. Ports & Adapters is in
 turn a specialization of Component + Strategy whose boundary is placed in
@@ -35,23 +51,28 @@ Humans and Technology Technical Report 2022.01, version 3a (2023-06-01).
 flowchart LR
     client[HTTP client] -->|HTTP requests| fuego[Fuego routes and middleware]
 
-    subgraph http[HTTP component — internal/webserver]
+    subgraph http[HTTP component — internal/components/webserver]
         fuego --> handlers[ClusterHandler]
-        handlers -->|calls required interface| port[ForManagingCluster]
+        handlers -->|calls Strategy| port[ForManagingClusters]
     end
 
-    port -->|implemented by| adapter[K8sHTTPAdapter]
-    adapter --> clusters[ClusterClient]
-    adapter --> machines[MachineClient]
-    adapter --> secrets[SecretClient]
+    subgraph clustercomponent[Cluster management component — internal/components/cluster_manager]
+        manager[ClusterManager]
+        clusterport[ForManagingClusterResources]
+        configport[ForGettingClusterConfig]
+        manager -->|calls required interface| clusterport
+        manager -->|calls required interface| configport
+    end
+
+    port -->|implemented by| manager
+    clusterport -->|implemented by| clusters[ClusterClient]
+    configport -->|implemented by| secrets[SecretClient]
     clusters --> api[Kubernetes API]
-    machines --> api
     secrets --> api
 
     configurator[cmd/http_server/main.go\nConfigurator] -. creates and wires .-> http
-    configurator -. creates and wires .-> adapter
+    configurator -. creates and wires .-> manager
     configurator -. creates and wires .-> clusters
-    configurator -. creates and wires .-> machines
     configurator -. creates .-> secrets
 ```
 
@@ -61,27 +82,30 @@ The roles from Component + Strategy map to the code as follows:
 | --- | --- | --- |
 | Driver | HTTP client through Fuego | Sends HTTP requests to the component |
 | Provided interface | Routes registered by `HttpServer.Run` | Exposes health and cluster operations over HTTP |
-| Component | `internal/webserver` | Owns transport concerns: routing, request decoding, response encoding, middleware, and OpenAPI |
-| Required interface / port | `strategies.ForManagingCluster` | Defines the cluster operations needed by the HTTP component without mentioning Kubernetes types |
-| Strategy and Adapter | `adapters.K8sHTTPAdapter` | Implements `ForManagingCluster`, translates between HTTP-facing models and CAPI objects, and delegates to Kubernetes clients |
-| External-resource clients | `ClusterClient`, `MachineClient`, `SecretClient` | Perform namespace-scoped operations through controller-runtime's Kubernetes client |
-| Configurator | `run` and `newK8sClient` in `cmd/http_server/main.go` | Select Kubernetes configuration, instantiate every collaborator, and inject the adapter into `HttpServer.Run` |
+| Component | `internal/components/webserver` | Owns transport concerns: routing, DTO validation, encoding, middleware, and OpenAPI |
+| Strategy | `strategies.ForManagingClusters` | Shared contract used by the HTTP component and implemented by `ClusterManager` |
+| Provided operations | `cluster_manager.ClusterManager` methods | Expose cluster-management use cases without declaring a producer-owned Go interface |
+| Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
+| Strategies | `ForManagingClusterResources`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
+| Strategies | `ClusterClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
+| Configurator | `run` and `newK8sClient` in `cmd/http_server/main.go` | Select Kubernetes configuration, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
 
-Go's implicit interface satisfaction keeps the dependency pointing towards the
-HTTP component: `internal/webserver` declares `ForManagingCluster`, while
-`internal/adapters` imports that package and implements it. The web server does
-not import the adapter or any Kubernetes package.
+Go's implicit interface satisfaction lets `cluster_manager.ClusterManager`
+satisfy `ForManagingClusters` directly. The HTTP handler converts its validated
+DTOs to and from the transport-neutral Strategy models. `ClusterClient` and
+`SecretClient` likewise satisfy their Strategies directly, so no Adapter is
+needed in the current graph.
 
 ## Request flow
 
 For a typical request such as `GET /api/kubernetes/clusters/{id}`:
 
 1. Fuego matches the route and invokes `ClusterHandler.GetCluster`.
-2. The handler extracts the path parameter and calls `ForManagingCluster`.
-3. The injected `K8sHTTPAdapter` calls `ClusterClient.GetCluster`.
-4. `ClusterClient` queries the Kubernetes API in the configured namespace.
-5. The adapter converts the CAPI `Cluster` into `strategies.ClusterInfo`.
-6. Fuego serializes that transport-facing value as the HTTP response.
+2. The handler extracts the path parameter and calls `ForManagingClusters`.
+3. The injected cluster component receives the call directly.
+4. The component calls `ForManagingClusterResources`.
+5. `ClusterClient`, injected as that Strategy, queries Kubernetes and returns a Strategy model.
+6. The handler converts it into an HTTP response DTO and Fuego serializes it.
 
 The same dependency path is used for create, list, delete, and kubeconfig
 operations. `/ping` is self-contained in the HTTP component and does not use
@@ -92,49 +116,43 @@ the strategy.
 | Path | Architectural purpose |
 | --- | --- |
 | `cmd/http_server/` | Executable, CLI options, runtime configuration, and object wiring |
-| `internal/webserver/` | Configurable HTTP component and its required interface |
-| `internal/webserver/handlers/` | HTTP entry points that delegate cluster work through the required interface |
-| `internal/webserver/strategies/` | HTTP component's required contract and transport-facing data structures |
-| `internal/webserver/middlewares/` | HTTP cross-cutting concerns |
-| `internal/adapters/` | Production strategy that adapts the HTTP contract to Kubernetes/CAPI operations |
-| `internal/kubernetes_clients/` | Concrete access to Cluster, Machine, and Secret resources |
+| `internal/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
+| `internal/components/cluster_manager/` | Cluster-management use cases and orchestration |
+| `internal/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
+| `internal/strategies/` | Shared contracts; one interface and its models per `for_*.go` file |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Configuration and variability
 
 The configurator currently varies infrastructure configuration rather than the
-`ForManagingCluster` implementation:
+`ForManagingClusters` implementation:
 
 - `--kube-client=kubeconfig` builds the Kubernetes client from a local file;
 - `--kube-client=in-cluster` uses the pod's ServiceAccount configuration;
 - `--namespace` scopes all resource clients;
 - `--swagger-ui` changes or disables the documentation UI.
 
-Only one production Strategy, `K8sHTTPAdapter`, currently implements
-`ForManagingCluster`. The component boundary nevertheless allows another
-implementation or a test double to be injected without changing handlers or
-routes.
+`ClusterManager` implements `ForManagingClusters` directly. Its required
+Strategies allow Kubernetes clients or test implementations to be injected
+without changing the component.
 
 ## Current limitations and architectural gaps
 
 - There are no automated tests. Cockburn treats tests at declared component
   boundaries as essential: the intended boundary should be exercised through
-  HTTP with a test implementation of `ForManagingCluster`, and the production
-  adapter should be tested against suitable Kubernetes test infrastructure.
-- `GetClusterNodesInfo` returns deterministic mock data and does not use the
-  injected `MachineClient`; node discovery is therefore not wired end to end.
-- `MachineClient` is constructed even though the current adapter does not call
-  it.
+  HTTP with a test implementation of `ForManagingClusters`, and the production
+  Kubernetes Strategies should be tested against suitable Kubernetes test
+  infrastructure.
+- `GetClusterNodesInfo` returns deterministic mock data from the cluster
+  component; node discovery is therefore not wired end to end.
 - Authentication middleware currently lets every request through.
 - Kubernetes errors pass through without an explicit mapping to HTTP status
   codes.
-- The Kubernetes resource clients are concrete collaborators of the adapter.
-  If the adapter needs isolated unit tests, small required interfaces at that
-  boundary would make substitutes straightforward; adding them before that
-  need appears would only add indirection.
+- The Kubernetes resource clients are Strategies selected by the Configurator.
+  The component itself can be isolated through its declared required interfaces.
 - The process has one HTTP driver and one Kubernetes-backed strategy. The
   design permits alternatives, but the configurator does not currently select
-  among multiple `ForManagingCluster` implementations.
+  among multiple `ForManagingClusters` implementations.
 
 These limitations do not change the dependency direction, but they mean the
 component's replaceability and isolation are design properties that still need

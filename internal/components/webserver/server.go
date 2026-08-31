@@ -4,9 +4,9 @@ import (
 	"net"
 	"strconv"
 
-	"capv-proxy/internal/webserver/handlers"
-	"capv-proxy/internal/webserver/middlewares"
-	"capv-proxy/internal/webserver/strategies"
+	"capv-proxy/internal/components/webserver/handlers"
+	"capv-proxy/internal/components/webserver/middlewares"
+	"capv-proxy/internal/strategies"
 
 	"github.com/go-fuego/fuego"
 )
@@ -27,7 +27,7 @@ func IsSwaggerUI(value string) bool {
 	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
 }
 
-func (httpServer HttpServer) Run(clusterService strategies.ForManagingCluster) error {
+func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters) error {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,

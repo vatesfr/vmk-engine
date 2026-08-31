@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"capv-proxy/internal/adapters"
-	"capv-proxy/internal/kubernetes_clients"
-	"capv-proxy/internal/webserver"
+	"capv-proxy/internal/components/cluster_manager"
+	"capv-proxy/internal/components/kubernetes_clients"
+	"capv-proxy/internal/components/webserver"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -100,16 +100,15 @@ func run(opts options) error {
 	}
 
 	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, opts.namespace)
-	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, opts.namespace)
 	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
-	k8sHTTPAdapter := adapters.NewK8sHTTPAdapter(k8sClusterClient, k8sMachineClient, k8sSecretClient)
+	clusterManager := cluster_manager.NewClusterManager(k8sClusterClient, k8sSecretClient)
 
 	httpServer := webserver.HttpServer{
 		Address:   opts.address,
 		Port:      opts.port,
 		SwaggerUI: opts.swaggerUI,
 	}
-	if err := httpServer.Run(k8sHTTPAdapter); err != nil {
+	if err := httpServer.Run(clusterManager); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)
 	}
 

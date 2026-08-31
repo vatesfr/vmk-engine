@@ -1,43 +1,41 @@
 # go-capi-client
 
-Service HTTP écrit en Go qui expose une API REST pour consulter et gérer des
-ressources [Cluster API](https://cluster-api.sigs.k8s.io/) dans un namespace
-Kubernetes.
+A Go HTTP service that exposes a REST API for viewing and managing
+[Cluster API](https://cluster-api.sigs.k8s.io/) resources in a Kubernetes
+namespace.
 
-Le service peut utiliser un `kubeconfig` local ou le ServiceAccount du pod. Il
-fournit également une spécification OpenAPI et une interface Swagger UI ou
-Stoplight Elements.
+The service can use either a local `kubeconfig` or a pod's ServiceAccount. It
+also provides an OpenAPI specification and a Swagger UI or Stoplight Elements
+interface.
 
 > [!WARNING]
-> Le projet est actuellement un prototype. Le middleware d'authentification
-> laisse passer toutes les requêtes, l'endpoint des nœuds renvoie des données
-> simulées et la création ne produit qu'une ressource CAPI `Cluster` minimale.
-> Ne l'exposez pas publiquement en l'état.
+> This project is currently a prototype. The authentication middleware allows
+> every request, the nodes endpoint returns mock data, and cluster creation only
+> produces a minimal CAPI `Cluster` resource. Do not expose it publicly as-is.
 
-## Fonctionnalités
+## Features
 
-- vérification de santé avec `GET /ping` ;
-- création, lecture, liste et suppression de ressources CAPI `Cluster` ;
-- lecture du kubeconfig d'un cluster depuis un `Secret` Kubernetes ;
-- inspection OpenAPI interactive avec Swagger UI ou Stoplight ;
-- accès Kubernetes par `kubeconfig` ou configuration in-cluster ;
-- image Docker non-root ;
-- déploiement Kubernetes via un chart Helm avec RBAC limité au namespace cible,
-  probes, Ingress et autoscaling optionnels.
+- health checks through `GET /ping`;
+- create, read, list, and delete CAPI `Cluster` resources;
+- read a cluster kubeconfig from a Kubernetes `Secret`;
+- interactive OpenAPI documentation with Swagger UI or Stoplight;
+- Kubernetes access using a `kubeconfig` or in-cluster configuration;
+- non-root Docker image;
+- Kubernetes deployment through a Helm chart with namespace-scoped RBAC,
+  probes, and optional Ingress and autoscaling.
 
-## Prérequis
+## Requirements
 
-- Go `1.26.5` ou une version compatible avec le fichier `go.mod` ;
-- un cluster Kubernetes accessible ;
-- les CRD Cluster API installées, notamment `clusters.cluster.x-k8s.io` ;
-- des droits sur les ressources `clusters`, `machines` et `secrets` du namespace
-  utilisé ;
-- facultativement Docker pour construire l'image ;
-- facultativement Helm 3 pour installer le chart.
+- Go `1.26.5`, or a version compatible with the `go.mod` file;
+- access to a Kubernetes cluster;
+- the Cluster API CRDs, including `clusters.cluster.x-k8s.io`;
+- permissions on `clusters`, `machines`, and `secrets` in the target namespace;
+- optionally, Docker to build the image;
+- optionally, Helm 3 to install the chart.
 
-## Démarrage rapide
+## Quick start
 
-### Depuis un poste local
+### From a local workstation
 
 ```bash
 go mod download
@@ -50,17 +48,17 @@ go run ./cmd/http_server \
   --swagger-ui=swagger
 ```
 
-Vérifiez ensuite que le service répond :
+Check that the service is running:
 
 ```bash
 curl http://127.0.0.1:8080/ping
 # {"message":"pong"}
 ```
 
-L'interface OpenAPI est disponible sous `/swagger/` et la spécification JSON
-sous `/swagger/openapi.json`.
+The OpenAPI interface is available under `/swagger/`, and the JSON
+specification under `/swagger/openapi.json`.
 
-### Depuis un pod Kubernetes
+### From a Kubernetes pod
 
 ```bash
 go run ./cmd/http_server \
@@ -71,54 +69,54 @@ go run ./cmd/http_server \
   --swagger-ui=stoplight
 ```
 
-En mode `in-cluster`, le client utilise automatiquement le token et l'autorité
-de certification montés dans le pod.
+In `in-cluster` mode, the client automatically uses the token and certificate
+authority mounted in the pod.
 
-## Configuration du serveur
+## Server configuration
 
-Toutes les options sont des flags Cobra :
+All options are exposed as Cobra flags:
 
-| Flag | Valeur par défaut | Description |
+| Flag | Default | Description |
 | --- | --- | --- |
-| `--kube-client` | `kubeconfig` | Source de configuration Kubernetes : `kubeconfig` ou `in-cluster` |
-| `--kubeconfig` | `$HOME/.kube/config` | Chemin absolu du kubeconfig, utilisé en mode `kubeconfig` |
-| `--namespace`, `-n` | `default` | Namespace contenant les ressources Cluster API |
-| `--address` | `0.0.0.0` | Adresse d'écoute du serveur HTTP |
-| `--port`, `-p` | `8080` | Port d'écoute du serveur HTTP |
-| `--swagger-ui` | `stoplight` | Interface OpenAPI : `swagger`, `stoplight` ou `disabled` |
+| `--kube-client` | `kubeconfig` | Kubernetes configuration source: `kubeconfig` or `in-cluster` |
+| `--kubeconfig` | `$HOME/.kube/config` | Absolute kubeconfig path, used in `kubeconfig` mode |
+| `--namespace`, `-n` | `default` | Namespace containing the Cluster API resources |
+| `--address` | `0.0.0.0` | HTTP server listen address |
+| `--port`, `-p` | `8080` | HTTP server listen port |
+| `--swagger-ui` | `stoplight` | OpenAPI interface: `swagger`, `stoplight`, or `disabled` |
 
-Pour afficher l'aide générée par le binaire :
+To display the help generated by the binary:
 
 ```bash
 go run ./cmd/http_server --help
 ```
 
-Avec `--swagger-ui=disabled`, l'interface est désactivée mais la spécification
-reste accessible sous `/swagger/openapi.json`.
+With `--swagger-ui=disabled`, the user interface is disabled, but the
+specification remains available under `/swagger/openapi.json`.
 
-## API HTTP
+## HTTP API
 
-URL de base : `http://localhost:8080`.
+Base URL: `http://localhost:8080`.
 
-| Méthode | Route | Description | État actuel |
+| Method | Route | Description | Current status |
 | --- | --- | --- | --- |
-| `GET` | `/ping` | Vérifie la santé du service | Fonctionnel |
-| `GET` | `/api/kubernetes/clusters/` | Liste les clusters du namespace | Fonctionnel |
-| `GET` | `/api/kubernetes/clusters/{id}` | Retourne un cluster | Fonctionnel |
-| `POST` | `/api/kubernetes/clusters/` | Crée un objet CAPI `Cluster` minimal | Fonctionnel, limité |
-| `DELETE` | `/api/kubernetes/clusters/{id}` | Supprime un cluster | Fonctionnel |
-| `GET` | `/api/kubernetes/clusters/{id}/config` | Lit le kubeconfig associé | Fonctionnel sous convention |
-| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Retourne les nœuds du cluster | Données simulées |
+| `GET` | `/ping` | Checks service health | Working |
+| `GET` | `/api/kubernetes/clusters/` | Lists clusters in the namespace | Working |
+| `GET` | `/api/kubernetes/clusters/{id}` | Returns one cluster | Working |
+| `POST` | `/api/kubernetes/clusters/` | Creates a minimal CAPI `Cluster` | Working, limited |
+| `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
+| `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
+| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes | Mock data |
 
-### Exemples
+### Examples
 
-Lister les clusters :
+List clusters:
 
 ```bash
 curl http://127.0.0.1:8080/api/kubernetes/clusters/
 ```
 
-Réponse type :
+Example response:
 
 ```json
 [
@@ -129,7 +127,7 @@ Réponse type :
 ]
 ```
 
-Créer un cluster :
+Create a cluster:
 
 ```bash
 curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
@@ -137,41 +135,41 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
   --data '{"name":"demo"}'
 ```
 
-Cette opération crée uniquement un objet `Cluster` avec son nom et son
-namespace. Elle ne crée pas l'infrastructure, le control plane, les
-`MachineDeployment` ou leurs templates.
+This operation only creates a `Cluster` object with its name and namespace. It
+does not create infrastructure, a control plane, `MachineDeployment` objects,
+or their templates.
 
-Consulter un cluster et ses nœuds :
+View a cluster and its nodes:
 
 ```bash
 curl http://127.0.0.1:8080/api/kubernetes/clusters/demo
 curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/nodes
 ```
 
-Récupérer son kubeconfig :
+Retrieve its kubeconfig:
 
 ```bash
 curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/config
 ```
 
-Le service cherche le `Secret` `demo-kubeconfig` dans le namespace configuré et
-retourne la valeur de sa clé `value`.
+The service looks for the `demo-kubeconfig` `Secret` in the configured
+namespace and returns the value stored under its `value` key.
 
-Supprimer le cluster :
+Delete the cluster:
 
 ```bash
 curl --request DELETE http://127.0.0.1:8080/api/kubernetes/clusters/demo
 ```
 
-## Image Docker
+## Docker image
 
-Construire l'image :
+Build the image:
 
 ```bash
 docker build --tag go-capi-client:local .
 ```
 
-Lancer l'image avec un kubeconfig local monté en lecture seule :
+Run the image with a read-only local kubeconfig mount:
 
 ```bash
 docker run --rm --publish 8080:8080 \
@@ -182,12 +180,12 @@ docker run --rm --publish 8080:8080 \
   --namespace=default
 ```
 
-L'image finale est basée sur Alpine, écoute sur le port `8080` et s'exécute avec
-l'utilisateur non privilégié `10001`.
+The final image is based on Alpine, listens on port `8080`, and runs as the
+unprivileged user `10001`.
 
-## Installation avec Helm
+## Helm installation
 
-Installez le service dans le namespace qui contient les ressources Cluster API :
+Install the service in the namespace containing the Cluster API resources:
 
 ```bash
 helm upgrade --install go-capi-client ./charts/go-capi-client \
@@ -197,8 +195,8 @@ helm upgrade --install go-capi-client ./charts/go-capi-client \
   --set image.tag=0.1.0
 ```
 
-Si les ressources Cluster API se trouvent dans un autre namespace que la
-release Helm, définissez `config.namespace` :
+If the Cluster API resources are in a namespace other than the Helm release
+namespace, set `config.namespace`:
 
 ```bash
 helm upgrade --install go-capi-client ./charts/go-capi-client \
@@ -209,80 +207,80 @@ helm upgrade --install go-capi-client ./charts/go-capi-client \
   --set image.tag=0.1.0
 ```
 
-Le chart crée par défaut un `Role` dans le namespace cible et un `RoleBinding`
-vers le ServiceAccount de la release. Désactivez cette gestion avec
-`--set rbac.create=false` si les permissions sont provisionnées séparément.
+By default, the chart creates a `Role` in the target namespace and a
+`RoleBinding` for the release ServiceAccount. Disable this behavior with
+`--set rbac.create=false` when permissions are managed separately.
 
-### Principales valeurs Helm
+### Main Helm values
 
-| Valeur | Défaut | Description |
+| Value | Default | Description |
 | --- | --- | --- |
-| `replicaCount` | `1` | Nombre de réplicas hors autoscaling |
-| `image.repository` | `go-capi-client` | Dépôt de l'image |
-| `image.tag` | `appVersion` du chart | Tag de l'image |
-| `image.pullPolicy` | `IfNotPresent` | Politique de téléchargement |
-| `config.namespace` | namespace de la release | Namespace CAPI cible |
-| `config.address` | `0.0.0.0` | Adresse d'écoute |
-| `config.port` | `8080` | Port du conteneur |
-| `config.swaggerUI` | `stoplight` | Interface OpenAPI |
-| `service.type` | `ClusterIP` | Type du Service |
-| `service.port` | `80` | Port du Service |
-| `rbac.create` | `true` | Création du Role et du RoleBinding |
-| `serviceAccount.create` | `true` | Création du ServiceAccount |
-| `ingress.enabled` | `false` | Création d'un Ingress |
-| `autoscaling.enabled` | `false` | Création d'un HPA |
+| `replicaCount` | `1` | Replica count when autoscaling is disabled |
+| `image.repository` | `go-capi-client` | Image repository |
+| `image.tag` | chart `appVersion` | Image tag |
+| `image.pullPolicy` | `IfNotPresent` | Image pull policy |
+| `config.namespace` | release namespace | Target CAPI namespace |
+| `config.address` | `0.0.0.0` | Listen address |
+| `config.port` | `8080` | Container port |
+| `config.swaggerUI` | `stoplight` | OpenAPI interface |
+| `service.type` | `ClusterIP` | Service type |
+| `service.port` | `80` | Service port |
+| `rbac.create` | `true` | Create the Role and RoleBinding |
+| `serviceAccount.create` | `true` | Create the ServiceAccount |
+| `ingress.enabled` | `false` | Create an Ingress |
+| `autoscaling.enabled` | `false` | Create an HPA |
 
-Consultez [`charts/go-capi-client/values.yaml`](charts/go-capi-client/values.yaml)
-pour l'ensemble des valeurs disponibles.
+See [`charts/go-capi-client/values.yaml`](charts/go-capi-client/values.yaml) for
+all available values.
 
-### Accès local au service Helm
+### Local access to the Helm service
 
 ```bash
 kubectl --namespace capi-system port-forward service/go-capi-client 8080:80
 curl http://127.0.0.1:8080/ping
 ```
 
-## RBAC requis
+## Required RBAC permissions
 
-Le service utilise les permissions minimales suivantes dans le namespace cible :
+The service uses the following minimum permissions in the target namespace:
 
-| Groupe API | Ressources | Verbes |
+| API group | Resources | Verbs |
 | --- | --- | --- |
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete` |
 | `cluster.x-k8s.io` | `machines` | `get` |
-| groupe core | `secrets` | `get` |
+| core group | `secrets` | `get` |
 
-L'accès aux Secrets permet de lire des kubeconfigs : traitez le compte de
-service et l'accès à l'API comme des éléments sensibles.
+Secret access allows the service to read kubeconfigs. Treat the ServiceAccount
+and API access as sensitive.
 
-## Développement
+## Development
 
-Compiler le serveur :
+Build the server:
 
 ```bash
 go build ./cmd/http_server
 ```
 
-Exécuter les tests disponibles :
+Run the available tests:
 
 ```bash
 go test ./...
 ```
 
-Lancer l'analyse statique et la recherche de vulnérabilités si les outils sont
-installés :
+Run static analysis and vulnerability scanning when the required tools are
+installed:
 
 ```bash
-make lint   # nécessite golangci-lint
-make vuln   # nécessite govulncheck
+make lint   # requires golangci-lint
+make vuln   # requires govulncheck
 ```
 
-Le dépôt ne contient actuellement aucun fichier de test automatisé.
+The repository does not currently contain any automated test files.
 
 ## Architecture
 
 ```text
-Client HTTP
+HTTP client
     |
     v
 Fuego (routes, OpenAPI, middleware)
@@ -290,35 +288,34 @@ Fuego (routes, OpenAPI, middleware)
     v
 K8sHTTPAdapter
     |
-    +-- ClusterClient  --> ressources CAPI Cluster
-    +-- MachineClient  --> ressources CAPI Machine
-    `-- SecretClient   --> Secrets Kubernetes
+    +-- ClusterClient  --> CAPI Cluster resources
+    +-- MachineClient  --> CAPI Machine resources
+    `-- SecretClient   --> Kubernetes Secrets
 ```
 
-Organisation principale du dépôt :
+Main repository structure:
 
 ```text
-cmd/http_server/                 point d'entrée et configuration CLI
-internal/webserver/              routes, handlers, middleware et modèles HTTP
-internal/adapters/               adaptation entre l'API HTTP et Kubernetes
-internal/kubernetes_clients/     accès aux ressources Kubernetes/CAPI
-charts/go-capi-client/           chart Helm
-k8s/deployment.yaml              manifeste Kubernetes simple pour usage local
-Dockerfile                       construction multi-stage de l'image
+cmd/http_server/                 entry point and CLI configuration
+internal/webserver/              routes, handlers, middleware, and HTTP models
+internal/adapters/               HTTP-to-Kubernetes adapter
+internal/kubernetes_clients/     Kubernetes and CAPI resource access
+charts/go-capi-client/           Helm chart
+k8s/deployment.yaml              basic Kubernetes manifest for local use
+Dockerfile                       multi-stage image build
 ```
 
-## Limites connues et feuille de route
+## Known limitations and roadmap
 
-- implémenter une authentification et une autorisation HTTP réelles ;
-- remplacer les données simulées de `/nodes` par la résolution
-  Machines/Nœuds ;
-- prendre en charge une spécification de cluster complète à la création ;
-- normaliser les erreurs Kubernetes en statuts HTTP explicites ;
-- ajouter des tests unitaires, d'intégration et end-to-end ;
-- ajouter observabilité, journalisation structurée et arrêt gracieux ;
-- définir une stratégie de versionnement et de publication d'images.
+- implement proper HTTP authentication and authorization;
+- replace the mock `/nodes` data with Machine/Node resolution;
+- support a complete cluster specification during creation;
+- map Kubernetes errors to explicit HTTP status codes;
+- add unit, integration, and end-to-end tests;
+- add observability, structured logging, and graceful shutdown;
+- define an image versioning and publishing strategy.
 
-## Licence
+## License
 
-Aucun fichier de licence n'est actuellement fourni dans ce dépôt. Ajoutez une
-licence avant toute distribution publique du projet.
+This repository does not currently include a license file. Add one before
+distributing the project publicly.

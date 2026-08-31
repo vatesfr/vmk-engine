@@ -6,6 +6,6 @@ type PingResponse struct {
 	Message string `json:"message"`
 }
 
-func PingHandler(fuego.ContextNoBody) (PingResponse, error) {
+func HealthCheck(fuego.ContextNoBody) (PingResponse, error) {
 	return PingResponse{Message: "pong"}, nil
 }

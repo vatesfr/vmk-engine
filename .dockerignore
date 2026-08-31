@@ -1,0 +1,11 @@
+.git
+.gitignore
+.golangci.yml
+.idea
+.vscode
+Dockerfile*
+README.md
+ignore
+coverage*
+*.log
+*.md

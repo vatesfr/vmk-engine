@@ -1,6 +1,9 @@
 package webserver
 
 import (
+	"net"
+	"strconv"
+
 	"capv-proxy/internal/webserver/handlers"
 	"capv-proxy/internal/webserver/middlewares"
 	"capv-proxy/internal/webserver/strategies"
@@ -8,28 +11,47 @@ import (
 	"github.com/go-fuego/fuego"
 )
 
-type HttpServer struct{}
+const (
+	SwaggerUISwagger   = "swagger"
+	SwaggerUIStoplight = "stoplight"
+	SwaggerUIDisabled  = "disabled"
+)
 
-func (HttpServer) Run(clusterService strategies.ForManagingCluster) error {
+type HttpServer struct {
+	Address   string
+	Port      uint16
+	SwaggerUI string
+}
+
+func IsSwaggerUI(value string) bool {
+	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
+}
+
+func (httpServer HttpServer) Run(clusterService strategies.ForManagingCluster) error {
+	openAPIConfig := fuego.OpenAPIConfig{
+		DisableLocalSave:     true,
+		DisableDefaultServer: true,
+	}
+	switch httpServer.SwaggerUI {
+	case SwaggerUISwagger:
+		openAPIConfig.UIHandler = swaggerUIHandler
+	case SwaggerUIDisabled:
+		openAPIConfig.DisableSwaggerUI = true
+	}
+
 	server := fuego.NewServer(
-		fuego.WithAddr("127.0.0.1:8080"),
+		fuego.WithAddr(net.JoinHostPort(httpServer.Address, strconv.Itoa(int(httpServer.Port)))),
 		fuego.WithoutAutoGroupTags(),
 		fuego.WithEngineOptions(
-			fuego.WithOpenAPIConfig(fuego.OpenAPIConfig{
-				// 		SpecURL:    "/swagger/openapi.json",
-				// 		SwaggerURL: "/swagger",
-				// 		UIHandler:  swaggerUIHandler,
-				DisableLocalSave: true,
-			}),
+			fuego.WithOpenAPIConfig(openAPIConfig),
 		),
 	)
 	server.OpenAPI.Description().Info.Title = "Cluster service"
 	server.OpenAPI.Description().Info.Version = "0.1.0"
 	server.OpenAPI.Description().Info.Description = "REST API for managing kubernetes clusters."
 
-	fuego.Get(server, "/ping", handlers.PingHandler,
+	fuego.Get(server, "/ping", handlers.HealthCheck,
 		fuego.OptionTags("Health"),
-		fuego.OptionSummary("Vérifier l'état du service"),
 	)
 
 	apiRouter := fuego.Group(server, "/api/kubernetes",

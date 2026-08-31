@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: go-capi-client
+  labels:
+    app.kubernetes.io/name: go-capi-client
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: go-capi-client
+  labels:
+    app.kubernetes.io/name: go-capi-client
+rules:
+  - apiGroups:
+      - cluster.x-k8s.io
+    resources:
+      - clusters
+    verbs:
+      - get
+      - list
+      - create
+      - delete
+  - apiGroups:
+      - cluster.x-k8s.io
+    resources:
+      - machines
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: go-capi-client
+  labels:
+    app.kubernetes.io/name: go-capi-client
+subjects:
+  - kind: ServiceAccount
+    name: go-capi-client
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: go-capi-client
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-capi-client
+  labels:
+    app.kubernetes.io/name: go-capi-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-capi-client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-capi-client
+    spec:
+      serviceAccountName: go-capi-client
+      containers:
+        - name: go-capi-client
+          image: go-capi-client:latest
+          imagePullPolicy: Never
+          args:
+            - --kube-client=in-cluster
+            - --address=0.0.0.0
+            - --port=8080
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-capi-client
+  labels:
+    app.kubernetes.io/name: go-capi-client
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: go-capi-client
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30080
+      protocol: TCP

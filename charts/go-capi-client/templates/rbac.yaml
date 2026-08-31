@@ -1,0 +1,36 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "go-capi-client.fullname" . }}
+  namespace: {{ include "go-capi-client.targetNamespace" . }}
+  labels:
+    {{- include "go-capi-client.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["cluster.x-k8s.io"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["cluster.x-k8s.io"]
+    resources: ["machines"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "go-capi-client.fullname" . }}
+  namespace: {{ include "go-capi-client.targetNamespace" . }}
+  labels:
+    {{- include "go-capi-client.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "go-capi-client.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "go-capi-client.fullname" . }}
+{{- end }}
+

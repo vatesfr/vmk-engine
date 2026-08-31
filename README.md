@@ -283,15 +283,24 @@ The repository does not currently contain any automated test files.
 HTTP client
     |
     v
-Fuego (routes, OpenAPI, middleware)
+HTTP component (Fuego routes and handlers)
     |
-    v
-K8sHTTPAdapter
+    v  ForManagingCluster (required interface)
+K8sHTTPAdapter (injected Strategy and Adapter)
     |
     +-- ClusterClient  --> CAPI Cluster resources
     +-- MachineClient  --> CAPI Machine resources
     `-- SecretClient   --> Kubernetes Secrets
 ```
+
+`cmd/http_server/main.go` is the Configurator: it creates the Kubernetes
+clients and the production strategy, then injects that strategy into the HTTP
+component. This follows Alistair Cockburn's **Component + Strategy** pattern;
+the Kubernetes implementation is also an Adapter because it translates and
+delegates calls to an external technology.
+
+See [architecture.md](architecture.md) for the pattern's mapping to the code,
+runtime request flow, dependency rules, and current architectural gaps.
 
 Main repository structure:
 

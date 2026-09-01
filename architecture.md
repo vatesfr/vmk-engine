@@ -110,9 +110,14 @@ For a typical request such as `GET /api/kubernetes/clusters/{id}`:
 5. `ClusterClient`, injected as that Strategy, queries Kubernetes and returns a Strategy model.
 6. The handler converts it into an HTTP response DTO and Fuego serializes it.
 
-The same dependency path is used for create, list, delete, and kubeconfig
-operations. `/ping` is self-contained in the HTTP component and does not use
-the strategy.
+For creation, `CreateClusterParams` carries only the cluster name through
+`ForManagingClusters`. `ClusterManager` enriches this intent with its current
+hardcoded ClusterClass, Kubernetes version, control-plane size, and
+MachineDeployment configuration. It then sends the resulting
+`CreateClusterResourceParams` through `ForManagingClusterResources`.
+
+The same dependency path is used for list, delete, and kubeconfig operations.
+`/ping` is self-contained in the HTTP component and does not use a Strategy.
 
 ## Package boundaries
 
@@ -139,13 +144,15 @@ The configurator currently varies infrastructure configuration rather than the
 Strategies allow Kubernetes clients or test implementations to be injected
 without changing the component.
 
+Cluster creation defaults currently live inside `ClusterManager`. They are
+grouped in one private configuration value so a future configuration Strategy
+can replace them without changing either the HTTP contract or the Kubernetes
+resource contract.
+
 ## Current limitations and architectural gaps
 
-- There are no automated tests. Cockburn treats tests at declared component
-  boundaries as essential: the intended boundary should be exercised through
-  HTTP with a test implementation of `ForManagingClusters`, and the production
-  Kubernetes Strategies should be tested against suitable Kubernetes test
-  infrastructure.
+- Component and conversion unit tests exist, but the HTTP boundary and the
+  Kubernetes Strategies still need integration tests.
 - `GetClusterNodesInfo` returns deterministic mock data from the cluster
   component; node discovery is therefore not wired end to end.
 - Authentication middleware currently lets every request through.

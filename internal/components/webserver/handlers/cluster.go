@@ -78,11 +78,15 @@ func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParam
 		return ClusterInfo{}, err
 	}
 
-	created, err := k.clusterService.CreateCluster(strategies.CreateClusterParams{Name: createParams.Name})
+	created, err := k.clusterService.CreateCluster(toCreateClusterParams(createParams))
 	if err != nil {
 		return ClusterInfo{}, err
 	}
 	return toClusterInfo(created), nil
+}
+
+func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterParams {
+	return strategies.CreateClusterParams{Name: value.Name}
 }
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {

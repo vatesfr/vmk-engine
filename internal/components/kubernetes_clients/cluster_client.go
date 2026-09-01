@@ -2,9 +2,12 @@ package kubernetes_clients
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	"capv-proxy/internal/strategies"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +24,7 @@ func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterC
 	return ClusterClient{kubernetesClient, namespace}
 }
 
-func (c ClusterClient) Create(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
+func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
 		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
 	}
@@ -34,13 +37,67 @@ func (c ClusterClient) Create(params strategies.CreateClusterParams) (strategies
 			Name:      params.Name,
 			Namespace: c.namespace,
 		},
+		Spec: capiv1.ClusterSpec{
+			Topology: capiv1.Topology{
+				ClassRef: capiv1.ClusterClassRef{
+					Name: params.ClusterClassName,
+				},
+				Version: params.KubernetesVersion,
+				ControlPlane: capiv1.ControlPlaneTopology{
+					Replicas: params.ControlPlaneReplicas,
+				},
+				Workers: capiv1.WorkersTopology{
+					MachineDeployments: toMachineDeployments(params.MachineDeployments),
+				},
+			},
+		},
 	}
+
+	variables, err := toClusterVariables(params.Variables)
+	if err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	clusterResource.Spec.Topology.Variables = variables
 
 	if err := c.kubernetesClient.Create(context.Background(), clusterResource); err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
 	}
 
 	return toInfo(clusterResource), nil
+}
+
+func toMachineDeployments(machineDeployments []strategies.MachineDeployment) []capiv1.MachineDeploymentTopology {
+	result := make([]capiv1.MachineDeploymentTopology, 0, len(machineDeployments))
+	for _, machineDeployment := range machineDeployments {
+		result = append(result, capiv1.MachineDeploymentTopology{
+			Name:          machineDeployment.Name,
+			Class:         machineDeployment.Class,
+			Replicas:      machineDeployment.Replicas,
+			FailureDomain: machineDeployment.FailureDomain,
+		})
+	}
+	return result
+}
+
+func toClusterVariables(variables map[string]any) ([]capiv1.ClusterVariable, error) {
+	names := make([]string, 0, len(variables))
+	for name := range variables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	result := make([]capiv1.ClusterVariable, 0, len(names))
+	for _, name := range names {
+		value, err := json.Marshal(variables[name])
+		if err != nil {
+			return nil, fmt.Errorf("encode cluster variable %q: %w", name, err)
+		}
+		result = append(result, capiv1.ClusterVariable{
+			Name:  name,
+			Value: apiextensionsv1.JSON{Raw: value},
+		})
+	}
+	return result, nil
 }
 
 func (c ClusterClient) List() ([]strategies.ClusterInfo, error) {

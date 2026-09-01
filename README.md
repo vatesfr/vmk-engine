@@ -10,8 +10,8 @@ interface.
 
 > [!WARNING]
 > This project is currently a prototype. The authentication middleware allows
-> every request, the nodes endpoint returns mock data, and cluster creation only
-> produces a minimal CAPI `Cluster` resource. Do not expose it publicly as-is.
+> every request and the nodes endpoint returns mock data. Cluster creation
+> requires an existing compatible ClusterClass. Do not expose it publicly as-is.
 
 ## Features
 
@@ -103,7 +103,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/ping` | Checks service health | Working |
 | `GET` | `/api/kubernetes/clusters/` | Lists clusters in the namespace | Working |
 | `GET` | `/api/kubernetes/clusters/{id}` | Returns one cluster | Working |
-| `POST` | `/api/kubernetes/clusters/` | Creates a minimal CAPI `Cluster` | Working, limited |
+| `POST` | `/api/kubernetes/clusters/` | Creates a topology-managed CAPI `Cluster` | Working with a ClusterClass |
 | `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes | Mock data |
@@ -135,9 +135,11 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
   --data '{"name":"demo"}'
 ```
 
-This operation only creates a `Cluster` object with its name and namespace. It
-does not create infrastructure, a control plane, `MachineDeployment` objects,
-or their templates.
+The HTTP API only requires the cluster name. `ClusterManager` currently adds a
+hardcoded topology using ClusterClass `production-v1`, Kubernetes `v1.34.1`,
+three control-plane replicas, and three workers from class `default-worker`.
+These values must match the ClusterClass installed in the target namespace and
+are intended to move to server-side configuration.
 
 View a cluster and its nodes:
 
@@ -318,7 +320,7 @@ Dockerfile                       multi-stage image build
 
 - implement proper HTTP authentication and authorization;
 - replace the mock `/nodes` data with Machine/Node resolution;
-- support a complete cluster specification during creation;
+- add server-side defaults and policy for cluster creation;
 - map Kubernetes errors to explicit HTTP status codes;
 - add unit, integration, and end-to-end tests;
 - add observability, structured logging, and graceful shutdown;

@@ -1,9 +1,26 @@
 package strategies
 
-// CreateClusterParams contains the transport-neutral parameters shared by the
-// cluster-management and cluster-resource Strategies.
+// CreateClusterParams describes the minimal cluster creation intent.
 type CreateClusterParams struct {
 	Name string
+}
+
+// CreateClusterResourceParams describes the complete topology required by the
+// cluster resource Strategy.
+type CreateClusterResourceParams struct {
+	Name                 string
+	ClusterClassName     string
+	KubernetesVersion    string
+	ControlPlaneReplicas *int32
+	MachineDeployments   []MachineDeployment
+	Variables            map[string]any
+}
+
+type MachineDeployment struct {
+	Name          string
+	Class         string
+	Replicas      *int32
+	FailureDomain string
 }
 
 // ClusterInfo is the shared representation returned by cluster Strategies.

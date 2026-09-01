@@ -11,6 +11,24 @@ type ClusterManager struct {
 	clusterConfigs   strategies.ForGettingClusterConfig
 }
 
+type clusterCreationDefaults struct {
+	clusterClassName     string
+	kubernetesVersion    string
+	controlPlaneReplicas int32
+	workerName           string
+	workerClass          string
+	workerReplicas       int32
+}
+
+var defaultClusterCreation = clusterCreationDefaults{
+	clusterClassName:     "production-v1",
+	kubernetesVersion:    "v1.34.1",
+	controlPlaneReplicas: 3,
+	workerName:           "default",
+	workerClass:          "default-worker",
+	workerReplicas:       3,
+}
+
 var _ strategies.ForManagingClusters = ClusterManager{}
 
 func NewClusterManager(
@@ -28,7 +46,22 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
 	}
 
-	return c.clusterResources.Create(params)
+	controlPlaneReplicas := defaultClusterCreation.controlPlaneReplicas
+	workerReplicas := defaultClusterCreation.workerReplicas
+
+	return c.clusterResources.Create(strategies.CreateClusterResourceParams{
+		Name:                 params.Name,
+		ClusterClassName:     defaultClusterCreation.clusterClassName,
+		KubernetesVersion:    defaultClusterCreation.kubernetesVersion,
+		ControlPlaneReplicas: &controlPlaneReplicas,
+		MachineDeployments: []strategies.MachineDeployment{
+			{
+				Name:     defaultClusterCreation.workerName,
+				Class:    defaultClusterCreation.workerClass,
+				Replicas: &workerReplicas,
+			},
+		},
+	})
 }
 
 func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {

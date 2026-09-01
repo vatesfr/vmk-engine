@@ -9,6 +9,7 @@ import (
 type ClusterManager struct {
 	clusterResources strategies.ForManagingClusterResources
 	clusterConfigs   strategies.ForGettingClusterConfig
+	clusterMachines  strategies.ForGettingClusterMachines
 }
 
 type clusterCreationDefaults struct {
@@ -36,10 +37,12 @@ var _ strategies.ForManagingClusters = ClusterManager{}
 func NewClusterManager(
 	clusterResources strategies.ForManagingClusterResources,
 	clusterConfigs strategies.ForGettingClusterConfig,
+	clusterMachines strategies.ForGettingClusterMachines,
 ) ClusterManager {
 	return ClusterManager{
 		clusterResources: clusterResources,
 		clusterConfigs:   clusterConfigs,
+		clusterMachines:  clusterMachines,
 	}
 }
 
@@ -84,10 +87,7 @@ func (c ClusterManager) GetCluster(name string) (strategies.ClusterInfo, error) 
 }
 
 func (c ClusterManager) GetClusterNodesInfo(name string) ([]strategies.ClusterNodeInfo, error) {
-	return []strategies.ClusterNodeInfo{
-		{Name: name + "-control-plane-0", Role: "control-plane", Status: "Ready", Endpoint: "https://192.0.2.10:10250"},
-		{Name: name + "-worker-0", Role: "worker", Status: "Ready", Endpoint: "https://192.0.2.11:10250"},
-	}, nil
+	return c.clusterMachines.GetMachinesByCluster(name)
 }
 
 func (c ClusterManager) GetClusterConfig(name string) (string, error) {

@@ -101,7 +101,8 @@ func run(opts options) error {
 
 	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, opts.namespace)
 	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
-	clusterManager := cluster_manager.NewClusterManager(k8sClusterClient, k8sSecretClient)
+	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, opts.namespace)
+	clusterManager := cluster_manager.NewClusterManager(k8sClusterClient, k8sSecretClient, k8sMachineClient)
 
 	httpServer := webserver.HttpServer{
 		Address:   opts.address,

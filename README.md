@@ -106,7 +106,7 @@ Base URL: `http://localhost:8080`.
 | `POST` | `/api/kubernetes/clusters/` | Creates a topology-managed CAPI `Cluster` | Working with a ClusterClass |
 | `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
-| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes | Mock data |
+| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes from CAPI Machines | Working |
 
 ### Examples
 

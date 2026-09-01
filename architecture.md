@@ -154,8 +154,8 @@ resource contract.
 
 - Component and conversion unit tests exist, but the HTTP boundary and the
   Kubernetes Strategies still need integration tests.
-- `GetClusterNodesInfo` returns deterministic mock data from the cluster
-  component; node discovery is therefore not wired end to end.
+- `GetClusterNodesInfo` currently derives its flat node information from CAPI
+  Machines. Workload-cluster Node enrichment is not wired yet.
 - Authentication middleware currently lets every request through.
 - Kubernetes errors pass through without an explicit mapping to HTTP status
   codes.

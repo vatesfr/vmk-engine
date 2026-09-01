@@ -2,7 +2,11 @@ package strategies
 
 // CreateClusterParams describes the minimal cluster creation intent.
 type CreateClusterParams struct {
-	Name string
+	Name                 string
+	ControlPlaneReplicas int32
+	WorkerReplicas       int32
+	ControlPlaneIP       string
+	VMNamePrefix         string
 }
 
 // CreateClusterResourceParams describes the complete topology required by the

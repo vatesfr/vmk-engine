@@ -132,14 +132,21 @@ Create a cluster:
 ```bash
 curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
   --header 'Content-Type: application/json' \
-  --data '{"name":"demo"}'
+  --data '{
+    "name": "demo",
+    "controlPlaneReplicas": 3,
+    "workerReplicas": 2,
+    "controlPlaneIP": "10.30.138.134",
+    "vmNamePrefix": "jls-capi-generated-"
+  }'
 ```
 
-The HTTP API only requires the cluster name. `ClusterManager` currently adds a
-hardcoded topology using ClusterClass `production-v1`, Kubernetes `v1.34.1`,
-three control-plane replicas, and three workers from class `default-worker`.
-These values must match the ClusterClass installed in the target namespace and
-are intended to move to server-side configuration.
+The HTTP API supplies the cluster-specific sizing, control-plane IP, and VM
+name prefix. `ClusterManager` adds the hardcoded Vates defaults: ClusterClass
+`vates-rhel-from-scratch`, Kubernetes `v1.36.3`, worker topology
+`worker-md-0`/`worker-from-scratch`, API port `6443`, subnet `16`, and
+`controlPlaneLB` value `kube-vip`. These defaults are intended to move to
+server-side configuration.
 
 View a cluster and its nodes:
 

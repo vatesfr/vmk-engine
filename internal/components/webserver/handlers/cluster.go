@@ -11,7 +11,11 @@ type ClusterHandler struct {
 }
 
 type ClusterCreateParams struct {
-	Name string `json:"name" validate:"required"`
+	Name                 string `json:"name" validate:"required"`
+	ControlPlaneReplicas int32  `json:"controlPlaneReplicas" validate:"required,min=1"`
+	WorkerReplicas       int32  `json:"workerReplicas" validate:"required,min=1"`
+	ControlPlaneIP       string `json:"controlPlaneIP" validate:"required,ip"`
+	VMNamePrefix         string `json:"vmNamePrefix" validate:"required"`
 }
 
 type ClusterInfo struct {
@@ -86,7 +90,13 @@ func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParam
 }
 
 func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterParams {
-	return strategies.CreateClusterParams{Name: value.Name}
+	return strategies.CreateClusterParams{
+		Name:                 value.Name,
+		ControlPlaneReplicas: value.ControlPlaneReplicas,
+		WorkerReplicas:       value.WorkerReplicas,
+		ControlPlaneIP:       value.ControlPlaneIP,
+		VMNamePrefix:         value.VMNamePrefix,
+	}
 }
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {

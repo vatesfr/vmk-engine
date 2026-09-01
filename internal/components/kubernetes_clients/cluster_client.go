@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"capv-proxy/internal/strategies"
+
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -63,7 +64,7 @@ func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (st
 		return strategies.ClusterInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
 	}
 
-	return toInfo(clusterResource), nil
+	return strategies.ClusterInfo{Name: clusterResource.GetName(), Phase: "Creating"}, nil
 }
 
 func toMachineDeployments(machineDeployments []strategies.MachineDeployment) []capiv1.MachineDeploymentTopology {

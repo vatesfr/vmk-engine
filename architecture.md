@@ -110,10 +110,11 @@ For a typical request such as `GET /api/kubernetes/clusters/{id}`:
 5. `ClusterClient`, injected as that Strategy, queries Kubernetes and returns a Strategy model.
 6. The handler converts it into an HTTP response DTO and Fuego serializes it.
 
-For creation, `CreateClusterParams` carries only the cluster name through
-`ForManagingClusters`. `ClusterManager` enriches this intent with its current
-hardcoded ClusterClass, Kubernetes version, control-plane size, and
-MachineDeployment configuration. It then sends the resulting
+For creation, `CreateClusterParams` carries the cluster name, control-plane and
+worker replica counts, control-plane IP, and VM name prefix through
+`ForManagingClusters`. `ClusterManager` enriches this intent with its hardcoded
+ClusterClass, Kubernetes version, MachineDeployment identity, endpoint network
+settings, and load-balancer choice. It then sends the resulting
 `CreateClusterResourceParams` through `ForManagingClusterResources`.
 
 The same dependency path is used for list, delete, and kubeconfig operations.

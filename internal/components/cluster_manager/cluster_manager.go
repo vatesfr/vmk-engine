@@ -12,21 +12,23 @@ type ClusterManager struct {
 }
 
 type clusterCreationDefaults struct {
-	clusterClassName     string
-	kubernetesVersion    string
-	controlPlaneReplicas int32
-	workerName           string
-	workerClass          string
-	workerReplicas       int32
+	clusterClassName           string
+	kubernetesVersion          string
+	workerName                 string
+	workerClass                string
+	controlPlaneEndpointPort   int
+	controlPlaneEndpointSubnet int
+	controlPlaneLoadBalancer   string
 }
 
 var defaultClusterCreation = clusterCreationDefaults{
-	clusterClassName:     "production-v1",
-	kubernetesVersion:    "v1.34.1",
-	controlPlaneReplicas: 3,
-	workerName:           "default",
-	workerClass:          "default-worker",
-	workerReplicas:       3,
+	clusterClassName:           "vates-rhel-from-scratch",
+	kubernetesVersion:          "v1.36.3",
+	workerName:                 "worker-md-0",
+	workerClass:                "worker-from-scratch",
+	controlPlaneEndpointPort:   6443,
+	controlPlaneEndpointSubnet: 16,
+	controlPlaneLoadBalancer:   "kube-vip",
 }
 
 var _ strategies.ForManagingClusters = ClusterManager{}
@@ -46,8 +48,8 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
 	}
 
-	controlPlaneReplicas := defaultClusterCreation.controlPlaneReplicas
-	workerReplicas := defaultClusterCreation.workerReplicas
+	controlPlaneReplicas := params.ControlPlaneReplicas
+	workerReplicas := params.WorkerReplicas
 
 	return c.clusterResources.Create(strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
@@ -60,6 +62,15 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 				Class:    defaultClusterCreation.workerClass,
 				Replicas: &workerReplicas,
 			},
+		},
+		Variables: map[string]any{
+			"controlPlaneEndpoint": map[string]any{
+				"host":   params.ControlPlaneIP,
+				"port":   defaultClusterCreation.controlPlaneEndpointPort,
+				"subnet": defaultClusterCreation.controlPlaneEndpointSubnet,
+			},
+			"vmNamePrefix":   params.VMNamePrefix,
+			"controlPlaneLB": defaultClusterCreation.controlPlaneLoadBalancer,
 		},
 	})
 }

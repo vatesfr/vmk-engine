@@ -27,10 +27,13 @@ are named after the capability they provide, following the existing
 (`NewClusterManager`, `clusterManager`).
 
 Strategies are shared contracts declared under `internal/strategies/`. Each
-Strategy and all of its exchange models live in one `for_*.go` file. Components
-are declared under `internal/components/` and may consume or implement any of
-these contracts. A concrete component is injected directly when it satisfies a
-Strategy; an Adapter is introduced only when translation is required.
+contract lives in one `for_*.go` file together with models used only by that
+contract. Models shared by multiple Strategies live once in `models.go` so
+compatible contracts can exchange values without duplicate representations or
+pass-through conversions. Components are declared under `internal/components/`
+and may consume or implement any of these contracts. A concrete component is
+injected directly when it satisfies a Strategy; an Adapter is introduced only
+when translation is required.
 
 Transport concerns remain inside the transport component. In particular, JSON
 metadata and HTTP validation tags belong to DTOs under `components/webserver`;
@@ -119,7 +122,7 @@ the strategy.
 | `internal/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `internal/components/cluster_manager/` | Cluster-management use cases and orchestration |
 | `internal/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
-| `internal/strategies/` | Shared contracts; one interface and its models per `for_*.go` file |
+| `internal/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Configuration and variability

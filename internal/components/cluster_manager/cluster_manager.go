@@ -28,32 +28,15 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
 	}
 
-	created, err := c.clusterResources.Create(strategies.CreateClusterResourceParams{Name: params.Name})
-	if err != nil {
-		return strategies.ClusterInfo{}, err
-	}
-	return toClusterInfo(created), nil
+	return c.clusterResources.Create(params)
 }
 
 func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {
-	clusters, err := c.clusterResources.List()
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]strategies.ClusterInfo, 0, len(clusters))
-	for _, value := range clusters {
-		result = append(result, toClusterInfo(value))
-	}
-	return result, nil
+	return c.clusterResources.List()
 }
 
 func (c ClusterManager) GetCluster(name string) (strategies.ClusterInfo, error) {
-	found, err := c.clusterResources.Get(name)
-	if err != nil {
-		return strategies.ClusterInfo{}, err
-	}
-	return toClusterInfo(found), nil
+	return c.clusterResources.Get(name)
 }
 
 func (c ClusterManager) GetClusterNodesInfo(name string) ([]strategies.ClusterNodeInfo, error) {
@@ -69,8 +52,4 @@ func (c ClusterManager) GetClusterConfig(name string) (string, error) {
 
 func (c ClusterManager) DeleteCluster(name string) error {
 	return c.clusterResources.Delete(name)
-}
-
-func toClusterInfo(value strategies.ClusterResourceInfo) strategies.ClusterInfo {
-	return strategies.ClusterInfo{Name: value.Name, Phase: value.Phase}
 }

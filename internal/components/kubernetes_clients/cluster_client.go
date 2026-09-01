@@ -21,12 +21,12 @@ func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterC
 	return ClusterClient{kubernetesClient, namespace}
 }
 
-func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (strategies.ClusterResourceInfo, error) {
+func (c ClusterClient) Create(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
-		return strategies.ClusterResourceInfo{}, fmt.Errorf("cluster name is required")
+		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
 	}
 	if c.namespace == "" {
-		return strategies.ClusterResourceInfo{}, fmt.Errorf("cluster namespace is required")
+		return strategies.ClusterInfo{}, fmt.Errorf("cluster namespace is required")
 	}
 
 	clusterResource := &capiv1.Cluster{
@@ -37,13 +37,13 @@ func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (st
 	}
 
 	if err := c.kubernetesClient.Create(context.Background(), clusterResource); err != nil {
-		return strategies.ClusterResourceInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
+		return strategies.ClusterInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
 	}
 
 	return toInfo(clusterResource), nil
 }
 
-func (c ClusterClient) List() ([]strategies.ClusterResourceInfo, error) {
+func (c ClusterClient) List() ([]strategies.ClusterInfo, error) {
 	clusters := &capiv1.ClusterList{}
 	if err := c.kubernetesClient.List(
 		context.Background(),
@@ -53,21 +53,21 @@ func (c ClusterClient) List() ([]strategies.ClusterResourceInfo, error) {
 		return nil, err
 	}
 
-	result := make([]strategies.ClusterResourceInfo, 0, len(clusters.Items))
+	result := make([]strategies.ClusterInfo, 0, len(clusters.Items))
 	for i := range clusters.Items {
 		result = append(result, toInfo(&clusters.Items[i]))
 	}
 	return result, nil
 }
 
-func (c ClusterClient) Get(name string) (strategies.ClusterResourceInfo, error) {
+func (c ClusterClient) Get(name string) (strategies.ClusterInfo, error) {
 	clusterResource := &capiv1.Cluster{}
 	if err := c.kubernetesClient.Get(
 		context.Background(),
 		client.ObjectKey{Namespace: c.namespace, Name: name},
 		clusterResource,
 	); err != nil {
-		return strategies.ClusterResourceInfo{}, err
+		return strategies.ClusterInfo{}, err
 	}
 
 	return toInfo(clusterResource), nil
@@ -95,6 +95,6 @@ func (c ClusterClient) Delete(name string) error {
 	return nil
 }
 
-func toInfo(value *capiv1.Cluster) strategies.ClusterResourceInfo {
-	return strategies.ClusterResourceInfo{Name: value.GetName(), Phase: value.Status.Phase}
+func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
+	return strategies.ClusterInfo{Name: value.GetName(), Phase: value.Status.Phase}
 }

@@ -11,15 +11,6 @@ type ForManagingClusters interface {
 	DeleteCluster(name string) error
 }
 
-type CreateClusterParams struct {
-	Name string
-}
-
-type ClusterInfo struct {
-	Name  string
-	Phase string
-}
-
 type ClusterNodeInfo struct {
 	Name     string
 	Role     string

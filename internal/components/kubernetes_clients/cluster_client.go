@@ -154,5 +154,14 @@ func (c ClusterClient) Delete(name string) error {
 }
 
 func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
-	return strategies.ClusterInfo{Name: value.GetName(), Phase: value.Status.Phase}
+	controlPlaneEndpoint := ""
+	if value.Spec.ControlPlaneEndpoint.IsValid() {
+		controlPlaneEndpoint = "https://" + value.Spec.ControlPlaneEndpoint.String()
+	}
+
+	return strategies.ClusterInfo{
+		Name:                 value.GetName(),
+		Phase:                value.Status.Phase,
+		ControlPlaneEndpoint: controlPlaneEndpoint,
+	}
 }

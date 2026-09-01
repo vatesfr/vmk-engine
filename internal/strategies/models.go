@@ -29,6 +29,7 @@ type MachineDeployment struct {
 
 // ClusterInfo is the shared representation returned by cluster Strategies.
 type ClusterInfo struct {
-	Name  string
-	Phase string
+	Name                 string
+	Phase                string
+	ControlPlaneEndpoint string
 }

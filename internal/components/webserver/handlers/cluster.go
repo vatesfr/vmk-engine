@@ -19,8 +19,9 @@ type ClusterCreateParams struct {
 }
 
 type ClusterInfo struct {
-	Name  string `json:"name"`
-	Phase string `json:"phase"`
+	Name                 string `json:"name"`
+	Phase                string `json:"phase"`
+	ControlPlaneEndpoint string `json:"controlPlaneEndpoint,omitempty"`
 }
 
 type ClusterNodeInfo struct {
@@ -100,7 +101,11 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 }
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
-	return ClusterInfo{Name: value.Name, Phase: value.Phase}
+	return ClusterInfo{
+		Name:                 value.Name,
+		Phase:                value.Phase,
+		ControlPlaneEndpoint: value.ControlPlaneEndpoint,
+	}
 }
 
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (string, error) {

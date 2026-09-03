@@ -1,8 +1,6 @@
 package cluster_manager
 
 import (
-	"fmt"
-
 	"capv-proxy/internal/strategies"
 )
 
@@ -48,22 +46,31 @@ func NewClusterManager(
 
 func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
-		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
+		return strategies.ClusterInfo{}, ErrClusterNameRequired
 	}
 
-	controlPlaneReplicas := params.ControlPlaneReplicas
-	workerReplicas := params.WorkerReplicas
+	if params.ControlPlaneIP == "" {
+		return strategies.ClusterInfo{}, ErrControlPlaneIPRequired
+	}
 
-	return c.clusterResources.Create(strategies.CreateClusterResourceParams{
+	if params.ControlPlaneReplicas <= 0 {
+		return strategies.ClusterInfo{}, ErrControlPlaneReplicasRequired
+	}
+
+	if params.WorkerReplicas <= 0 {
+		return strategies.ClusterInfo{}, ErrWorkerReplicasRequired
+	}
+
+	clusterInfo, err := c.clusterResources.Create(strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
 		ClusterClassName:     defaultClusterCreation.clusterClassName,
 		KubernetesVersion:    defaultClusterCreation.kubernetesVersion,
-		ControlPlaneReplicas: &controlPlaneReplicas,
+		ControlPlaneReplicas: &params.ControlPlaneReplicas,
 		MachineDeployments: []strategies.MachineDeployment{
 			{
 				Name:     defaultClusterCreation.workerName,
 				Class:    defaultClusterCreation.workerClass,
-				Replicas: &workerReplicas,
+				Replicas: &params.WorkerReplicas,
 			},
 		},
 		Variables: map[string]any{
@@ -76,6 +83,13 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 			"controlPlaneLB": defaultClusterCreation.controlPlaneLoadBalancer,
 		},
 	})
+
+	if err != nil {
+		return strategies.ClusterInfo{}, NewErrClusterCreationFailed(err)
+	}
+
+	return clusterInfo, nil
+
 }
 
 func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {

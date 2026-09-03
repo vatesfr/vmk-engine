@@ -14,6 +14,6 @@ unit: ## Unit Tests
 run: ## Run the application
 	go run ./cmd/${PLUGIN_NAME} --v 5 --node-name $(KUBE_NODE_NAME) --endpoint=unix:///csi/csi.sock --vdi-name-prefix=$(VDI_NAME_PREFIX) --cluster-tag=$(CLUSTER_TAGS) --xo-client-timeout=240s
 
-.PHONY: mock
-mock: ## Generate mocks
+.PHONY: mocks
+mocks: ## Generate mocks
 	go generate ./...

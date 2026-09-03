@@ -1,7 +1,6 @@
 package strategies
 
-//go:generate go run -mod=mod go.uber.org/mock/mockgen -source=for_managing_clusters.go -destination=mock/for_managing_clusters.go -package=mock
-
+//go:generate go run -mod=mod go.uber.org/mock/mockgen -source=for_managing_clusters.go -destination=mocks/for_managing_clusters.go -package=mocks
 type ForManagingClusters interface {
 	CreateCluster(CreateClusterParams) (ClusterInfo, error)
 	GetClusters() ([]ClusterInfo, error)

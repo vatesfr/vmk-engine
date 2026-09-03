@@ -10,8 +10,9 @@ interface.
 
 > [!WARNING]
 > This project is currently a prototype. The authentication middleware allows
-> every request and the nodes endpoint returns mock data. Cluster creation
-> requires an existing compatible ClusterClass. Do not expose it publicly as-is.
+> every request. Cluster creation requires an existing compatible ClusterClass
+> and currently relies on hardcoded topology defaults. Do not expose the service
+> publicly as-is.
 
 ## Features
 
@@ -256,7 +257,7 @@ The service uses the following minimum permissions in the target namespace:
 | API group | Resources | Verbs |
 | --- | --- | --- |
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete` |
-| `cluster.x-k8s.io` | `machines` | `get` |
+| `cluster.x-k8s.io` | `machines` | `list` |
 | core group | `secrets` | `get` |
 
 Secret access allows the service to read kubeconfigs. Treat the ServiceAccount
@@ -273,7 +274,16 @@ go build ./cmd/http_server
 Run the available tests:
 
 ```bash
-go test ./...
+make unit
+```
+
+The unit suite currently covers the `ClusterManager`. Unit tests use the
+`unit` build tag, which is applied by the Make target.
+
+Regenerate GoMock implementations after changing a Strategy interface:
+
+```bash
+make mocks
 ```
 
 Run static analysis and vulnerability scanning when the required tools are
@@ -283,8 +293,6 @@ installed:
 make lint   # requires golangci-lint
 make vuln   # requires govulncheck
 ```
-
-The repository does not currently contain any automated test files.
 
 ## Architecture
 
@@ -298,7 +306,8 @@ HTTP component (Fuego routes and handlers)
 ClusterManager
     |
     +-- ForManagingClusterResources --> ClusterClient --> CAPI Cluster resources
-    `-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
+    +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
+    `-- ForGettingClusterMachines   --> MachineClient --> CAPI Machine resources
 ```
 
 `cmd/http_server/main.go` is the Configurator: it creates the Kubernetes
@@ -326,10 +335,10 @@ Dockerfile                       multi-stage image build
 ## Known limitations and roadmap
 
 - implement proper HTTP authentication and authorization;
-- replace the mock `/nodes` data with Machine/Node resolution;
+- enrich `/nodes` Machine data with information from Kubernetes Node resources;
 - add server-side defaults and policy for cluster creation;
 - map Kubernetes errors to explicit HTTP status codes;
-- add unit, integration, and end-to-end tests;
+- extend unit coverage and add integration and end-to-end tests;
 - add observability, structured logging, and graceful shutdown;
 - define an image versioning and publishing strategy.
 

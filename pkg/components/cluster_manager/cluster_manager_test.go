@@ -1,9 +1,9 @@
 package cluster_manager_test
 
 import (
-	"capv-proxy/internal/components/cluster_manager"
-	"capv-proxy/internal/strategies"
-	"capv-proxy/internal/strategies/mocks"
+	"capv-proxy/pkg/components/cluster_manager"
+	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/strategies/mocks"
 	"errors"
 	"testing"
 

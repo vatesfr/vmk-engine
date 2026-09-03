@@ -1,7 +1,7 @@
 package cluster_manager
 
 import (
-	"capv-proxy/internal/strategies"
+	"capv-proxy/pkg/strategies"
 )
 
 type ClusterManager struct {

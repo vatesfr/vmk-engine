@@ -6,7 +6,7 @@ import (
 	"net"
 	"sort"
 
-	"capv-proxy/internal/strategies"
+	"capv-proxy/pkg/strategies"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

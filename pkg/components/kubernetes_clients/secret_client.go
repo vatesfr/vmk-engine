@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"capv-proxy/internal/strategies"
+	"capv-proxy/pkg/strategies"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

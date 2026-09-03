@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"capv-proxy/internal/components/cluster_manager"
-	"capv-proxy/internal/components/kubernetes_clients"
-	"capv-proxy/internal/components/webserver"
+	"capv-proxy/pkg/components/cluster_manager"
+	"capv-proxy/pkg/components/kubernetes_clients"
+	"capv-proxy/pkg/components/webserver"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"

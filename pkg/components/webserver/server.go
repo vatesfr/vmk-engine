@@ -4,9 +4,9 @@ import (
 	"net"
 	"strconv"
 
-	"capv-proxy/internal/components/webserver/handlers"
-	"capv-proxy/internal/components/webserver/middlewares"
-	"capv-proxy/internal/strategies"
+	"capv-proxy/pkg/components/webserver/handlers"
+	"capv-proxy/pkg/components/webserver/middlewares"
+	"capv-proxy/pkg/strategies"
 
 	"github.com/go-fuego/fuego"
 )

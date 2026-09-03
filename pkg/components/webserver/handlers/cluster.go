@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"capv-proxy/internal/strategies"
+	"capv-proxy/pkg/strategies"
 
 	"github.com/go-fuego/fuego"
 )

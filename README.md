@@ -323,10 +323,10 @@ Main repository structure:
 
 ```text
 cmd/http_server/                 entry point and CLI configuration
-internal/components/webserver/   HTTP routes, handlers, validation, and DTOs
-internal/components/cluster_manager/ cluster-management orchestration
-internal/components/kubernetes_clients/ Kubernetes Strategy implementations
-internal/strategies/             shared contracts and cross-contract models
+pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
+pkg/components/cluster_manager/ cluster-management orchestration
+pkg/components/kubernetes_clients/ Kubernetes Strategy implementations
+pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use
 Dockerfile                       multi-stage image build

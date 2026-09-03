@@ -10,7 +10,7 @@
 package mocks
 
 import (
-	strategies "capv-proxy/internal/strategies"
+	strategies "capv-proxy/pkg/strategies"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"

@@ -26,11 +26,11 @@ are named after the capability they provide, following the existing
 `ClusterManager`. Constructors and variables follow the same vocabulary
 (`NewClusterManager`, `clusterManager`).
 
-Strategies are shared contracts declared under `internal/strategies/`. Each
+Strategies are shared contracts declared under `pkg/strategies/`. Each
 contract lives in one `for_*.go` file together with models used only by that
 contract. Models shared by multiple Strategies live once in `models.go` so
 compatible contracts can exchange values without duplicate representations or
-pass-through conversions. Components are declared under `internal/components/`
+pass-through conversions. Components are declared under `pkg/components/`
 and may consume or implement any of these contracts. A concrete component is
 injected directly when it satisfies a Strategy; an Adapter is introduced only
 when translation is required.
@@ -54,12 +54,12 @@ Humans and Technology Technical Report 2022.01, version 3a (2023-06-01).
 flowchart LR
     client[HTTP client] -->|HTTP requests| fuego[Fuego routes and middleware]
 
-    subgraph http[HTTP component — internal/components/webserver]
+    subgraph http[HTTP component — pkg/components/webserver]
         fuego --> handlers[ClusterHandler]
         handlers -->|calls Strategy| port[ForManagingClusters]
     end
 
-    subgraph clustercomponent[Cluster management component — internal/components/cluster_manager]
+    subgraph clustercomponent[Cluster management component — pkg/components/cluster_manager]
         manager[ClusterManager]
         clusterport[ForManagingClusterResources]
         configport[ForGettingClusterConfig]
@@ -85,7 +85,7 @@ The roles from Component + Strategy map to the code as follows:
 | --- | --- | --- |
 | Driver | HTTP client through Fuego | Sends HTTP requests to the component |
 | Provided interface | Routes registered by `HttpServer.Run` | Exposes health and cluster operations over HTTP |
-| Component | `internal/components/webserver` | Owns transport concerns: routing, DTO validation, encoding, middleware, and OpenAPI |
+| Component | `pkg/components/webserver` | Owns transport concerns: routing, DTO validation, encoding, middleware, and OpenAPI |
 | Strategy | `strategies.ForManagingClusters` | Shared contract used by the HTTP component and implemented by `ClusterManager` |
 | Provided operations | `cluster_manager.ClusterManager` methods | Expose cluster-management use cases without declaring a producer-owned Go interface |
 | Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
@@ -125,10 +125,10 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | Path | Architectural purpose |
 | --- | --- |
 | `cmd/http_server/` | Executable, CLI options, runtime configuration, and object wiring |
-| `internal/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
-| `internal/components/cluster_manager/` | Cluster-management use cases and orchestration |
-| `internal/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
-| `internal/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
+| `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
+| `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
+| `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
+| `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Configuration and variability

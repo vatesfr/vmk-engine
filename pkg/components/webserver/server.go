@@ -2,6 +2,7 @@ package webserver
 
 import (
 	"net"
+	"net/http"
 	"strconv"
 
 	"capv-proxy/pkg/components/webserver/handlers"
@@ -28,6 +29,16 @@ func IsSwaggerUI(value string) bool {
 }
 
 func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters) error {
+	return httpServer.newServer(clusterService).Run()
+}
+
+// Handler builds the complete HTTP application without opening a network
+// listener. It is intended for httptest-based tests and embedding.
+func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters) http.Handler {
+	return httpServer.newServer(clusterService).Mux
+}
+
+func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters) *fuego.Server {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,
@@ -72,5 +83,5 @@ func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters) 
 	fuego.Post(clusterRouter, "/", clusterHandler.CreateCluster)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster)
 
-	return server.Run()
+	return server
 }

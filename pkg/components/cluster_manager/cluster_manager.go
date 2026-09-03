@@ -1,6 +1,8 @@
 package cluster_manager
 
 import (
+	"fmt"
+
 	"capv-proxy/pkg/strategies"
 )
 
@@ -46,19 +48,19 @@ func NewClusterManager(
 
 func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
-		return strategies.ClusterInfo{}, ErrClusterNameRequired
+		return strategies.ClusterInfo{}, strategies.ErrClusterNameRequired
 	}
 
 	if params.ControlPlaneIP == "" {
-		return strategies.ClusterInfo{}, ErrControlPlaneIPRequired
+		return strategies.ClusterInfo{}, strategies.ErrControlPlaneIPRequired
 	}
 
 	if params.ControlPlaneReplicas <= 0 {
-		return strategies.ClusterInfo{}, ErrControlPlaneReplicasRequired
+		return strategies.ClusterInfo{}, strategies.ErrControlPlaneReplicasRequired
 	}
 
 	if params.WorkerReplicas <= 0 {
-		return strategies.ClusterInfo{}, ErrWorkerReplicasRequired
+		return strategies.ClusterInfo{}, strategies.ErrWorkerReplicasRequired
 	}
 
 	clusterInfo, err := c.clusterResources.Create(strategies.CreateClusterResourceParams{
@@ -85,7 +87,7 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 	})
 
 	if err != nil {
-		return strategies.ClusterInfo{}, NewErrClusterCreationFailed(err)
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationFailed, err)
 	}
 
 	return clusterInfo, nil

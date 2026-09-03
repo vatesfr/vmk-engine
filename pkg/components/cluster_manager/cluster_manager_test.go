@@ -76,7 +76,7 @@ func TestCreateCluster(t *testing.T) {
 				VMNamePrefix:         vmNamePrefix,
 			},
 			clusterResourcesCreateErr: nil,
-			oracleErr:                 cluster_manager.ErrClusterNameRequired,
+			oracleErr:                 strategies.ErrClusterNameRequired,
 		},
 		"missing control plane replicas": {
 			params: strategies.CreateClusterParams{
@@ -87,7 +87,7 @@ func TestCreateCluster(t *testing.T) {
 				VMNamePrefix:         vmNamePrefix,
 			},
 			clusterResourcesCreateErr: nil,
-			oracleErr:                 cluster_manager.ErrControlPlaneReplicasRequired,
+			oracleErr:                 strategies.ErrControlPlaneReplicasRequired,
 		},
 		"missing worker replicas": {
 			params: strategies.CreateClusterParams{
@@ -98,7 +98,7 @@ func TestCreateCluster(t *testing.T) {
 				VMNamePrefix:         vmNamePrefix,
 			},
 			clusterResourcesCreateErr: nil,
-			oracleErr:                 cluster_manager.ErrWorkerReplicasRequired,
+			oracleErr:                 strategies.ErrWorkerReplicasRequired,
 		},
 		"missing control plane IP": {
 			params: strategies.CreateClusterParams{
@@ -109,7 +109,7 @@ func TestCreateCluster(t *testing.T) {
 				VMNamePrefix:         vmNamePrefix,
 			},
 			clusterResourcesCreateErr: nil,
-			oracleErr:                 cluster_manager.ErrControlPlaneIPRequired,
+			oracleErr:                 strategies.ErrControlPlaneIPRequired,
 		},
 		"cluster resources create error": {
 			params: strategies.CreateClusterParams{
@@ -120,7 +120,7 @@ func TestCreateCluster(t *testing.T) {
 				VMNamePrefix:         vmNamePrefix,
 			},
 			clusterResourcesCreateErr: testError,
-			oracleErr:                 cluster_manager.ErrClusterCreationFailed,
+			oracleErr:                 strategies.ErrClusterCreationFailed,
 		},
 	}
 

@@ -4,16 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"capv-proxy/pkg/components/kubernetes_clients"
-	"capv-proxy/pkg/strategies"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	"capv-proxy/pkg/components/kubernetes_clients"
+	"capv-proxy/pkg/strategies"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -73,8 +74,8 @@ func TestClusterClientCreate(t *testing.T) {
 		"kubernetes error": {
 			params:          strategies.CreateClusterResourceParams{Name: clusterName},
 			namespace:       testNamespace,
-			createErr:       testError,
-			oracleErr:       testError,
+			createErr:       errTest,
+			oracleErr:       errTest,
 			wantErrContains: "create Cluster " + testNamespace + "/" + clusterName,
 		},
 	}
@@ -168,15 +169,14 @@ func TestClusterClientList(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterClient := kubernetes_clients.NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{List: listErrorFunc(testError)}), testNamespace,
+			newErrorClient(t, interceptor.Funcs{List: listErrorFunc(errTest)}), testNamespace,
 		)
 
 		clusters, err := clusterClient.List()
 
 		assert.Nil(t, clusters)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 	})
-
 }
 
 func TestClusterClientGet(t *testing.T) {
@@ -208,13 +208,13 @@ func TestClusterClientGet(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterClient := kubernetes_clients.NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(testError)}), testNamespace,
+			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(errTest)}), testNamespace,
 		)
 
 		info, err := clusterClient.Get(clusterName)
 
 		assert.Empty(t, info)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -259,13 +259,13 @@ func TestClusterClientDelete(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterClient := kubernetes_clients.NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{Delete: deleteErrorFunc(testError)}), testNamespace,
+			newErrorClient(t, interceptor.Funcs{Delete: deleteErrorFunc(errTest)}), testNamespace,
 		)
 
 		err := clusterClient.Delete(clusterName)
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.Contains(t, err.Error(), "delete Cluster "+testNamespace+"/"+clusterName)
 	})
 

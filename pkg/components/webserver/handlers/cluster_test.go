@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"testing"
 
-	"capv-proxy/pkg/components/webserver/handlers"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
-
 	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	"capv-proxy/pkg/components/webserver/handlers"
+	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/strategies/mocks"
 )
 
 const (
@@ -29,7 +29,7 @@ const (
 	clusterConfig              = "apiVersion: v1\nkind: Config"
 )
 
-var testError = errors.New("test error")
+var errTest = errors.New("test error")
 
 func TestGetClusters(t *testing.T) {
 	testCases := map[string]struct {
@@ -45,7 +45,7 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
 		},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -76,7 +76,7 @@ func TestGetCluster(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			},
 		},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -106,7 +106,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
 			}},
 		},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -129,7 +129,7 @@ func TestGetClusterConfig(t *testing.T) {
 		expected      string
 	}{
 		"success":       {serviceResult: clusterConfig, expected: clusterConfig},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -163,7 +163,7 @@ func TestCreateCluster(t *testing.T) {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase},
 			expected:      handlers.ClusterInfo{Name: clusterName, Phase: clusterPhase},
 		},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -248,7 +248,7 @@ func TestDeleteCluster(t *testing.T) {
 		expected     string
 	}{
 		"success":       {expected: "ok"},
-		"service error": {serviceError: testError},
+		"service error": {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {

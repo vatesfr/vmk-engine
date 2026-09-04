@@ -1,15 +1,16 @@
 package cluster_manager_test
 
 import (
-	"capv-proxy/pkg/components/cluster_manager"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	"capv-proxy/pkg/components/cluster_manager"
+	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/strategies/mocks"
 )
 
 type testCreateClusterParams struct {
@@ -41,7 +42,7 @@ const (
 	clusterConfig        = "apiVersion: v1\nkind: Config"
 )
 
-var testError = errors.New("test error")
+var errTest = errors.New("test error")
 
 func TestCreateCluster(t *testing.T) {
 	testCases := map[string]testCreateClusterParams{
@@ -119,7 +120,7 @@ func TestCreateCluster(t *testing.T) {
 				ControlPlaneIP:       controlPlaneIP,
 				VMNamePrefix:         vmNamePrefix,
 			},
-			clusterResourcesCreateErr: testError,
+			clusterResourcesCreateErr: errTest,
 			oracleErr:                 strategies.ErrClusterCreationFailed,
 		},
 		"cluster already exists": {
@@ -187,12 +188,12 @@ func TestGetClusters(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().List().Return(nil, testError)
+		clusterResources.EXPECT().List().Return(nil, errTest)
 
 		clusters, err := clusterManager.GetClusters()
 
 		assert.Nil(t, clusters)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterListingFailed)
 	})
 }
@@ -215,12 +216,12 @@ func TestGetCluster(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Get(clusterName).Return(strategies.ClusterInfo{}, testError)
+		clusterResources.EXPECT().Get(clusterName).Return(strategies.ClusterInfo{}, errTest)
 
 		cluster, err := clusterManager.GetCluster(clusterName)
 
 		assert.Empty(t, cluster)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterRetrievalFailed)
 	})
 
@@ -253,12 +254,12 @@ func TestGetClusterNodesInfo(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		_, _, clusterMachines, clusterManager := newTestClusterManager(t)
-		clusterMachines.EXPECT().GetMachinesByCluster(clusterName).Return(nil, testError)
+		clusterMachines.EXPECT().GetMachinesByCluster(clusterName).Return(nil, errTest)
 
 		nodes, err := clusterManager.GetClusterNodesInfo(clusterName)
 
 		assert.Nil(t, nodes)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterNodesRetrievalFailed)
 	})
 }
@@ -276,12 +277,12 @@ func TestGetClusterConfig(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		_, clusterConfigs, _, clusterManager := newTestClusterManager(t)
-		clusterConfigs.EXPECT().Get(clusterName).Return("", testError)
+		clusterConfigs.EXPECT().Get(clusterName).Return("", errTest)
 
 		config, err := clusterManager.GetClusterConfig(clusterName)
 
 		assert.Empty(t, config)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterConfigRetrievalFailed)
 	})
 }
@@ -298,11 +299,11 @@ func TestDeleteCluster(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Delete(clusterName).Return(testError)
+		clusterResources.EXPECT().Delete(clusterName).Return(errTest)
 
 		err := clusterManager.DeleteCluster(clusterName)
 
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterDeletionFailed)
 	})
 }

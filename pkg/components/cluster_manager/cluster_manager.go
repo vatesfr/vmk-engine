@@ -85,13 +85,11 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 			"controlPlaneLB": defaultClusterCreation.controlPlaneLoadBalancer,
 		},
 	})
-
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationFailed, err)
 	}
 
 	return clusterInfo, nil
-
 }
 
 func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {

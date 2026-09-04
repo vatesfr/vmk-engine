@@ -52,4 +52,9 @@ formatters:
         - standard # Captures all standard packages if they do not match another section.
         - default # Contains all imports that could not be matched to another section type.
         - prefix(github.com/vatesfr) # Groups all imports with the specified Prefix.
+        - prefix(capv-proxy) # Groups imports from this module.
         - prefix(k8s.io) # Groups all imports with the specified Prefix.
+    gofumpt:
+      module-path: capv-proxy
+    goimports:
+      local-prefixes: capv-proxy

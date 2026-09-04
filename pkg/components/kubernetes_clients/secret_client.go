@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"capv-proxy/pkg/strategies"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (c SecretClient) Get(clusterName string) (string, error) {
@@ -30,10 +32,6 @@ type SecretClient struct {
 }
 
 var _ strategies.ForGettingClusterConfig = SecretClient{}
-
-type Secret struct {
-	key, value string
-}
 
 func NewSecretClient(kubernetesClient client.Client, namespace string) SecretClient {
 	return SecretClient{kubernetesClient, namespace}

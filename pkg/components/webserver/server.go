@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-fuego/fuego"
+
 	"capv-proxy/pkg/components/webserver/handlers"
 	"capv-proxy/pkg/components/webserver/middlewares"
 	"capv-proxy/pkg/strategies"
-
-	"github.com/go-fuego/fuego"
 )
 
 const (

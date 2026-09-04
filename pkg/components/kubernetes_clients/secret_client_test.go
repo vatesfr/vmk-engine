@@ -3,14 +3,15 @@ package kubernetes_clients_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
 	"capv-proxy/pkg/components/kubernetes_clients"
 	"capv-proxy/pkg/strategies"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const (
@@ -69,7 +70,6 @@ func TestSecretClientGet(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
 	})
-
 }
 
 func TestSecretClientGetSecretData(t *testing.T) {
@@ -108,12 +108,12 @@ func TestSecretClientGetSecretData(t *testing.T) {
 
 	t.Run("kubernetes error", func(t *testing.T) {
 		secretClient := kubernetes_clients.NewSecretClient(
-			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(testError)}), testNamespace,
+			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(errTest)}), testNamespace,
 		)
 
 		data, err := secretClient.GetSecretData(secretDataName)
 
 		assert.Nil(t, data)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 	})
 }

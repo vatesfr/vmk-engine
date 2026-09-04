@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"capv-proxy/pkg/strategies"
-
 	"github.com/go-fuego/fuego"
+
+	"capv-proxy/pkg/strategies"
 )
 
 type ClusterHandler struct {

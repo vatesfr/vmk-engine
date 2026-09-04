@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"capv-proxy/pkg/components/webserver"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	"capv-proxy/pkg/components/webserver"
+	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/strategies/mocks"
 )
 
 const (
@@ -84,7 +84,7 @@ const (
 	}`
 )
 
-var testError = errors.New("test error")
+var errTest = errors.New("test error")
 
 type httpTestCase struct {
 	method         string
@@ -178,7 +178,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clustersPath,
 			body:   createClusterRequestBody,
 			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(strategies.ClusterInfo{}, testError)
+				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(strategies.ClusterInfo{}, errTest)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},

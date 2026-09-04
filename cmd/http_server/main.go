@@ -5,18 +5,19 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"capv-proxy/pkg/components/cluster_manager"
 	"capv-proxy/pkg/components/kubernetes_clients"
 	"capv-proxy/pkg/components/webserver"
 
-	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func main() {

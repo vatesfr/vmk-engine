@@ -3,15 +3,16 @@ package kubernetes_clients_test
 import (
 	"testing"
 
-	"capv-proxy/pkg/components/kubernetes_clients"
-	"capv-proxy/pkg/strategies"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	"capv-proxy/pkg/components/kubernetes_clients"
+	"capv-proxy/pkg/strategies"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const controlPlaneRole = "control-plane"
@@ -125,14 +126,14 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	}
 
 	t.Run("kubernetes error", func(t *testing.T) {
-		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(testError)})
+		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(errTest)})
 		machineClient := kubernetes_clients.NewMachineClient(kubeClient, testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(clusterName)
 
 		assert.Nil(t, nodes)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, errTest)
 		assert.Contains(t, err.Error(), "list Machines for cluster "+testNamespace+"/"+clusterName)
 	})
 

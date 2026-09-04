@@ -3,9 +3,9 @@ package handlers
 import (
 	"errors"
 
-	"capv-proxy/pkg/strategies"
-
 	"github.com/go-fuego/fuego"
+
+	"capv-proxy/pkg/strategies"
 )
 
 // toHTTPError translates application errors at the HTTP boundary. Application

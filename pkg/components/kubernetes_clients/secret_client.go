@@ -6,6 +6,7 @@ import (
 
 	"capv-proxy/pkg/strategies"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,6 +46,9 @@ func (s SecretClient) GetSecretData(name string) (map[string][]byte, error) {
 		client.ObjectKey{Namespace: s.namespace, Name: name},
 		kubernetesSecret,
 	); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
+		}
 		return nil, err
 	}
 

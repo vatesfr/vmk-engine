@@ -122,6 +122,17 @@ func TestCreateCluster(t *testing.T) {
 			clusterResourcesCreateErr: testError,
 			oracleErr:                 strategies.ErrClusterCreationFailed,
 		},
+		"cluster already exists": {
+			params: strategies.CreateClusterParams{
+				Name:                 clusterName,
+				ControlPlaneReplicas: controlPlaneReplicas,
+				WorkerReplicas:       workerReplicas,
+				ControlPlaneIP:       controlPlaneIP,
+				VMNamePrefix:         vmNamePrefix,
+			},
+			clusterResourcesCreateErr: strategies.ErrClusterAlreadyExists,
+			oracleErr:                 strategies.ErrClusterCreationFailed,
+		},
 	}
 
 	for name, tc := range testCases {
@@ -182,6 +193,7 @@ func TestGetClusters(t *testing.T) {
 
 		assert.Nil(t, clusters)
 		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, strategies.ErrClusterListingFailed)
 	})
 }
 
@@ -209,6 +221,18 @@ func TestGetCluster(t *testing.T) {
 
 		assert.Empty(t, cluster)
 		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, strategies.ErrClusterRetrievalFailed)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		clusterResources, _, _, clusterManager := newTestClusterManager(t)
+		clusterResources.EXPECT().Get(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+
+		cluster, err := clusterManager.GetCluster(clusterName)
+
+		assert.Empty(t, cluster)
+		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
+		assert.ErrorIs(t, err, strategies.ErrClusterRetrievalFailed)
 	})
 }
 
@@ -235,6 +259,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 
 		assert.Nil(t, nodes)
 		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, strategies.ErrClusterNodesRetrievalFailed)
 	})
 }
 
@@ -257,6 +282,7 @@ func TestGetClusterConfig(t *testing.T) {
 
 		assert.Empty(t, config)
 		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, strategies.ErrClusterConfigRetrievalFailed)
 	})
 }
 
@@ -277,7 +303,38 @@ func TestDeleteCluster(t *testing.T) {
 		err := clusterManager.DeleteCluster(clusterName)
 
 		assert.ErrorIs(t, err, testError)
+		assert.ErrorIs(t, err, strategies.ErrClusterDeletionFailed)
 	})
+}
+
+func TestClusterNameRequired(t *testing.T) {
+	testCases := map[string]func(cluster_manager.ClusterManager) error{
+		"get cluster": func(manager cluster_manager.ClusterManager) error {
+			_, err := manager.GetCluster("")
+			return err
+		},
+		"get cluster nodes": func(manager cluster_manager.ClusterManager) error {
+			_, err := manager.GetClusterNodesInfo("")
+			return err
+		},
+		"get cluster config": func(manager cluster_manager.ClusterManager) error {
+			_, err := manager.GetClusterConfig("")
+			return err
+		},
+		"delete cluster": func(manager cluster_manager.ClusterManager) error {
+			return manager.DeleteCluster("")
+		},
+	}
+
+	for name, run := range testCases {
+		t.Run(name, func(t *testing.T) {
+			_, _, _, clusterManager := newTestClusterManager(t)
+
+			err := run(clusterManager)
+
+			assert.ErrorIs(t, err, strategies.ErrClusterNameRequired)
+		})
+	}
 }
 
 func newTestClusterManager(t *testing.T) (

@@ -47,8 +47,8 @@ func NewClusterManager(
 }
 
 func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
-	if params.Name == "" {
-		return strategies.ClusterInfo{}, strategies.ErrClusterNameRequired
+	if err := validateClusterName(params.Name); err != nil {
+		return strategies.ClusterInfo{}, err
 	}
 
 	if params.ControlPlaneIP == "" {
@@ -95,21 +95,59 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 }
 
 func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {
-	return c.clusterResources.List()
+	clusters, err := c.clusterResources.List()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterListingFailed, err)
+	}
+	return clusters, nil
 }
 
 func (c ClusterManager) GetCluster(name string) (strategies.ClusterInfo, error) {
-	return c.clusterResources.Get(name)
+	if err := validateClusterName(name); err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	cluster, err := c.clusterResources.Get(name)
+	if err != nil {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
+	}
+	return cluster, nil
 }
 
 func (c ClusterManager) GetClusterNodesInfo(name string) ([]strategies.ClusterNodeInfo, error) {
-	return c.clusterMachines.GetMachinesByCluster(name)
+	if err := validateClusterName(name); err != nil {
+		return nil, err
+	}
+	nodes, err := c.clusterMachines.GetMachinesByCluster(name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
+	}
+	return nodes, nil
 }
 
 func (c ClusterManager) GetClusterConfig(name string) (string, error) {
-	return c.clusterConfigs.Get(name)
+	if err := validateClusterName(name); err != nil {
+		return "", err
+	}
+	config, err := c.clusterConfigs.Get(name)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", strategies.ErrClusterConfigRetrievalFailed, err)
+	}
+	return config, nil
 }
 
 func (c ClusterManager) DeleteCluster(name string) error {
-	return c.clusterResources.Delete(name)
+	if err := validateClusterName(name); err != nil {
+		return err
+	}
+	if err := c.clusterResources.Delete(name); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrClusterDeletionFailed, err)
+	}
+	return nil
+}
+
+func validateClusterName(name string) error {
+	if name == "" {
+		return strategies.ErrClusterNameRequired
+	}
+	return nil
 }

@@ -26,6 +26,18 @@ func toHTTPError(err error) error {
 			Title:  "Invalid cluster parameters",
 			Detail: err.Error(),
 		}
+	case errors.Is(err, strategies.ErrClusterNotFound):
+		return fuego.NotFoundError{
+			Err:    err,
+			Title:  "Cluster not found",
+			Detail: strategies.ErrClusterNotFound.Error(),
+		}
+	case errors.Is(err, strategies.ErrClusterAlreadyExists):
+		return fuego.ConflictError{
+			Err:    err,
+			Title:  "Cluster already exists",
+			Detail: strategies.ErrClusterAlreadyExists.Error(),
+		}
 	default:
 		// Keep the technical cause for logs but do not expose it to clients.
 		return fuego.InternalServerError{

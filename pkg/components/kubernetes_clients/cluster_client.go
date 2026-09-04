@@ -9,6 +9,7 @@ import (
 	"capv-proxy/pkg/strategies"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,10 +28,10 @@ func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterC
 
 func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
-		return strategies.ClusterInfo{}, fmt.Errorf("cluster name is required")
+		return strategies.ClusterInfo{}, strategies.ErrClusterNameRequired
 	}
 	if c.namespace == "" {
-		return strategies.ClusterInfo{}, fmt.Errorf("cluster namespace is required")
+		return strategies.ClusterInfo{}, strategies.ErrClusterNamespaceRequired
 	}
 
 	clusterResource := &capiv1.Cluster{
@@ -61,6 +62,9 @@ func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (st
 	clusterResource.Spec.Topology.Variables = variables
 
 	if err := c.kubernetesClient.Create(context.Background(), clusterResource); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterAlreadyExists, err)
+		}
 		return strategies.ClusterInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
 	}
 
@@ -125,6 +129,9 @@ func (c ClusterClient) Get(name string) (strategies.ClusterInfo, error) {
 		client.ObjectKey{Namespace: c.namespace, Name: name},
 		clusterResource,
 	); err != nil {
+		if apierrors.IsNotFound(err) {
+			return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
+		}
 		return strategies.ClusterInfo{}, err
 	}
 
@@ -133,10 +140,10 @@ func (c ClusterClient) Get(name string) (strategies.ClusterInfo, error) {
 
 func (c ClusterClient) Delete(name string) error {
 	if name == "" {
-		return fmt.Errorf("cluster name is required")
+		return strategies.ErrClusterNameRequired
 	}
 	if c.namespace == "" {
-		return fmt.Errorf("cluster namespace is required")
+		return strategies.ErrClusterNamespaceRequired
 	}
 
 	cluster := &capiv1.Cluster{
@@ -147,6 +154,9 @@ func (c ClusterClient) Delete(name string) error {
 	}
 
 	if err := c.kubernetesClient.Delete(context.Background(), cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
+		}
 		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, name, err)
 	}
 

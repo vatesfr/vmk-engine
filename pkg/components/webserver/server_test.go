@@ -129,6 +129,14 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10"}`,
 		},
+		"get missing cluster": {
+			method: http.MethodGet,
+			path:   getClusterPath,
+			setupMock: func(service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetCluster(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
 		"get cluster nodes": {
 			method: http.MethodGet,
 			path:   clusterNodesPath,
@@ -174,6 +182,17 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
+		"create existing cluster": {
+			method: http.MethodPost,
+			path:   clustersPath,
+			body:   createClusterRequestBody,
+			setupMock: func(service *mocks.MockForManagingClusters) {
+				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(
+					strategies.ClusterInfo{}, strategies.ErrClusterAlreadyExists,
+				)
+			},
+			expectedStatus: http.StatusConflict,
+		},
 		"delete cluster": {
 			method: http.MethodDelete,
 			path:   getClusterPath,
@@ -182,6 +201,14 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `"ok"`,
+		},
+		"delete missing cluster": {
+			method: http.MethodDelete,
+			path:   getClusterPath,
+			setupMock: func(service *mocks.MockForManagingClusters) {
+				service.EXPECT().DeleteCluster(clusterName).Return(strategies.ErrClusterNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
 		},
 		"unknown route": {
 			method:         http.MethodGet,

@@ -181,27 +181,63 @@ func TestCreateCluster(t *testing.T) {
 }
 
 func TestCreateClusterApplicationErrors(t *testing.T) {
-	testCases := map[string]error{
-		"cluster name required":           strategies.ErrClusterNameRequired,
-		"control plane replicas required": strategies.ErrControlPlaneReplicasRequired,
-		"worker replicas required":        strategies.ErrWorkerReplicasRequired,
-		"control plane IP required":       strategies.ErrControlPlaneIPRequired,
+	testCases := map[string]struct {
+		err    error
+		status int
+	}{
+		"cluster name required":           {strategies.ErrClusterNameRequired, http.StatusBadRequest},
+		"control plane replicas required": {strategies.ErrControlPlaneReplicasRequired, http.StatusBadRequest},
+		"worker replicas required":        {strategies.ErrWorkerReplicasRequired, http.StatusBadRequest},
+		"control plane IP required":       {strategies.ErrControlPlaneIPRequired, http.StatusBadRequest},
+		"cluster already exists":          {strategies.ErrClusterAlreadyExists, http.StatusConflict},
 	}
 	body := handlers.ClusterCreateParams{
 		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
 	}
 
-	for name, applicationError := range testCases {
+	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().CreateCluster(gomock.Any()).Return(strategies.ClusterInfo{}, applicationError)
+			service.EXPECT().CreateCluster(gomock.Any()).Return(strategies.ClusterInfo{}, testCase.err)
 
 			_, err := handler.CreateCluster(fuego.NewMockContext[handlers.ClusterCreateParams, any](body, nil))
 
 			require.Error(t, err)
-			assert.ErrorIs(t, err, applicationError)
-			assert.Equal(t, http.StatusBadRequest, errorStatusCode(t, err))
+			assert.ErrorIs(t, err, testCase.err)
+			assert.Equal(t, testCase.status, errorStatusCode(t, err))
+		})
+	}
+}
+
+func TestClusterNotFoundApplicationErrors(t *testing.T) {
+	testCases := map[string]func(*mocks.MockForManagingClusters, handlers.ClusterHandler) error{
+		"get cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
+			service.EXPECT().GetCluster(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			_, err := handler.GetCluster(newContextWithClusterID())
+			return err
+		},
+		"get config": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
+			service.EXPECT().GetClusterConfig(clusterName).Return("", strategies.ErrClusterNotFound)
+			_, err := handler.GetClusterConfig(newContextWithClusterID())
+			return err
+		},
+		"delete cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
+			service.EXPECT().DeleteCluster(clusterName).Return(strategies.ErrClusterNotFound)
+			_, err := handler.DeleteCluster(newContextWithClusterID())
+			return err
+		},
+	}
+
+	for name, run := range testCases {
+		t.Run(name, func(t *testing.T) {
+			service, handler := newClusterHandler(t)
+
+			err := run(service, handler)
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
+			assert.Equal(t, http.StatusNotFound, errorStatusCode(t, err))
 		})
 	}
 }

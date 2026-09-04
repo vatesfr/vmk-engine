@@ -27,10 +27,10 @@ func NewMachineClient(kubernetesClient client.Client, namespace string) MachineC
 
 func (m MachineClient) GetMachinesByCluster(clusterName string) ([]strategies.ClusterNodeInfo, error) {
 	if clusterName == "" {
-		return nil, fmt.Errorf("cluster name is required")
+		return nil, strategies.ErrClusterNameRequired
 	}
 	if m.namespace == "" {
-		return nil, fmt.Errorf("cluster namespace is required")
+		return nil, strategies.ErrClusterNamespaceRequired
 	}
 
 	machines := &capiv1.MachineList{}

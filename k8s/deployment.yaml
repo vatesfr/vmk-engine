@@ -27,6 +27,7 @@ rules:
       - machines
     verbs:
       - get
+      - list
   - apiGroups:
       - ""
     resources:

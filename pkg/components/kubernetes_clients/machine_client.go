@@ -26,7 +26,7 @@ func NewMachineClient(kubernetesClient client.Client, namespace string) MachineC
 	return MachineClient{kubernetesClient, namespace}
 }
 
-func (m MachineClient) GetMachinesByCluster(clusterName string) ([]strategies.ClusterNodeInfo, error) {
+func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName string) ([]strategies.ClusterNodeInfo, error) {
 	if clusterName == "" {
 		return nil, strategies.ErrClusterNameRequired
 	}
@@ -36,7 +36,7 @@ func (m MachineClient) GetMachinesByCluster(clusterName string) ([]strategies.Cl
 
 	machines := &capiv1.MachineList{}
 	if err := m.kubernetesClient.List(
-		context.Background(),
+		ctx,
 		machines,
 		client.InNamespace(m.namespace),
 		client.MatchingLabels{capiv1.ClusterNameLabel: clusterName},

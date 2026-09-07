@@ -11,6 +11,7 @@ package mocks
 
 import (
 	strategies "capv-proxy/pkg/strategies"
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -41,16 +42,16 @@ func (m *MockForGettingClusterMachines) EXPECT() *MockForGettingClusterMachinesM
 }
 
 // GetMachinesByCluster mocks base method.
-func (m *MockForGettingClusterMachines) GetMachinesByCluster(clusterName string) ([]strategies.ClusterNodeInfo, error) {
+func (m *MockForGettingClusterMachines) GetMachinesByCluster(ctx context.Context, clusterName string) ([]strategies.ClusterNodeInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMachinesByCluster", clusterName)
+	ret := m.ctrl.Call(m, "GetMachinesByCluster", ctx, clusterName)
 	ret0, _ := ret[0].([]strategies.ClusterNodeInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetMachinesByCluster indicates an expected call of GetMachinesByCluster.
-func (mr *MockForGettingClusterMachinesMockRecorder) GetMachinesByCluster(clusterName any) *gomock.Call {
+func (mr *MockForGettingClusterMachinesMockRecorder) GetMachinesByCluster(ctx, clusterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachinesByCluster", reflect.TypeOf((*MockForGettingClusterMachines)(nil).GetMachinesByCluster), clusterName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachinesByCluster", reflect.TypeOf((*MockForGettingClusterMachines)(nil).GetMachinesByCluster), ctx, clusterName)
 }

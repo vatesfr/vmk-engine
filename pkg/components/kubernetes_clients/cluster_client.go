@@ -27,7 +27,7 @@ func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterC
 	return ClusterClient{kubernetesClient, namespace}
 }
 
-func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
+func (c ClusterClient) Create(ctx context.Context, params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
 	if params.Name == "" {
 		return strategies.ClusterInfo{}, strategies.ErrClusterNameRequired
 	}
@@ -62,7 +62,7 @@ func (c ClusterClient) Create(params strategies.CreateClusterResourceParams) (st
 	}
 	clusterResource.Spec.Topology.Variables = variables
 
-	if err := c.kubernetesClient.Create(context.Background(), clusterResource); err != nil {
+	if err := c.kubernetesClient.Create(ctx, clusterResource); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterAlreadyExists, err)
 		}
@@ -106,10 +106,10 @@ func toClusterVariables(variables map[string]any) ([]capiv1.ClusterVariable, err
 	return result, nil
 }
 
-func (c ClusterClient) List() ([]strategies.ClusterInfo, error) {
+func (c ClusterClient) List(ctx context.Context) ([]strategies.ClusterInfo, error) {
 	clusters := &capiv1.ClusterList{}
 	if err := c.kubernetesClient.List(
-		context.Background(),
+		ctx,
 		clusters,
 		client.InNamespace(c.namespace),
 	); err != nil {
@@ -123,10 +123,10 @@ func (c ClusterClient) List() ([]strategies.ClusterInfo, error) {
 	return result, nil
 }
 
-func (c ClusterClient) Get(name string) (strategies.ClusterInfo, error) {
+func (c ClusterClient) Get(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	clusterResource := &capiv1.Cluster{}
 	if err := c.kubernetesClient.Get(
-		context.Background(),
+		ctx,
 		client.ObjectKey{Namespace: c.namespace, Name: name},
 		clusterResource,
 	); err != nil {
@@ -139,7 +139,7 @@ func (c ClusterClient) Get(name string) (strategies.ClusterInfo, error) {
 	return toInfo(clusterResource), nil
 }
 
-func (c ClusterClient) Delete(name string) error {
+func (c ClusterClient) Delete(ctx context.Context, name string) error {
 	if name == "" {
 		return strategies.ErrClusterNameRequired
 	}
@@ -154,7 +154,7 @@ func (c ClusterClient) Delete(name string) error {
 		},
 	}
 
-	if err := c.kubernetesClient.Delete(context.Background(), cluster); err != nil {
+	if err := c.kubernetesClient.Delete(ctx, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
 		}

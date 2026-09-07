@@ -146,14 +146,14 @@ func TestCreateCluster(t *testing.T) {
 				tc.params.WorkerReplicas > 0 &&
 				tc.params.Name != "" &&
 				tc.params.ControlPlaneIP != "" {
-				clusterResources.EXPECT().Create(
+				clusterResources.EXPECT().Create(t.Context(),
 					gomock.AssignableToTypeOf(strategies.CreateClusterResourceParams{}),
 				).Return(
 					strategies.ClusterInfo{Name: tc.params.Name},
 					tc.clusterResourcesCreateErr,
 				)
 			}
-			_, err := clusterManager.CreateCluster(tc.params)
+			_, err := clusterManager.CreateCluster(t.Context(), tc.params)
 
 			if tc.oracleErr == nil {
 				require.NoError(t, err)
@@ -178,9 +178,9 @@ func TestGetClusters(t *testing.T) {
 			{Name: clusterName, Phase: provisionedPhase},
 			{Name: secondClusterName, Phase: provisioningPhase},
 		}
-		clusterResources.EXPECT().List().Return(expected, nil)
+		clusterResources.EXPECT().List(t.Context()).Return(expected, nil)
 
-		clusters, err := clusterManager.GetClusters()
+		clusters, err := clusterManager.GetClusters(t.Context())
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, clusters)
@@ -188,9 +188,9 @@ func TestGetClusters(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().List().Return(nil, errTest)
+		clusterResources.EXPECT().List(t.Context()).Return(nil, errTest)
 
-		clusters, err := clusterManager.GetClusters()
+		clusters, err := clusterManager.GetClusters(t.Context())
 
 		assert.Nil(t, clusters)
 		assert.ErrorIs(t, err, errTest)
@@ -206,9 +206,9 @@ func TestGetCluster(t *testing.T) {
 			Phase:                provisionedPhase,
 			ControlPlaneEndpoint: controlPlaneIP,
 		}
-		clusterResources.EXPECT().Get(clusterName).Return(expected, nil)
+		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(expected, nil)
 
-		cluster, err := clusterManager.GetCluster(clusterName)
+		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, cluster)
@@ -216,9 +216,9 @@ func TestGetCluster(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Get(clusterName).Return(strategies.ClusterInfo{}, errTest)
+		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, errTest)
 
-		cluster, err := clusterManager.GetCluster(clusterName)
+		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
 
 		assert.Empty(t, cluster)
 		assert.ErrorIs(t, err, errTest)
@@ -227,9 +227,9 @@ func TestGetCluster(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Get(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 
-		cluster, err := clusterManager.GetCluster(clusterName)
+		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
 
 		assert.Empty(t, cluster)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
@@ -244,9 +244,9 @@ func TestGetClusterNodesInfo(t *testing.T) {
 			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP},
 			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
 		}
-		clusterMachines.EXPECT().GetMachinesByCluster(clusterName).Return(expected, nil)
+		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterName).Return(expected, nil)
 
-		nodes, err := clusterManager.GetClusterNodesInfo(clusterName)
+		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, nodes)
@@ -254,9 +254,9 @@ func TestGetClusterNodesInfo(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		_, _, clusterMachines, clusterManager := newTestClusterManager(t)
-		clusterMachines.EXPECT().GetMachinesByCluster(clusterName).Return(nil, errTest)
+		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterName).Return(nil, errTest)
 
-		nodes, err := clusterManager.GetClusterNodesInfo(clusterName)
+		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterName)
 
 		assert.Nil(t, nodes)
 		assert.ErrorIs(t, err, errTest)
@@ -267,9 +267,9 @@ func TestGetClusterNodesInfo(t *testing.T) {
 func TestGetClusterConfig(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		_, clusterConfigs, _, clusterManager := newTestClusterManager(t)
-		clusterConfigs.EXPECT().Get(clusterName).Return(clusterConfig, nil)
+		clusterConfigs.EXPECT().Get(t.Context(), clusterName).Return(clusterConfig, nil)
 
-		config, err := clusterManager.GetClusterConfig(clusterName)
+		config, err := clusterManager.GetClusterConfig(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Equal(t, clusterConfig, config)
@@ -277,9 +277,9 @@ func TestGetClusterConfig(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		_, clusterConfigs, _, clusterManager := newTestClusterManager(t)
-		clusterConfigs.EXPECT().Get(clusterName).Return("", errTest)
+		clusterConfigs.EXPECT().Get(t.Context(), clusterName).Return("", errTest)
 
-		config, err := clusterManager.GetClusterConfig(clusterName)
+		config, err := clusterManager.GetClusterConfig(t.Context(), clusterName)
 
 		assert.Empty(t, config)
 		assert.ErrorIs(t, err, errTest)
@@ -290,18 +290,18 @@ func TestGetClusterConfig(t *testing.T) {
 func TestDeleteCluster(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Delete(clusterName).Return(nil)
+		clusterResources.EXPECT().Delete(t.Context(), clusterName).Return(nil)
 
-		err := clusterManager.DeleteCluster(clusterName)
+		err := clusterManager.DeleteCluster(t.Context(), clusterName)
 
 		require.NoError(t, err)
 	})
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Delete(clusterName).Return(errTest)
+		clusterResources.EXPECT().Delete(t.Context(), clusterName).Return(errTest)
 
-		err := clusterManager.DeleteCluster(clusterName)
+		err := clusterManager.DeleteCluster(t.Context(), clusterName)
 
 		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterDeletionFailed)
@@ -311,19 +311,19 @@ func TestDeleteCluster(t *testing.T) {
 func TestClusterNameRequired(t *testing.T) {
 	testCases := map[string]func(cluster_manager.ClusterManager) error{
 		"get cluster": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetCluster("")
+			_, err := manager.GetCluster(t.Context(), "")
 			return err
 		},
 		"get cluster nodes": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetClusterNodesInfo("")
+			_, err := manager.GetClusterNodesInfo(t.Context(), "")
 			return err
 		},
 		"get cluster config": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetClusterConfig("")
+			_, err := manager.GetClusterConfig(t.Context(), "")
 			return err
 		},
 		"delete cluster": func(manager cluster_manager.ClusterManager) error {
-			return manager.DeleteCluster("")
+			return manager.DeleteCluster(t.Context(), "")
 		},
 	}
 

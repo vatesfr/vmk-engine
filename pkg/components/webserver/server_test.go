@@ -1,6 +1,7 @@
 package webserver_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -90,7 +91,7 @@ type httpTestCase struct {
 	method         string
 	path           string
 	body           string
-	setupMock      func(*mocks.MockForManagingClusters)
+	setupMock      func(context.Context, *mocks.MockForManagingClusters)
 	expectedStatus int
 	expectedJSON   string
 }
@@ -106,8 +107,8 @@ func TestHTTPRoutes(t *testing.T) {
 		"list clusters": {
 			method: http.MethodGet,
 			path:   clustersPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusters().Return([]strategies.ClusterInfo{
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
 					{Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint},
 					{Name: secondClusterName, Phase: secondClusterPhase},
 				}, nil)
@@ -121,8 +122,8 @@ func TestHTTPRoutes(t *testing.T) {
 		"get cluster": {
 			method: http.MethodGet,
 			path:   getClusterPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(clusterName).Return(strategies.ClusterInfo{
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{
 					Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint,
 				}, nil)
 			},
@@ -132,16 +133,16 @@ func TestHTTPRoutes(t *testing.T) {
 		"get missing cluster": {
 			method: http.MethodGet,
 			path:   getClusterPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
 		"get cluster nodes": {
 			method: http.MethodGet,
 			path:   clusterNodesPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterNodesInfo(clusterName).Return([]strategies.ClusterNodeInfo{{
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
 					Name:     controlPlaneNodeName,
 					Role:     controlPlaneNodeRole,
 					Status:   controlPlaneNodeStatus,
@@ -155,8 +156,8 @@ func TestHTTPRoutes(t *testing.T) {
 		"get cluster config": {
 			method: http.MethodGet,
 			path:   clusterConfigPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterConfig(clusterName).Return(clusterConfig, nil)
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterConfig(ctx, clusterName).Return(clusterConfig, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `"apiVersion: v1\nkind: Config"`,
@@ -165,8 +166,8 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodPost,
 			path:   clustersPath,
 			body:   createClusterRequestBody,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(strategies.ClusterInfo{
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().CreateCluster(ctx, validCreateClusterParams()).Return(strategies.ClusterInfo{
 					Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint,
 				}, nil)
 			},
@@ -177,8 +178,8 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodPost,
 			path:   clustersPath,
 			body:   createClusterRequestBody,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(strategies.ClusterInfo{}, errTest)
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().CreateCluster(ctx, validCreateClusterParams()).Return(strategies.ClusterInfo{}, errTest)
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -186,8 +187,8 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodPost,
 			path:   clustersPath,
 			body:   createClusterRequestBody,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().CreateCluster(validCreateClusterParams()).Return(
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().CreateCluster(ctx, validCreateClusterParams()).Return(
 					strategies.ClusterInfo{}, strategies.ErrClusterAlreadyExists,
 				)
 			},
@@ -196,8 +197,8 @@ func TestHTTPRoutes(t *testing.T) {
 		"delete cluster": {
 			method: http.MethodDelete,
 			path:   getClusterPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteCluster(clusterName).Return(nil)
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().DeleteCluster(ctx, clusterName).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `"ok"`,
@@ -205,8 +206,8 @@ func TestHTTPRoutes(t *testing.T) {
 		"delete missing cluster": {
 			method: http.MethodDelete,
 			path:   getClusterPath,
-			setupMock: func(service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteCluster(clusterName).Return(strategies.ErrClusterNotFound)
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().DeleteCluster(ctx, clusterName).Return(strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
@@ -255,11 +256,11 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 	ctrl := gomock.NewController(t)
 	clusterService := mocks.NewMockForManagingClusters(ctrl)
 	if testCase.setupMock != nil {
-		testCase.setupMock(clusterService)
+		testCase.setupMock(t.Context(), clusterService)
 	}
 
 	handler := newTestHandler(clusterService)
-	request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(testCase.body))
+	request := httptest.NewRequestWithContext(t.Context(), testCase.method, testCase.path, strings.NewReader(testCase.body))
 	request.Header.Set(acceptHeader, "application/json, application/xml")
 	if testCase.body != "" {
 		request.Header.Set(contentTypeHeader, applicationJSON)

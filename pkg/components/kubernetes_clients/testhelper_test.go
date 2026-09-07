@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -69,20 +71,34 @@ func newErrorClient(t *testing.T, funcs interceptor.Funcs) client.Client {
 		Build()
 }
 
-func createErrorFunc(err error) func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
-	return func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error { return err }
-}
-
-func getErrorFunc(err error) func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
-	return func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+func createErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+		require.Same(t, t.Context(), ctx)
 		return err
 	}
 }
 
-func listErrorFunc(err error) func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
-	return func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error { return err }
+func getErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
 }
 
-func deleteErrorFunc(err error) func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
-	return func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error { return err }
+func listErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
+}
+
+func deleteErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
 }

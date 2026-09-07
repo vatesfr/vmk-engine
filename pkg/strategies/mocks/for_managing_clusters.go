@@ -11,6 +11,7 @@ package mocks
 
 import (
 	strategies "capv-proxy/pkg/strategies"
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -41,90 +42,90 @@ func (m *MockForManagingClusters) EXPECT() *MockForManagingClustersMockRecorder 
 }
 
 // CreateCluster mocks base method.
-func (m *MockForManagingClusters) CreateCluster(arg0 strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
+func (m *MockForManagingClusters) CreateCluster(ctx context.Context, params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateCluster", arg0)
+	ret := m.ctrl.Call(m, "CreateCluster", ctx, params)
 	ret0, _ := ret[0].(strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateCluster indicates an expected call of CreateCluster.
-func (mr *MockForManagingClustersMockRecorder) CreateCluster(arg0 any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) CreateCluster(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCluster", reflect.TypeOf((*MockForManagingClusters)(nil).CreateCluster), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCluster", reflect.TypeOf((*MockForManagingClusters)(nil).CreateCluster), ctx, params)
 }
 
 // DeleteCluster mocks base method.
-func (m *MockForManagingClusters) DeleteCluster(name string) error {
+func (m *MockForManagingClusters) DeleteCluster(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteCluster", name)
+	ret := m.ctrl.Call(m, "DeleteCluster", ctx, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteCluster indicates an expected call of DeleteCluster.
-func (mr *MockForManagingClustersMockRecorder) DeleteCluster(name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) DeleteCluster(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCluster", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteCluster), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCluster", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteCluster), ctx, name)
 }
 
 // GetCluster mocks base method.
-func (m *MockForManagingClusters) GetCluster(name string) (strategies.ClusterInfo, error) {
+func (m *MockForManagingClusters) GetCluster(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCluster", name)
+	ret := m.ctrl.Call(m, "GetCluster", ctx, name)
 	ret0, _ := ret[0].(strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCluster indicates an expected call of GetCluster.
-func (mr *MockForManagingClustersMockRecorder) GetCluster(name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetCluster(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockForManagingClusters)(nil).GetCluster), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockForManagingClusters)(nil).GetCluster), ctx, name)
 }
 
 // GetClusterConfig mocks base method.
-func (m *MockForManagingClusters) GetClusterConfig(name string) (string, error) {
+func (m *MockForManagingClusters) GetClusterConfig(ctx context.Context, name string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterConfig", name)
+	ret := m.ctrl.Call(m, "GetClusterConfig", ctx, name)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterConfig indicates an expected call of GetClusterConfig.
-func (mr *MockForManagingClustersMockRecorder) GetClusterConfig(name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterConfig(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterConfig", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterConfig), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterConfig", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterConfig), ctx, name)
 }
 
 // GetClusterNodesInfo mocks base method.
-func (m *MockForManagingClusters) GetClusterNodesInfo(name string) ([]strategies.ClusterNodeInfo, error) {
+func (m *MockForManagingClusters) GetClusterNodesInfo(ctx context.Context, name string) ([]strategies.ClusterNodeInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterNodesInfo", name)
+	ret := m.ctrl.Call(m, "GetClusterNodesInfo", ctx, name)
 	ret0, _ := ret[0].([]strategies.ClusterNodeInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterNodesInfo indicates an expected call of GetClusterNodesInfo.
-func (mr *MockForManagingClustersMockRecorder) GetClusterNodesInfo(name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterNodesInfo(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterNodesInfo", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterNodesInfo), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterNodesInfo", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterNodesInfo), ctx, name)
 }
 
 // GetClusters mocks base method.
-func (m *MockForManagingClusters) GetClusters() ([]strategies.ClusterInfo, error) {
+func (m *MockForManagingClusters) GetClusters(ctx context.Context) ([]strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusters")
+	ret := m.ctrl.Call(m, "GetClusters", ctx)
 	ret0, _ := ret[0].([]strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusters indicates an expected call of GetClusters.
-func (mr *MockForManagingClustersMockRecorder) GetClusters() *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusters(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusters", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusters))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusters", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusters), ctx)
 }

@@ -53,7 +53,7 @@ func TestGetClusters(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetClusters().Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusters(gomock.Any()).Return(testCase.serviceResult, testCase.serviceError)
 
 			result, err := handler.GetClusters(fuego.NewMockContextNoBody())
 
@@ -84,7 +84,7 @@ func TestGetCluster(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetCluster(clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
 
 			result, err := handler.GetCluster(newContextWithClusterID())
 
@@ -114,7 +114,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetClusterNodesInfo(clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusterNodesInfo(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
 
 			result, err := handler.GetClusterNodesInfo(newContextWithClusterID())
 
@@ -137,7 +137,7 @@ func TestGetClusterConfig(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetClusterConfig(clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusterConfig(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
 
 			result, err := handler.GetClusterConfig(newContextWithClusterID())
 
@@ -171,7 +171,7 @@ func TestCreateCluster(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().CreateCluster(expectedParams).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().CreateCluster(gomock.Any(), expectedParams).Return(testCase.serviceResult, testCase.serviceError)
 			ctx := fuego.NewMockContext[handlers.ClusterCreateParams, any](validBody, nil)
 
 			result, err := handler.CreateCluster(ctx)
@@ -201,9 +201,10 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().CreateCluster(gomock.Any()).Return(strategies.ClusterInfo{}, testCase.err)
+			service.EXPECT().CreateCluster(gomock.Any(), gomock.Any()).Return(strategies.ClusterInfo{}, testCase.err)
 
-			_, err := handler.CreateCluster(fuego.NewMockContext[handlers.ClusterCreateParams, any](body, nil))
+			ctx := fuego.NewMockContext[handlers.ClusterCreateParams, any](body, nil)
+			_, err := handler.CreateCluster(ctx)
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, testCase.err)
@@ -215,17 +216,17 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 func TestClusterNotFoundApplicationErrors(t *testing.T) {
 	testCases := map[string]func(*mocks.MockForManagingClusters, handlers.ClusterHandler) error{
 		"get cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().GetCluster(clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			_, err := handler.GetCluster(newContextWithClusterID())
 			return err
 		},
 		"get config": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().GetClusterConfig(clusterName).Return("", strategies.ErrClusterNotFound)
+			service.EXPECT().GetClusterConfig(gomock.Any(), clusterName).Return("", strategies.ErrClusterNotFound)
 			_, err := handler.GetClusterConfig(newContextWithClusterID())
 			return err
 		},
 		"delete cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().DeleteCluster(clusterName).Return(strategies.ErrClusterNotFound)
+			service.EXPECT().DeleteCluster(gomock.Any(), clusterName).Return(strategies.ErrClusterNotFound)
 			_, err := handler.DeleteCluster(newContextWithClusterID())
 			return err
 		},
@@ -256,7 +257,7 @@ func TestDeleteCluster(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().DeleteCluster(clusterName).Return(testCase.serviceError)
+			service.EXPECT().DeleteCluster(gomock.Any(), clusterName).Return(testCase.serviceError)
 
 			result, err := handler.DeleteCluster(newContextWithClusterID())
 

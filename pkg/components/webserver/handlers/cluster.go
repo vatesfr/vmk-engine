@@ -37,8 +37,8 @@ func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHan
 	}
 }
 
-func (k ClusterHandler) GetClusters(fuego.ContextNoBody) ([]ClusterInfo, error) {
-	clusters, err := k.clusterService.GetClusters()
+func (k ClusterHandler) GetClusters(c fuego.ContextNoBody) ([]ClusterInfo, error) {
+	clusters, err := k.clusterService.GetClusters(c.Context())
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -51,7 +51,7 @@ func (k ClusterHandler) GetClusters(fuego.ContextNoBody) ([]ClusterInfo, error) 
 }
 
 func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
-	cluster, err := k.clusterService.GetCluster(c.PathParam("id"))
+	cluster, err := k.clusterService.GetCluster(c.Context(), c.PathParam("id"))
 	if err != nil {
 		return ClusterInfo{}, toHTTPError(err)
 	}
@@ -59,7 +59,7 @@ func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
 }
 
 func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
-	nodes, err := k.clusterService.GetClusterNodesInfo(c.PathParam("id"))
+	nodes, err := k.clusterService.GetClusterNodesInfo(c.Context(), c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -74,7 +74,7 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 }
 
 func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (string, error) {
-	config, err := k.clusterService.GetClusterConfig(c.PathParam("id"))
+	config, err := k.clusterService.GetClusterConfig(c.Context(), c.PathParam("id"))
 	if err != nil {
 		return "", toHTTPError(err)
 	}
@@ -87,7 +87,7 @@ func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParam
 		return ClusterInfo{}, toHTTPError(err)
 	}
 
-	created, err := k.clusterService.CreateCluster(toCreateClusterParams(createParams))
+	created, err := k.clusterService.CreateCluster(c.Context(), toCreateClusterParams(createParams))
 	if err != nil {
 		return ClusterInfo{}, toHTTPError(err)
 	}
@@ -113,7 +113,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 }
 
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (string, error) {
-	if err := k.clusterService.DeleteCluster(c.PathParam("id")); err != nil {
+	if err := k.clusterService.DeleteCluster(c.Context(), c.PathParam("id")); err != nil {
 		return "", toHTTPError(err)
 	}
 

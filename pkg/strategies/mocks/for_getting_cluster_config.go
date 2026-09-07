@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,16 +41,16 @@ func (m *MockForGettingClusterConfig) EXPECT() *MockForGettingClusterConfigMockR
 }
 
 // Get mocks base method.
-func (m *MockForGettingClusterConfig) Get(clusterName string) (string, error) {
+func (m *MockForGettingClusterConfig) Get(ctx context.Context, clusterName string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", clusterName)
+	ret := m.ctrl.Call(m, "Get", ctx, clusterName)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockForGettingClusterConfigMockRecorder) Get(clusterName any) *gomock.Call {
+func (mr *MockForGettingClusterConfigMockRecorder) Get(ctx, clusterName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockForGettingClusterConfig)(nil).Get), clusterName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockForGettingClusterConfig)(nil).Get), ctx, clusterName)
 }

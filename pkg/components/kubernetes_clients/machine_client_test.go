@@ -106,7 +106,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			t.Parallel()
 
 			machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, tc.objects...), tc.namespace)
-			nodes, err := machineClient.GetMachinesByCluster(tc.clusterName)
+			nodes, err := machineClient.GetMachinesByCluster(t.Context(), tc.clusterName)
 
 			if tc.wantErrContains != "" {
 				assert.Nil(t, nodes)
@@ -126,10 +126,10 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	}
 
 	t.Run("kubernetes error", func(t *testing.T) {
-		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(errTest)})
+		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
 		machineClient := kubernetes_clients.NewMachineClient(kubeClient, testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
 		assert.Nil(t, nodes)
 		require.Error(t, err)
@@ -143,7 +143,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Status.Phase = "Provisioning"
 		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -198,7 +198,7 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 			machine := machineWithStatus("worker", testNamespace, clusterName, false, "", tc.addresses...)
 			machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
 
-			nodes, err := machineClient.GetMachinesByCluster(clusterName)
+			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
 			assert.Equal(t, tc.want, nodes[0].Endpoint)

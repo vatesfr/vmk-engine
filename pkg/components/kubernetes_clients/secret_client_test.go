@@ -35,7 +35,7 @@ func TestSecretClientGet(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{kubeconfigKey: []byte(kubeconfig)})
 		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
 
-		config, err := secretClient.Get(clusterName)
+		config, err := secretClient.Get(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Equal(t, kubeconfig, config)
@@ -45,7 +45,7 @@ func TestSecretClientGet(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{kubeconfigKey: {}})
 		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
 
-		config, err := secretClient.Get(clusterName)
+		config, err := secretClient.Get(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Empty(t, config)
@@ -55,7 +55,7 @@ func TestSecretClientGet(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{"other": []byte("x")})
 		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
 
-		config, err := secretClient.Get(clusterName)
+		config, err := secretClient.Get(t.Context(), clusterName)
 
 		assert.Empty(t, config)
 		assert.EqualError(t, err, `secret "`+clusterName+kubeconfigSuffix+`" does not contain key "value"`)
@@ -64,7 +64,7 @@ func TestSecretClientGet(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t), testNamespace)
 
-		config, err := secretClient.Get(clusterName)
+		config, err := secretClient.Get(t.Context(), clusterName)
 
 		assert.Empty(t, config)
 		require.Error(t, err)
@@ -79,7 +79,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 			newFakeClient(t, secretWithName(secretDataName, expected)), testNamespace,
 		)
 
-		data, err := secretClient.GetSecretData(secretDataName)
+		data, err := secretClient.GetSecretData(t.Context(), secretDataName)
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, data)
@@ -90,7 +90,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 			newFakeClient(t, secretWithName(secretDataName, nil)), testNamespace,
 		)
 
-		data, err := secretClient.GetSecretData(secretDataName)
+		data, err := secretClient.GetSecretData(t.Context(), secretDataName)
 
 		require.NoError(t, err)
 		assert.Nil(t, data)
@@ -99,7 +99,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t), testNamespace)
 
-		data, err := secretClient.GetSecretData(secretDataName)
+		data, err := secretClient.GetSecretData(t.Context(), secretDataName)
 
 		assert.Nil(t, data)
 		require.Error(t, err)
@@ -108,10 +108,10 @@ func TestSecretClientGetSecretData(t *testing.T) {
 
 	t.Run("kubernetes error", func(t *testing.T) {
 		secretClient := kubernetes_clients.NewSecretClient(
-			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(errTest)}), testNamespace,
+			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(t, errTest)}), testNamespace,
 		)
 
-		data, err := secretClient.GetSecretData(secretDataName)
+		data, err := secretClient.GetSecretData(t.Context(), secretDataName)
 
 		assert.Nil(t, data)
 		assert.ErrorIs(t, err, errTest)

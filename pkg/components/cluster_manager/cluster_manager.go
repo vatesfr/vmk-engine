@@ -1,6 +1,7 @@
 package cluster_manager
 
 import (
+	"context"
 	"fmt"
 
 	"capv-proxy/pkg/strategies"
@@ -46,7 +47,7 @@ func NewClusterManager(
 	}
 }
 
-func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
+func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	if err := validateClusterName(params.Name); err != nil {
 		return strategies.ClusterInfo{}, err
 	}
@@ -63,7 +64,7 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 		return strategies.ClusterInfo{}, strategies.ErrWorkerReplicasRequired
 	}
 
-	clusterInfo, err := c.clusterResources.Create(strategies.CreateClusterResourceParams{
+	clusterInfo, err := c.clusterResources.Create(ctx, strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
 		ClusterClassName:     defaultClusterCreation.clusterClassName,
 		KubernetesVersion:    defaultClusterCreation.kubernetesVersion,
@@ -92,52 +93,52 @@ func (c ClusterManager) CreateCluster(params strategies.CreateClusterParams) (st
 	return clusterInfo, nil
 }
 
-func (c ClusterManager) GetClusters() ([]strategies.ClusterInfo, error) {
-	clusters, err := c.clusterResources.List()
+func (c ClusterManager) GetClusters(ctx context.Context) ([]strategies.ClusterInfo, error) {
+	clusters, err := c.clusterResources.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterListingFailed, err)
 	}
 	return clusters, nil
 }
 
-func (c ClusterManager) GetCluster(name string) (strategies.ClusterInfo, error) {
+func (c ClusterManager) GetCluster(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	if err := validateClusterName(name); err != nil {
 		return strategies.ClusterInfo{}, err
 	}
-	cluster, err := c.clusterResources.Get(name)
+	cluster, err := c.clusterResources.Get(ctx, name)
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
 	}
 	return cluster, nil
 }
 
-func (c ClusterManager) GetClusterNodesInfo(name string) ([]strategies.ClusterNodeInfo, error) {
+func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, name string) ([]strategies.ClusterNodeInfo, error) {
 	if err := validateClusterName(name); err != nil {
 		return nil, err
 	}
-	nodes, err := c.clusterMachines.GetMachinesByCluster(name)
+	nodes, err := c.clusterMachines.GetMachinesByCluster(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
 	}
 	return nodes, nil
 }
 
-func (c ClusterManager) GetClusterConfig(name string) (string, error) {
+func (c ClusterManager) GetClusterConfig(ctx context.Context, name string) (string, error) {
 	if err := validateClusterName(name); err != nil {
 		return "", err
 	}
-	config, err := c.clusterConfigs.Get(name)
+	config, err := c.clusterConfigs.Get(ctx, name)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", strategies.ErrClusterConfigRetrievalFailed, err)
 	}
 	return config, nil
 }
 
-func (c ClusterManager) DeleteCluster(name string) error {
+func (c ClusterManager) DeleteCluster(ctx context.Context, name string) error {
 	if err := validateClusterName(name); err != nil {
 		return err
 	}
-	if err := c.clusterResources.Delete(name); err != nil {
+	if err := c.clusterResources.Delete(ctx, name); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrClusterDeletionFailed, err)
 	}
 	return nil

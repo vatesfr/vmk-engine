@@ -12,9 +12,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-func (c SecretClient) Get(clusterName string) (string, error) {
+func (c SecretClient) Get(ctx context.Context, clusterName string) (string, error) {
 	secretName := clusterName + "-kubeconfig"
-	data, err := c.GetSecretData(secretName)
+	data, err := c.GetSecretData(ctx, secretName)
 	if err != nil {
 		return "", err
 	}
@@ -37,10 +37,10 @@ func NewSecretClient(kubernetesClient client.Client, namespace string) SecretCli
 	return SecretClient{kubernetesClient, namespace}
 }
 
-func (s SecretClient) GetSecretData(name string) (map[string][]byte, error) {
+func (s SecretClient) GetSecretData(ctx context.Context, name string) (map[string][]byte, error) {
 	kubernetesSecret := &corev1.Secret{}
 	if err := s.kubernetesClient.Get(
-		context.TODO(),
+		ctx,
 		client.ObjectKey{Namespace: s.namespace, Name: name},
 		kubernetesSecret,
 	); err != nil {

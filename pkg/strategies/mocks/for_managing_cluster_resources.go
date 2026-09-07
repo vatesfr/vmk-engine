@@ -11,6 +11,7 @@ package mocks
 
 import (
 	strategies "capv-proxy/pkg/strategies"
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -41,60 +42,60 @@ func (m *MockForManagingClusterResources) EXPECT() *MockForManagingClusterResour
 }
 
 // Create mocks base method.
-func (m *MockForManagingClusterResources) Create(arg0 strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
+func (m *MockForManagingClusterResources) Create(ctx context.Context, params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", arg0)
+	ret := m.ctrl.Call(m, "Create", ctx, params)
 	ret0, _ := ret[0].(strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockForManagingClusterResourcesMockRecorder) Create(arg0 any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) Create(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockForManagingClusterResources)(nil).Create), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockForManagingClusterResources)(nil).Create), ctx, params)
 }
 
 // Delete mocks base method.
-func (m *MockForManagingClusterResources) Delete(name string) error {
+func (m *MockForManagingClusterResources) Delete(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", name)
+	ret := m.ctrl.Call(m, "Delete", ctx, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockForManagingClusterResourcesMockRecorder) Delete(name any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) Delete(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockForManagingClusterResources)(nil).Delete), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockForManagingClusterResources)(nil).Delete), ctx, name)
 }
 
 // Get mocks base method.
-func (m *MockForManagingClusterResources) Get(name string) (strategies.ClusterInfo, error) {
+func (m *MockForManagingClusterResources) Get(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", name)
+	ret := m.ctrl.Call(m, "Get", ctx, name)
 	ret0, _ := ret[0].(strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockForManagingClusterResourcesMockRecorder) Get(name any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) Get(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockForManagingClusterResources)(nil).Get), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockForManagingClusterResources)(nil).Get), ctx, name)
 }
 
 // List mocks base method.
-func (m *MockForManagingClusterResources) List() ([]strategies.ClusterInfo, error) {
+func (m *MockForManagingClusterResources) List(ctx context.Context) ([]strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List")
+	ret := m.ctrl.Call(m, "List", ctx)
 	ret0, _ := ret[0].([]strategies.ClusterInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockForManagingClusterResourcesMockRecorder) List() *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) List(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockForManagingClusterResources)(nil).List))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockForManagingClusterResources)(nil).List), ctx)
 }

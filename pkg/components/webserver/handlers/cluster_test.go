@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	testCaseSuccess            = "success"
+	testCaseServiceError       = "service error"
 	clusterName                = "cluster-1"
 	clusterPhase               = "Provisioned"
 	controlPlaneIP             = "10.0.0.10"
@@ -37,7 +39,7 @@ func TestGetClusters(t *testing.T) {
 		serviceError  error
 		expected      []handlers.ClusterInfo
 	}{
-		"success": {
+		testCaseSuccess: {
 			serviceResult: []strategies.ClusterInfo{{
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
@@ -45,7 +47,7 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
 		},
-		"service error": {serviceError: errTest},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -70,13 +72,13 @@ func TestGetCluster(t *testing.T) {
 		serviceError  error
 		expected      handlers.ClusterInfo
 	}{
-		"success": {
+		testCaseSuccess: {
 			serviceResult: expectedServiceResult,
 			expected: handlers.ClusterInfo{
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			},
 		},
-		"service error": {serviceError: errTest},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -98,7 +100,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 		serviceError  error
 		expected      []handlers.ClusterNodeInfo
 	}{
-		"success": {
+		testCaseSuccess: {
 			serviceResult: []strategies.ClusterNodeInfo{{
 				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
 			}},
@@ -106,7 +108,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
 			}},
 		},
-		"service error": {serviceError: errTest},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -128,8 +130,8 @@ func TestGetClusterConfig(t *testing.T) {
 		serviceError  error
 		expected      string
 	}{
-		"success":       {serviceResult: clusterConfig, expected: clusterConfig},
-		"service error": {serviceError: errTest},
+		testCaseSuccess:      {serviceResult: clusterConfig, expected: clusterConfig},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -159,11 +161,11 @@ func TestCreateCluster(t *testing.T) {
 		serviceError  error
 		expected      handlers.ClusterInfo
 	}{
-		"success": {
+		testCaseSuccess: {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase},
 			expected:      handlers.ClusterInfo{Name: clusterName, Phase: clusterPhase},
 		},
-		"service error": {serviceError: errTest},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {
@@ -247,8 +249,8 @@ func TestDeleteCluster(t *testing.T) {
 		serviceError error
 		expected     string
 	}{
-		"success":       {expected: "ok"},
-		"service error": {serviceError: errTest},
+		testCaseSuccess:      {expected: "ok"},
+		testCaseServiceError: {serviceError: errTest},
 	}
 
 	for name, testCase := range testCases {

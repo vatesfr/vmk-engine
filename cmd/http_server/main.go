@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+const kubeClientKubeconfig = "kubeconfig"
+
 func main() {
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -38,7 +40,7 @@ type options struct {
 
 func newRootCommand() *cobra.Command {
 	opts := options{
-		kubeClient: "kubeconfig",
+		kubeClient: kubeClientKubeconfig,
 		kubeconfig: filepath.Join(homedir.HomeDir(), ".kube", "config"),
 		namespace:  "default",
 		address:    "0.0.0.0",
@@ -72,10 +74,10 @@ func newRootCommand() *cobra.Command {
 }
 
 func (o options) validate() error {
-	if o.kubeClient != "kubeconfig" && o.kubeClient != "in-cluster" {
+	if o.kubeClient != kubeClientKubeconfig && o.kubeClient != "in-cluster" {
 		return fmt.Errorf("invalid --kube-client %q: must be kubeconfig or in-cluster", o.kubeClient)
 	}
-	if o.kubeClient == "kubeconfig" && o.kubeconfig == "" {
+	if o.kubeClient == kubeClientKubeconfig && o.kubeconfig == "" {
 		return fmt.Errorf("--kubeconfig must not be empty when --kube-client=kubeconfig")
 	}
 	if o.namespace == "" {

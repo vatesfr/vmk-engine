@@ -76,11 +76,11 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	)
 	clusterHandler := handlers.NewClusterHandler(clusterService)
 
-	fuego.Get(clusterRouter, "/", clusterHandler.GetClusters)
+	fuego.Get(clusterRouter, "", clusterHandler.GetClusters)
 	fuego.Get(clusterRouter, "/{id}", clusterHandler.GetCluster)
 	fuego.Get(clusterRouter, "/{id}/nodes", clusterHandler.GetClusterNodesInfo)
 	fuego.Get(clusterRouter, "/{id}/config", clusterHandler.GetClusterConfig)
-	fuego.Post(clusterRouter, "/", clusterHandler.CreateCluster)
+	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster)
 
 	return server

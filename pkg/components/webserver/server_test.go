@@ -33,7 +33,7 @@ const (
 	controlPlaneNodeEndpoint       = "10.0.0.11"
 	clusterConfig                  = "apiVersion: v1\nkind: Config"
 	pingPath                       = "/ping"
-	clustersPath                   = "/api/kubernetes/clusters/"
+	clustersPath                   = "/api/kubernetes/clusters"
 	getClusterPath                 = "/api/kubernetes/clusters/cluster-1"
 	clusterNodesPath               = "/api/kubernetes/clusters/cluster-1/nodes"
 	clusterConfigPath              = "/api/kubernetes/clusters/cluster-1/config"
@@ -260,7 +260,7 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 
 	handler := newTestHandler(clusterService)
 	request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(testCase.body))
-	request.Header.Set(acceptHeader, applicationJSON)
+	request.Header.Set(acceptHeader, "application/json, application/xml")
 	if testCase.body != "" {
 		request.Header.Set(contentTypeHeader, applicationJSON)
 	}
@@ -269,6 +269,7 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 	handler.ServeHTTP(response, request)
 
 	require.Equal(t, testCase.expectedStatus, response.Code, response.Body.String())
+	assert.Empty(t, response.Header().Get("Location"), "API routes must respond without redirecting")
 	if testCase.expectedJSON != "" {
 		assert.JSONEq(t, testCase.expectedJSON, response.Body.String())
 	} else if testCase.expectedStatus >= http.StatusBadRequest &&

@@ -143,11 +143,11 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
 ```
 
 The HTTP API supplies the cluster-specific sizing, control-plane IP, and VM
-name prefix. `ClusterManager` adds the hardcoded Vates defaults: ClusterClass
-`vates-rhel-from-scratch`, Kubernetes `v1.36.3`, worker topology
-`worker-md-0`/`worker-from-scratch`, API port `6443`, subnet `16`, and
-`controlPlaneLB` value `kube-vip`. These defaults are intended to move to
-server-side configuration.
+name prefix. `ClusterManager` gets the Vates defaults through the
+`ForGettingClusterCreationDefaults` Strategy. Its current `cluster_defaults`
+implementation supplies ClusterClass `vates-rhel-from-scratch`, Kubernetes
+`v1.36.3`, worker topology `worker-md-0`/`worker-from-scratch`, API port `6443`,
+subnet `16`, and the `controlPlaneLB` value `kube-vip`.
 
 View a cluster and its nodes:
 
@@ -325,6 +325,7 @@ Main repository structure:
 cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
+pkg/components/cluster_defaults/ default cluster-creation configuration
 pkg/components/kubernetes_clients/ Kubernetes Strategy implementations
 pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart

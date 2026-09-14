@@ -8,29 +8,10 @@ import (
 )
 
 type ClusterManager struct {
-	clusterResources strategies.ForManagingClusterResources
-	clusterConfigs   strategies.ForGettingClusterConfig
-	clusterMachines  strategies.ForGettingClusterMachines
-}
-
-type clusterCreationDefaults struct {
-	clusterClassName           string
-	kubernetesVersion          string
-	workerName                 string
-	workerClass                string
-	controlPlaneEndpointPort   int
-	controlPlaneEndpointSubnet int
-	controlPlaneLoadBalancer   string
-}
-
-var defaultClusterCreation = clusterCreationDefaults{
-	clusterClassName:           "vates-rhel-from-scratch",
-	kubernetesVersion:          "v1.36.3",
-	workerName:                 "worker-md-0",
-	workerClass:                "worker-from-scratch",
-	controlPlaneEndpointPort:   6443,
-	controlPlaneEndpointSubnet: 16,
-	controlPlaneLoadBalancer:   "kube-vip",
+	clusterResources        strategies.ForManagingClusterResources
+	clusterConfigs          strategies.ForGettingClusterConfig
+	clusterMachines         strategies.ForGettingClusterMachines
+	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults
 }
 
 var _ strategies.ForManagingClusters = ClusterManager{}
@@ -39,11 +20,13 @@ func NewClusterManager(
 	clusterResources strategies.ForManagingClusterResources,
 	clusterConfigs strategies.ForGettingClusterConfig,
 	clusterMachines strategies.ForGettingClusterMachines,
+	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults,
 ) ClusterManager {
 	return ClusterManager{
-		clusterResources: clusterResources,
-		clusterConfigs:   clusterConfigs,
-		clusterMachines:  clusterMachines,
+		clusterResources:        clusterResources,
+		clusterConfigs:          clusterConfigs,
+		clusterMachines:         clusterMachines,
+		clusterCreationDefaults: clusterCreationDefaults,
 	}
 }
 
@@ -64,26 +47,31 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 		return strategies.ClusterInfo{}, strategies.ErrWorkerReplicasRequired
 	}
 
+	defaults, err := c.clusterCreationDefaults.GetClusterCreationDefaults(ctx)
+	if err != nil {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationDefaultsRetrievalFailed, err)
+	}
+
 	clusterInfo, err := c.clusterResources.Create(ctx, strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
-		ClusterClassName:     defaultClusterCreation.clusterClassName,
-		KubernetesVersion:    defaultClusterCreation.kubernetesVersion,
+		ClusterClassName:     defaults.ClusterClassName,
+		KubernetesVersion:    defaults.KubernetesVersion,
 		ControlPlaneReplicas: &params.ControlPlaneReplicas,
 		MachineDeployments: []strategies.MachineDeployment{
 			{
-				Name:     defaultClusterCreation.workerName,
-				Class:    defaultClusterCreation.workerClass,
+				Name:     defaults.WorkerName,
+				Class:    defaults.WorkerClass,
 				Replicas: &params.WorkerReplicas,
 			},
 		},
 		Variables: map[string]any{
 			"controlPlaneEndpoint": map[string]any{
 				"host":   params.ControlPlaneIP,
-				"port":   defaultClusterCreation.controlPlaneEndpointPort,
-				"subnet": defaultClusterCreation.controlPlaneEndpointSubnet,
+				"port":   defaults.ControlPlaneEndpointPort,
+				"subnet": defaults.ControlPlaneEndpointSubnet,
 			},
 			"vmNamePrefix":   params.VMNamePrefix,
-			"controlPlaneLB": defaultClusterCreation.controlPlaneLoadBalancer,
+			"controlPlaneLB": defaults.ControlPlaneLoadBalancer,
 		},
 	})
 	if err != nil {

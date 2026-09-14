@@ -145,10 +145,12 @@ The configurator currently varies infrastructure configuration rather than the
 Strategies allow Kubernetes clients or test implementations to be injected
 without changing the component.
 
-Cluster creation defaults currently live inside `ClusterManager`. They are
-grouped in one private configuration value so a future configuration Strategy
-can replace them without changing either the HTTP contract or the Kubernetes
-resource contract.
+Cluster creation defaults are provided by the
+`ForGettingClusterCreationDefaults` Strategy. The `cluster_defaults` component
+contains the current static Vates values, while `ClusterManager` consumes the
+Strategy when it builds a complete cluster resource. Another implementation can
+therefore load these values from configuration without changing either the HTTP
+contract or the Kubernetes resource contract.
 
 ## Current limitations and architectural gaps
 

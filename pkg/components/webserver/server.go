@@ -28,17 +28,17 @@ func IsSwaggerUI(value string) bool {
 	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
 }
 
-func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters) error {
-	return httpServer.newServer(clusterService).Run()
+func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters, tagService strategies.ForManagingClusterTags) error {
+	return httpServer.newServer(clusterService, tagService).Run()
 }
 
 // Handler builds the complete HTTP application without opening a network
 // listener. It is intended for httptest-based tests and embedding.
-func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters) http.Handler {
-	return httpServer.newServer(clusterService).Mux
+func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters, tagService strategies.ForManagingClusterTags) http.Handler {
+	return httpServer.newServer(clusterService, tagService).Mux
 }
 
-func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters) *fuego.Server {
+func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters, tagService strategies.ForManagingClusterTags) *fuego.Server {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,
@@ -83,11 +83,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster)
 
-	// clusterTagRouter := fuego.Group(
-	// 	clusterRouter,
-	// 	"/tag",
-	// )
-	clusterTagHandler := handlers.NewClusterTagHandler()
+	clusterTagHandler := handlers.NewClusterTagHandler(tagService)
 
 	fuego.Get(clusterRouter, "/{id}/tags", clusterTagHandler.GetClusterTags)
 	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterTagHandler.GetClusterTag)

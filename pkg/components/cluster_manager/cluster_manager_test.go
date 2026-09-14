@@ -44,6 +44,16 @@ const (
 
 var errTest = errors.New("test error")
 
+var clusterCreationDefaults = strategies.ClusterCreationDefaults{
+	ClusterClassName:           "test-class",
+	KubernetesVersion:          "v1.2.3",
+	WorkerName:                 "test-workers",
+	WorkerClass:                "test-worker-class",
+	ControlPlaneEndpointPort:   6443,
+	ControlPlaneEndpointSubnet: 24,
+	ControlPlaneLoadBalancer:   "test-lb",
+}
+
 func TestCreateCluster(t *testing.T) {
 	testCases := map[string]testCreateClusterParams{
 		"all params provided": {
@@ -169,6 +179,70 @@ func TestCreateCluster(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clusterResources := mocks.NewMockForManagingClusterResources(ctrl)
+	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
+	clusterMachines := mocks.NewMockForGettingClusterMachines(ctrl)
+	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
+	params := strategies.CreateClusterParams{
+		Name:                 clusterName,
+		ControlPlaneReplicas: controlPlaneReplicas,
+		WorkerReplicas:       workerReplicas,
+		ControlPlaneIP:       controlPlaneIP,
+		VMNamePrefix:         vmNamePrefix,
+	}
+
+	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
+	clusterResources.EXPECT().Create(t.Context(), strategies.CreateClusterResourceParams{
+		Name:                 clusterName,
+		ClusterClassName:     clusterCreationDefaults.ClusterClassName,
+		KubernetesVersion:    clusterCreationDefaults.KubernetesVersion,
+		ControlPlaneReplicas: &params.ControlPlaneReplicas,
+		MachineDeployments: []strategies.MachineDeployment{{
+			Name:     clusterCreationDefaults.WorkerName,
+			Class:    clusterCreationDefaults.WorkerClass,
+			Replicas: &params.WorkerReplicas,
+		}},
+		Variables: map[string]any{
+			"controlPlaneEndpoint": map[string]any{
+				"host":   controlPlaneIP,
+				"port":   clusterCreationDefaults.ControlPlaneEndpointPort,
+				"subnet": clusterCreationDefaults.ControlPlaneEndpointSubnet,
+			},
+			"vmNamePrefix":   vmNamePrefix,
+			"controlPlaneLB": clusterCreationDefaults.ControlPlaneLoadBalancer,
+		},
+	}).Return(strategies.ClusterInfo{Name: clusterName}, nil)
+
+	_, err := clusterManager.CreateCluster(t.Context(), params)
+
+	require.NoError(t, err)
+}
+
+func TestCreateClusterDefaultsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
+	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(strategies.ClusterCreationDefaults{}, errTest)
+	clusterManager := cluster_manager.NewClusterManager(
+		mocks.NewMockForManagingClusterResources(ctrl),
+		mocks.NewMockForGettingClusterConfig(ctrl),
+		mocks.NewMockForGettingClusterMachines(ctrl),
+		clusterDefaults,
+	)
+
+	_, err := clusterManager.CreateCluster(t.Context(), strategies.CreateClusterParams{
+		Name:                 clusterName,
+		ControlPlaneReplicas: controlPlaneReplicas,
+		WorkerReplicas:       workerReplicas,
+		ControlPlaneIP:       controlPlaneIP,
+	})
+
+	assert.ErrorIs(t, err, errTest)
+	assert.ErrorIs(t, err, strategies.ErrClusterCreationDefaultsRetrievalFailed)
 }
 
 func TestGetClusters(t *testing.T) {
@@ -350,7 +424,9 @@ func newTestClusterManager(t *testing.T) (
 	clusterResources := mocks.NewMockForManagingClusterResources(ctrl)
 	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
 	clusterMachines := mocks.NewMockForGettingClusterMachines(ctrl)
-	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines)
+	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
+	clusterDefaults.EXPECT().GetClusterCreationDefaults(gomock.Any()).Return(clusterCreationDefaults, nil).AnyTimes()
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
 
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
 }

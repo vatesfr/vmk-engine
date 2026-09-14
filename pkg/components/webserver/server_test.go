@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"capv-proxy/pkg/components/tag_db"
 	"capv-proxy/pkg/components/webserver"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
@@ -302,5 +303,5 @@ func validCreateClusterParams() strategies.CreateClusterParams {
 func newTestHandler(clusterService strategies.ForManagingClusters) http.Handler {
 	return webserver.HttpServer{
 		SwaggerUI: webserver.SwaggerUIDisabled,
-	}.Handler(clusterService)
+	}.Handler(clusterService, tag_db.NewTagDB())
 }

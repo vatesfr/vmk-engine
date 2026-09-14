@@ -83,5 +83,16 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster)
 
+	// clusterTagRouter := fuego.Group(
+	// 	clusterRouter,
+	// 	"/tag",
+	// )
+	clusterTagHandler := handlers.NewClusterTagHandler()
+
+	fuego.Get(clusterRouter, "/{id}/tags", clusterTagHandler.GetClusterTags)
+	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterTagHandler.GetClusterTag)
+	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterTagHandler.CreateOrUpdateClusterTag)
+	fuego.Delete(clusterRouter, "/{id}/tags/{tag}", clusterTagHandler.DeleteClusterTag)
+
 	return server
 }

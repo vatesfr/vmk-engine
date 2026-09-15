@@ -35,10 +35,16 @@ func (c ClusterClient) Create(ctx context.Context, params strategies.CreateClust
 		return strategies.ClusterInfo{}, strategies.ErrClusterNamespaceRequired
 	}
 
+	labels, err := toClusterTagLabels(params.Tags)
+	if err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+
 	clusterResource := &capiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      params.Name,
 			Namespace: c.namespace,
+			Labels:    labels,
 		},
 		Spec: capiv1.ClusterSpec{
 			Topology: capiv1.Topology{

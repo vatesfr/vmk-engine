@@ -11,7 +11,9 @@ type ClusterTagHandler struct {
 }
 
 type ClusterCreateTagParams struct {
-	Value string `json:"value" validate:"required"`
+	// Kubernetes limits label values to 63 characters:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+	Value string `json:"value" validate:"max=63"`
 }
 
 type ClusterTagsResponse struct {
@@ -23,11 +25,19 @@ func NewClusterTagHandler(tagService strategies.ForManagingClusterTags) ClusterT
 }
 
 func (k ClusterTagHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {
-	return ClusterTagsResponse{Result: k.tagService.GetClusterTags(c.Context(), c.PathParam("id"))}, nil
+	tags, err := k.tagService.GetClusterTags(c.Context(), c.PathParam("id"))
+	if err != nil {
+		return ClusterTagsResponse{}, toHTTPError(err)
+	}
+	return ClusterTagsResponse{Result: tags}, nil
 }
 
 func (k ClusterTagHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
-	return k.tagService.GetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag")), nil
+	value, err := k.tagService.GetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"))
+	if err != nil {
+		return "", toHTTPError(err)
+	}
+	return value, nil
 }
 
 func (k ClusterTagHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[ClusterCreateTagParams]) (string, error) {
@@ -36,13 +46,17 @@ func (k ClusterTagHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[Clus
 		return err.Error(), err
 	}
 
-	k.tagService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value)
+	if err := k.tagService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value); err != nil {
+		return "", toHTTPError(err)
+	}
 
 	return "ok", nil
 }
 
 func (k ClusterTagHandler) DeleteClusterTag(c fuego.ContextNoBody) (string, error) {
-	k.tagService.DeleteClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"))
+	if err := k.tagService.DeleteClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag")); err != nil {
+		return "", toHTTPError(err)
+	}
 
 	return "ok", nil
 }

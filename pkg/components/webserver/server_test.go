@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"capv-proxy/pkg/components/tag_db"
 	"capv-proxy/pkg/components/webserver"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
@@ -39,9 +38,12 @@ const (
 	getClusterPath                 = "/api/kubernetes/clusters/cluster-1"
 	clusterNodesPath               = "/api/kubernetes/clusters/cluster-1/nodes"
 	clusterConfigPath              = "/api/kubernetes/clusters/cluster-1/config"
+	clusterTagsPath                = "/api/kubernetes/clusters/cluster-1/tags"
+	clusterTagPath                 = "/api/kubernetes/clusters/cluster-1/tags/environment"
 	contentTypeHeader              = "Content-Type"
 	acceptHeader                   = "Accept"
 	applicationJSON                = "application/json"
+	okJSON                         = `"ok"`
 	unknownPath                    = "/unknown"
 	createClusterRequestBody       = `{
 		"name":"cluster-1",
@@ -93,8 +95,11 @@ type httpTestCase struct {
 	path           string
 	body           string
 	setupMock      func(context.Context, *mocks.MockForManagingClusters)
+	setupTagMock   func(context.Context, *mocks.MockForManagingClusterTags)
 	expectedStatus int
 	expectedJSON   string
+	expectedTitle  string
+	expectedDetail string
 }
 
 func TestHTTPRoutes(t *testing.T) {
@@ -138,6 +143,8 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
+			expectedTitle:  "Cluster not found",
+			expectedDetail: strategies.ErrClusterNotFound.Error(),
 		},
 		"get cluster nodes": {
 			method: http.MethodGet,
@@ -175,6 +182,18 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10"}`,
 		},
+		"create cluster with tags": {
+			method: http.MethodPost,
+			path:   clustersPath,
+			body:   strings.Replace(createClusterRequestBody, `"vmNamePrefix":"test"`, `"vmNamePrefix":"test","tags":{"environment":"production"}`, 1),
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				params := validCreateClusterParams()
+				params.Tags = map[string]string{"environment": "production"}
+				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `{"name":"cluster-1","phase":""}`,
+		},
 		"create cluster service error": {
 			method: http.MethodPost,
 			path:   clustersPath,
@@ -202,7 +221,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().DeleteCluster(ctx, clusterName).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `"ok"`,
+			expectedJSON:   okJSON,
 		},
 		"delete missing cluster": {
 			method: http.MethodDelete,
@@ -211,6 +230,64 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().DeleteCluster(ctx, clusterName).Return(strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
+			expectedTitle:  "Cluster not found",
+			expectedDetail: strategies.ErrClusterNotFound.Error(),
+		},
+		"get cluster tags": {
+			method: http.MethodGet,
+			path:   clusterTagsPath,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().GetClusterTags(ctx, clusterName).Return(map[string]string{"environment": "production"}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `{"result":{"environment":"production"}}`,
+		},
+		"get cluster tag": {
+			method: http.MethodGet,
+			path:   clusterTagPath,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("production", nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `"production"`,
+		},
+		"set cluster tag": {
+			method: http.MethodPut,
+			path:   clusterTagPath,
+			body:   `{"value":"production"}`,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   okJSON,
+		},
+		"delete cluster tag": {
+			method: http.MethodDelete,
+			path:   clusterTagPath,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   okJSON,
+		},
+		"missing cluster tag": {
+			method: http.MethodGet,
+			path:   clusterTagPath,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("", strategies.ErrClusterTagNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
+			expectedTitle:  "Cluster tag not found",
+			expectedDetail: strategies.ErrClusterTagNotFound.Error(),
+		},
+		"invalid cluster tag": {
+			method: http.MethodPut,
+			path:   clusterTagPath,
+			body:   `{"value":"production"}`,
+			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(strategies.ErrInvalidClusterTagName)
+			},
+			expectedStatus: http.StatusBadRequest,
 		},
 		"unknown route": {
 			method:         http.MethodGet,
@@ -251,16 +328,29 @@ func TestCreateClusterHTTPValidation(t *testing.T) {
 	}
 }
 
+func TestClusterTagValueHTTPValidation(t *testing.T) {
+	executeHTTPTestCase(t, httpTestCase{
+		method:         http.MethodPut,
+		path:           clusterTagPath,
+		body:           `{"value":"` + strings.Repeat("a", 64) + `"}`,
+		expectedStatus: http.StatusBadRequest,
+	})
+}
+
 func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
 	clusterService := mocks.NewMockForManagingClusters(ctrl)
+	tagService := mocks.NewMockForManagingClusterTags(ctrl)
 	if testCase.setupMock != nil {
 		testCase.setupMock(t.Context(), clusterService)
 	}
+	if testCase.setupTagMock != nil {
+		testCase.setupTagMock(t.Context(), tagService)
+	}
 
-	handler := newTestHandler(clusterService)
+	handler := newTestHandler(clusterService, tagService)
 	request := httptest.NewRequestWithContext(t.Context(), testCase.method, testCase.path, strings.NewReader(testCase.body))
 	request.Header.Set(acceptHeader, "application/json, application/xml")
 	if testCase.body != "" {
@@ -278,6 +368,9 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 		response.Header().Get(contentTypeHeader) == applicationJSON {
 		assertJSONErrorStatus(t, response, testCase.expectedStatus)
 	}
+	if testCase.expectedTitle != "" || testCase.expectedDetail != "" {
+		assertJSONError(t, response, testCase.expectedTitle, testCase.expectedDetail)
+	}
 }
 
 func assertJSONErrorStatus(t *testing.T, response *httptest.ResponseRecorder, expectedStatus int) {
@@ -290,6 +383,18 @@ func assertJSONErrorStatus(t *testing.T, response *httptest.ResponseRecorder, ex
 	assert.Equal(t, expectedStatus, body.Status, response.Body.String())
 }
 
+func assertJSONError(t *testing.T, response *httptest.ResponseRecorder, expectedTitle, expectedDetail string) {
+	t.Helper()
+
+	var body struct {
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body), response.Body.String())
+	assert.Equal(t, expectedTitle, body.Title)
+	assert.Equal(t, expectedDetail, body.Detail)
+}
+
 func validCreateClusterParams() strategies.CreateClusterParams {
 	return strategies.CreateClusterParams{
 		Name:                 clusterName,
@@ -300,8 +405,11 @@ func validCreateClusterParams() strategies.CreateClusterParams {
 	}
 }
 
-func newTestHandler(clusterService strategies.ForManagingClusters) http.Handler {
+func newTestHandler(
+	clusterService strategies.ForManagingClusters,
+	tagService strategies.ForManagingClusterTags,
+) http.Handler {
 	return webserver.HttpServer{
 		SwaggerUI: webserver.SwaggerUIDisabled,
-	}.Handler(clusterService, tag_db.NewTagDB())
+	}.Handler(clusterService, tagService)
 }

@@ -194,6 +194,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 		WorkerReplicas:       workerReplicas,
 		ControlPlaneIP:       controlPlaneIP,
 		VMNamePrefix:         vmNamePrefix,
+		Tags:                 map[string]string{"environment": "production"},
 	}
 
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
@@ -216,6 +217,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 			"vmNamePrefix":   vmNamePrefix,
 			"controlPlaneLB": clusterCreationDefaults.ControlPlaneLoadBalancer,
 		},
+		Tags: params.Tags,
 	}).Return(strategies.ClusterInfo{Name: clusterName}, nil)
 
 	_, err := clusterManager.CreateCluster(t.Context(), params)

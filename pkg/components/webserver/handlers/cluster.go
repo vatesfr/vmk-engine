@@ -16,6 +16,9 @@ type ClusterCreateParams struct {
 	WorkerReplicas       int32  `json:"workerReplicas" validate:"required,min=1"`
 	ControlPlaneIP       string `json:"controlPlaneIP" validate:"required,ip"`
 	VMNamePrefix         string `json:"vmNamePrefix" validate:"required"`
+	// Kubernetes limits label names and values to 63 characters:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
 type ClusterInfo struct {
@@ -101,6 +104,7 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 		WorkerReplicas:       value.WorkerReplicas,
 		ControlPlaneIP:       value.ControlPlaneIP,
 		VMNamePrefix:         value.VMNamePrefix,
+		Tags:                 value.Tags,
 	}
 }
 

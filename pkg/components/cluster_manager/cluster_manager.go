@@ -46,7 +46,6 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 	if params.WorkerReplicas <= 0 {
 		return strategies.ClusterInfo{}, strategies.ErrWorkerReplicasRequired
 	}
-
 	defaults, err := c.clusterCreationDefaults.GetClusterCreationDefaults(ctx)
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationDefaultsRetrievalFailed, err)
@@ -73,6 +72,7 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 			"vmNamePrefix":   params.VMNamePrefix,
 			"controlPlaneLB": defaults.ControlPlaneLoadBalancer,
 		},
+		Tags: params.Tags,
 	})
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationFailed, err)

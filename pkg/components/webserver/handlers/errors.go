@@ -20,11 +20,20 @@ func toHTTPError(err error) error {
 	case errors.Is(err, strategies.ErrClusterNameRequired),
 		errors.Is(err, strategies.ErrControlPlaneReplicasRequired),
 		errors.Is(err, strategies.ErrWorkerReplicasRequired),
-		errors.Is(err, strategies.ErrControlPlaneIPRequired):
+		errors.Is(err, strategies.ErrControlPlaneIPRequired),
+		errors.Is(err, strategies.ErrClusterTagNameRequired),
+		errors.Is(err, strategies.ErrInvalidClusterTagName),
+		errors.Is(err, strategies.ErrInvalidClusterTagValue):
 		return fuego.BadRequestError{
 			Err:    err,
 			Title:  "Invalid cluster parameters",
 			Detail: err.Error(),
+		}
+	case errors.Is(err, strategies.ErrClusterTagNotFound):
+		return fuego.NotFoundError{
+			Err:    err,
+			Title:  "Cluster tag not found",
+			Detail: strategies.ErrClusterTagNotFound.Error(),
 		}
 	case errors.Is(err, strategies.ErrClusterNotFound):
 		return fuego.NotFoundError{

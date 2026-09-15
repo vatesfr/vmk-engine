@@ -9,7 +9,7 @@ metadata:
 rules:
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["clusters"]
-    verbs: ["get", "list", "create", "delete"]
+    verbs: ["get", "list", "create", "delete", "patch"]
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["machines"]
     verbs: ["get"]
@@ -33,4 +33,3 @@ roleRef:
   kind: Role
   name: {{ include "go-capi-client.fullname" . }}
 {{- end }}
-

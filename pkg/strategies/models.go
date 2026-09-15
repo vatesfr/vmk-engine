@@ -7,6 +7,7 @@ type CreateClusterParams struct {
 	WorkerReplicas       int32
 	ControlPlaneIP       string
 	VMNamePrefix         string
+	Tags                 map[string]string
 }
 
 // ClusterCreationDefaults contains the server-side topology values used to
@@ -30,6 +31,7 @@ type CreateClusterResourceParams struct {
 	ControlPlaneReplicas *int32
 	MachineDeployments   []MachineDeployment
 	Variables            map[string]any
+	Tags                 map[string]string
 }
 
 type MachineDeployment struct {

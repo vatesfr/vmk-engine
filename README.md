@@ -138,7 +138,8 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
     "controlPlaneReplicas": 3,
     "workerReplicas": 2,
     "controlPlaneIP": "10.30.138.134",
-    "vmNamePrefix": "jls-capi-generated-"
+    "vmNamePrefix": "jls-capi-generated-",
+    "tags": {"environment": "production"}
   }'
 ```
 
@@ -148,6 +149,22 @@ name prefix. `ClusterManager` gets the Vates defaults through the
 implementation supplies ClusterClass `vates-rhel-from-scratch`, Kubernetes
 `v1.36.3`, worker topology `worker-md-0`/`worker-from-scratch`, API port `6443`,
 subnet `16`, and the `controlPlaneLB` value `kube-vip`.
+
+Cluster tags are stored as labels on the CAPI `Cluster` resource under the
+`tags.vmk.vates.tech/` prefix. For example, the tag `environment=production`
+becomes `tags.vmk.vates.tech/environment=production`. Tag names and values
+must follow Kubernetes label syntax and are limited to 63 characters by the
+[Kubernetes label specification](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set).
+Tags may be supplied in the cluster creation request or managed later through
+`GET /clusters/{id}/tags`, `GET /clusters/{id}/tags/{tag}`,
+`PUT /clusters/{id}/tags/{tag}` with `{"value":"production"}`, and
+`DELETE /clusters/{id}/tags/{tag}` under `/api/kubernetes`. The cluster labels
+are the persistent source of truth; tags previously kept only in process
+memory do not migrate across a deployment.
+
+The HTTP server delegates these operations to `ClusterTagManager`, which owns
+the tag use cases and uses `ClusterClient` for Kubernetes label persistence.
+The client enforces the constraints specific to Kubernetes labels.
 
 View a cluster and its nodes:
 
@@ -256,7 +273,7 @@ The service uses the following minimum permissions in the target namespace:
 
 | API group | Resources | Verbs |
 | --- | --- | --- |
-| `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete` |
+| `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
 | `cluster.x-k8s.io` | `machines` | `list` |
 | core group | `secrets` | `get` |
 

@@ -32,7 +32,48 @@ interface.
 - the Cluster API CRDs, including `clusters.cluster.x-k8s.io`;
 - permissions on `clusters`, `machines`, and `secrets` in the target namespace;
 - optionally, Docker to build the image;
-- optionally, Helm 3 to install the chart.
+- optionally, Helm 3 to install the chart;
+- optionally, `pre-commit` and `golangci-lint` for local quality checks.
+
+## Development
+
+The Git hooks require `pre-commit` and `golangci-lint` to be available in your
+`PATH`. On Debian or Ubuntu, install `pre-commit` in an isolated environment
+with `pipx`:
+
+```bash
+sudo apt update
+sudo apt install pipx
+pipx ensurepath
+pipx install pre-commit
+```
+
+Open a new terminal after `pipx ensurepath`, then check that the required
+commands are available:
+
+```bash
+pre-commit --version
+golangci-lint --version
+```
+
+See the
+[`golangci-lint` installation guide](https://golangci-lint.run/docs/welcome/install/local/)
+if the second command is missing.
+
+After cloning the repository, install both the pre-commit and pre-push Git
+hooks:
+
+```bash
+make pre-commit-install
+```
+
+The pre-commit hook checks common file issues and runs `golangci-lint` on Go
+changes. The pre-push hook runs the Go test suite. Run all pre-commit checks
+manually with:
+
+```bash
+make pre-commit
+```
 
 ## Quick start
 

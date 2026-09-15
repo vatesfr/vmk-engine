@@ -40,4 +40,3 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "go-capi-client.targetNamespace" -}}
 {{- default .Release.Namespace .Values.config.namespace }}
 {{- end }}
-

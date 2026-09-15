@@ -2,6 +2,14 @@
 lint: ## Lint Code
 	golangci-lint run --config .golangci.yml
 
+.PHONY: pre-commit-install
+pre-commit-install: ## Install the pre-commit and pre-push Git hooks
+	pre-commit install --hook-type pre-commit --hook-type pre-push
+
+.PHONY: pre-commit
+pre-commit: ## Run every pre-commit hook on the repository
+	pre-commit run --all-files
+
 .PHONY: vuln
 vuln: ## Check for known vulnerabilities
 	govulncheck ./...

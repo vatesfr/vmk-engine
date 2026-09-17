@@ -88,3 +88,13 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 topologySpreadConstraints: []
+
+# Cluster creation defaults stored in the target namespace.
+clusterDefaults:
+  clusterClassName: "vates-rhel-from-scratch"
+  kubernetesVersion: "v1.36.3"
+  workerName: "worker-md-0"
+  workerClass: "worker-from-scratch"
+  controlPlaneEndpointPort: "6443"
+  controlPlaneEndpointSubnet: "16"
+  controlPlaneLoadBalancer: "kube-vip"

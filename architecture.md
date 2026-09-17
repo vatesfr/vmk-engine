@@ -64,8 +64,10 @@ flowchart LR
         manager[ClusterManager]
         clusterport[ForManagingClusterResources]
         configport[ForGettingClusterConfig]
+        defaultsport[ForGettingClusterCreationDefaults]
         manager -->|calls required interface| clusterport
         manager -->|calls required interface| configport
+        manager -->|calls required interface| defaultsport
     end
 
     subgraph tagcomponent[Tag management component — pkg/components/cluster_tag_manager]
@@ -79,6 +81,8 @@ flowchart LR
     clusterport -->|implemented by| clusters[ClusterClient]
     tagresourceport -->|implemented by| clusters
     configport -->|implemented by| secrets[SecretClient]
+    defaultsport -->|implemented by| defaults[ConfigMapClient]
+    defaults --> api
     clusters --> api[Kubernetes API]
     secrets --> api
 
@@ -123,7 +127,7 @@ For a typical request such as `GET /api/kubernetes/clusters/{id}`:
 
 For creation, `CreateClusterParams` carries the cluster name, control-plane and
 worker replica counts, control-plane IP, and VM name prefix through
-`ForManagingClusters`. `ClusterManager` enriches this intent with its hardcoded
+`ForManagingClusters`. `ClusterManager` enriches this intent through `ForGettingClusterCreationDefaults` with its
 ClusterClass, Kubernetes version, MachineDeployment identity, endpoint network
 settings, and load-balancer choice. It then sends the resulting
 `CreateClusterResourceParams` through `ForManagingClusterResources`.
@@ -158,11 +162,12 @@ Strategies allow Kubernetes clients or test implementations to be injected
 without changing the component.
 
 Cluster creation defaults are provided by the
-`ForGettingClusterCreationDefaults` Strategy. The `cluster_defaults` component
-contains the current static Vates values, while `ClusterManager` consumes the
-Strategy when it builds a complete cluster resource. Another implementation can
-therefore load these values from configuration without changing either the HTTP
-contract or the Kubernetes resource contract.
+`ForGettingClusterCreationDefaults` Strategy. The `kubernetes_clients.ConfigMapClient`
+implements this contract and reads `cluster-defaults` in the configured namespace
+on every call. The ConfigMap and each of its seven keys are required; missing or
+invalid configuration is propagated instead of being replaced by values built
+into the binary. The configurator injects this client into `ClusterManager`,
+keeping Kubernetes types out of the manager and shared contracts.
 
 `ClusterTagManager` implements `ForManagingClusterTags` for the HTTP component
 and requires `ForManagingClusterTagResources`, implemented by `ClusterClient`.

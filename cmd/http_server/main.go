@@ -9,7 +9,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"capv-proxy/pkg/components/cluster_defaults"
 	"capv-proxy/pkg/components/cluster_manager"
 	"capv-proxy/pkg/components/cluster_tag_manager"
 	"capv-proxy/pkg/components/kubernetes_clients"
@@ -107,10 +106,10 @@ func run(opts options) error {
 	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, opts.namespace)
 	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
 	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, opts.namespace)
-	clusterDefaults := cluster_defaults.NewClusterDefaults()
+	k8sConfigMapClient := kubernetes_clients.NewConfigMapClient(k8sClient, opts.namespace)
 	clusterTagManager := cluster_tag_manager.NewClusterTagManager(k8sClusterClient)
 	clusterManager := cluster_manager.NewClusterManager(
-		k8sClusterClient, k8sSecretClient, k8sMachineClient, clusterDefaults,
+		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient,
 	)
 
 	httpServer := webserver.HttpServer{

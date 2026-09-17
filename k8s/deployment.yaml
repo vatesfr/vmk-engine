@@ -33,6 +33,7 @@ rules:
       - ""
     resources:
       - secrets
+      - configmaps
     verbs:
       - get
 ---
@@ -127,3 +128,18 @@ spec:
       targetPort: http
       nodePort: 30080
       protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-defaults
+  labels:
+    app.kubernetes.io/name: go-capi-client
+data:
+  clusterClassName: "vates-rhel-from-scratch"
+  kubernetesVersion: "v1.36.3"
+  workerName: "worker-md-0"
+  workerClass: "worker-from-scratch"
+  controlPlaneEndpointPort: "6443"
+  controlPlaneEndpointSubnet: "16"
+  controlPlaneLoadBalancer: "kube-vip"

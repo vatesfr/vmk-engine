@@ -11,7 +11,7 @@ interface.
 > [!WARNING]
 > This project is currently a prototype. The authentication middleware allows
 > every request. Cluster creation requires an existing compatible ClusterClass
-> and currently relies on hardcoded topology defaults. Do not expose the service
+> and uses configurable topology defaults. Do not expose the service
 > publicly as-is.
 
 ## Features
@@ -186,10 +186,16 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
 
 The HTTP API supplies the cluster-specific sizing, control-plane IP, and VM
 name prefix. `ClusterManager` gets the Vates defaults through the
-`ForGettingClusterCreationDefaults` Strategy. Its current `cluster_defaults`
-implementation supplies ClusterClass `vates-rhel-from-scratch`, Kubernetes
-`v1.36.3`, worker topology `worker-md-0`/`worker-from-scratch`, API port `6443`,
-subnet `16`, and the `controlPlaneLB` value `kube-vip`.
+`ForGettingClusterCreationDefaults` Strategy. Its `kubernetes_clients.ConfigMapClient` implementation reads the `cluster-defaults`
+ConfigMap in `--namespace` on each creation. This ConfigMap and all seven keys
+are required; the client returns an error when configuration is missing or
+invalid instead of silently using values embedded in the binary.
+
+The ConfigMap is included in `k8s/deployment.yaml` and the Helm chart. Configure
+its seven camelCase keys through `clusterDefaults` in Helm values. Changes apply
+to subsequent cluster creations without restarting the server. Present string
+values are used as-is; invalid ports (outside 1–65535) or IPv4 subnet prefixes
+(outside 0–32) return an error, as do Kubernetes read errors.
 
 Cluster tags are stored as labels on the CAPI `Cluster` resource under the
 `tags.vmk.vates.tech/` prefix. For example, the tag `environment=production`
@@ -383,7 +389,6 @@ Main repository structure:
 cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
-pkg/components/cluster_defaults/ default cluster-creation configuration
 pkg/components/kubernetes_clients/ Kubernetes Strategy implementations
 pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart

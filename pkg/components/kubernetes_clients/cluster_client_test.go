@@ -2,7 +2,9 @@ package kubernetes_clients_test
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -152,8 +155,8 @@ func TestClusterClientList(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []strategies.ClusterInfo{
-			{Name: "provisioned", Phase: provisionedPhase},
-			{Name: "provisioning", Phase: provisioningPhase},
+			{Name: "provisioned", Phase: provisionedPhase, CreatedAt: time.Time{}.String()},
+			{Name: "provisioning", Phase: provisioningPhase, CreatedAt: time.Time{}.String()},
 		}, clusters)
 	})
 
@@ -192,7 +195,55 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
+			CreatedAt: time.Time{}.String(), Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
+		}, info)
+	})
+
+	t.Run("replica status and metadata", func(t *testing.T) {
+		createdAt := metav1.NewTime(time.Date(2026, time.September, 21, 10, 0, 0, 0, time.UTC))
+		cluster := &capiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, CreationTimestamp: createdAt},
+			Spec:       capiv1.ClusterSpec{Topology: capiv1.Topology{Version: k8sVersion}},
+			Status: capiv1.ClusterStatus{
+				ControlPlane: &capiv1.ClusterControlPlaneStatus{
+					AvailableReplicas: ptr.To(int32(1)), DesiredReplicas: ptr.To(int32(3)),
+					ReadyReplicas: ptr.To(int32(2)), Replicas: ptr.To(int32(4)),
+				},
+				Workers: &capiv1.WorkersStatus{
+					AvailableReplicas: ptr.To(int32(5)), DesiredReplicas: ptr.To(int32(7)),
+					ReadyReplicas: ptr.To(int32(6)), Replicas: ptr.To(int32(8)),
+				},
+			},
+		}
+		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+
+		info, err := clusterClient.Get(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		assert.Equal(t, strategies.ClusterInfo{
+			Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
+			ControlPlanesStatus: strategies.NodeTypeStatus{AvailableReplicas: 1, DesiredReplicas: 3, ReadyReplicas: 2, Replicas: 4},
+			WorkersStatus:       strategies.NodeTypeStatus{AvailableReplicas: 5, DesiredReplicas: 7, ReadyReplicas: 6, Replicas: 8},
+		}, info)
+	})
+
+	t.Run("partially populated replica status", func(t *testing.T) {
+		cluster := &capiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+			Status: capiv1.ClusterStatus{
+				ControlPlane: &capiv1.ClusterControlPlaneStatus{DesiredReplicas: ptr.To(int32(3))},
+				Workers:      &capiv1.WorkersStatus{Replicas: ptr.To(int32(2))},
+			},
+		}
+		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+
+		info, err := clusterClient.Get(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		assert.Equal(t, strategies.ClusterInfo{
+			Name: clusterName, CreatedAt: time.Time{}.String(),
+			ControlPlanesStatus: strategies.NodeTypeStatus{DesiredReplicas: 3},
+			WorkersStatus:       strategies.NodeTypeStatus{Replicas: 2},
 		}, info)
 	})
 
@@ -277,4 +328,167 @@ func TestClusterClientDelete(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
 	})
+}
+
+const caseEmptyTagValue = "empty value"
+
+const testTagLabelPrefix = "tags.vmk.vates.tech/"
+
+const (
+	ownerTag        = "owner"
+	platformValue   = "platform"
+	productionValue = "production"
+)
+
+func TestClusterClientCreatesClusterWithTags(t *testing.T) {
+	testCases := map[string]struct {
+		tags    map[string]string
+		labels  map[string]string
+		wantErr error
+	}{
+		"multiple tags": {
+			tags:   map[string]string{"environment": productionValue, ownerTag: platformValue},
+			labels: map[string]string{testTagLabelPrefix + "environment": productionValue, testTagLabelPrefix + ownerTag: platformValue},
+		},
+		"no tags":         {},
+		caseEmptyTagValue: {tags: map[string]string{ownerTag: ""}, labels: map[string]string{testTagLabelPrefix + ownerTag: ""}},
+		"invalid name":    {tags: map[string]string{strings.Repeat("a", 64): "value"}, wantErr: strategies.ErrInvalidClusterTagName},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			kubeClient := newFakeClient(t)
+			clusterClient := kubernetes_clients.NewClusterClient(kubeClient, testNamespace)
+			info, err := clusterClient.Create(t.Context(), strategies.CreateClusterResourceParams{Name: clusterName, Tags: tc.tags})
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, info)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.tags, info.Tags)
+			stored := &capiv1.Cluster{}
+			require.NoError(t, kubeClient.Get(t.Context(), types.NamespacedName{Namespace: testNamespace, Name: clusterName}, stored))
+			assert.Equal(t, tc.labels, stored.Labels)
+		})
+	}
+}
+
+func TestClusterClientReadsClusterTags(t *testing.T) {
+	testCases := map[string]struct {
+		labels map[string]string
+		tags   map[string]string
+	}{
+		"filters unrelated labels": {
+			labels: map[string]string{capiv1.ClusterNameLabel: clusterName, testTagLabelPrefix + ownerTag: platformValue},
+			tags:   map[string]string{ownerTag: platformValue},
+		},
+		caseEmptyTagValue: {labels: map[string]string{testTagLabelPrefix + ownerTag: ""}, tags: map[string]string{ownerTag: ""}},
+		"no labels":       {},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: tc.labels}}
+			clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			tags, err := clusterClient.GetTags(t.Context(), clusterName)
+			require.NoError(t, err)
+			if tc.tags == nil {
+				assert.Equal(t, map[string]string{}, tags)
+			} else {
+				assert.Equal(t, tc.tags, tags)
+			}
+			info, err := clusterClient.Get(t.Context(), clusterName)
+			require.NoError(t, err)
+			assert.Equal(t, tc.tags, info.Tags)
+			clusters, err := clusterClient.List(t.Context())
+			require.NoError(t, err)
+			require.Len(t, clusters, 1)
+			assert.Equal(t, tc.tags, clusters[0].Tags)
+			for tag, expected := range tc.tags {
+				value, err := clusterClient.GetTag(t.Context(), clusterName, tag)
+				require.NoError(t, err)
+				assert.Equal(t, expected, value)
+			}
+		})
+	}
+}
+
+func TestClusterClientUpdatesClusterTags(t *testing.T) {
+	testCases := map[string]struct {
+		initial   map[string]string
+		tag       string
+		value     string
+		deleteTag bool
+		want      map[string]string
+		wantErr   error
+	}{
+		"create":          {tag: ownerTag, value: platformValue, want: map[string]string{ownerTag: platformValue}},
+		"update":          {initial: map[string]string{ownerTag: platformValue}, tag: ownerTag, value: "compute", want: map[string]string{ownerTag: "compute"}},
+		caseEmptyTagValue: {tag: ownerTag, want: map[string]string{ownerTag: ""}},
+		"delete":          {initial: map[string]string{ownerTag: platformValue}, tag: ownerTag, deleteTag: true, want: map[string]string{}},
+		"missing tag":     {tag: ownerTag, deleteTag: true, wantErr: strategies.ErrClusterTagNotFound},
+		"invalid value":   {tag: ownerTag, value: strings.Repeat("a", 64), wantErr: strategies.ErrInvalidClusterTagValue},
+		"invalid name":    {tag: "invalid/name", value: platformValue, wantErr: strategies.ErrInvalidClusterTagName},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			labels := map[string]string{capiv1.ClusterNameLabel: clusterName}
+			for tag, value := range tc.initial {
+				labels[testTagLabelPrefix+tag] = value
+			}
+			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: labels}}
+			kubeClient := newFakeClient(t, cluster)
+			clusterClient := kubernetes_clients.NewClusterClient(kubeClient, testNamespace)
+			var err error
+			if tc.deleteTag {
+				err = clusterClient.DeleteTag(t.Context(), clusterName, tc.tag)
+			} else {
+				err = clusterClient.SetTag(t.Context(), clusterName, tc.tag, tc.value)
+			}
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				labels = map[string]string{capiv1.ClusterNameLabel: clusterName}
+				for tag, value := range tc.want {
+					labels[testTagLabelPrefix+tag] = value
+				}
+			}
+			stored := &capiv1.Cluster{}
+			require.NoError(t, kubeClient.Get(t.Context(), types.NamespacedName{Namespace: testNamespace, Name: clusterName}, stored))
+			assert.Equal(t, labels, stored.Labels)
+			if tc.deleteTag && tc.wantErr == nil {
+				_, err := clusterClient.GetTag(t.Context(), clusterName, tc.tag)
+				assert.ErrorIs(t, err, strategies.ErrClusterTagNotFound)
+			}
+		})
+	}
+}
+
+func TestClusterClientTagMissingCluster(t *testing.T) {
+	testCases := map[string]func(context.Context, kubernetes_clients.ClusterClient) error{
+		"list": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+			_, err := c.GetTags(ctx, clusterName)
+			return err
+		},
+		"get": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+			_, err := c.GetTag(ctx, clusterName, ownerTag)
+			return err
+		},
+		"set": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+			return c.SetTag(ctx, clusterName, ownerTag, platformValue)
+		},
+		"delete": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+			return c.DeleteTag(ctx, clusterName, ownerTag)
+		},
+	}
+	for name, operation := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+			assert.ErrorIs(t, operation(t.Context(), clusterClient), strategies.ErrClusterNotFound)
+		})
+	}
 }

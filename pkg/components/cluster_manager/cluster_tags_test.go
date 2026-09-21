@@ -1,4 +1,4 @@
-package cluster_tag_manager_test
+package cluster_manager_test
 
 import (
 	"errors"
@@ -8,15 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"capv-proxy/pkg/components/cluster_tag_manager"
+	"capv-proxy/pkg/components/cluster_manager"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
 )
 
-func TestClusterTagManager(t *testing.T) {
+func TestClusterManagerTags(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	resources := mocks.NewMockForManagingClusterTagResources(ctrl)
-	manager := cluster_tag_manager.NewClusterTagManager(resources)
+	resources := mocks.NewMockForManagingClusterResources(ctrl)
+	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil)
 
 	resources.EXPECT().GetTags(t.Context(), "cluster").Return(map[string]string{"owner": "platform"}, nil)
 	tags, err := manager.GetClusterTags(t.Context(), "cluster")
@@ -35,10 +35,10 @@ func TestClusterTagManager(t *testing.T) {
 	require.NoError(t, manager.DeleteClusterTag(t.Context(), "cluster", "owner"))
 }
 
-func TestClusterTagManagerWrapsResourceErrors(t *testing.T) {
+func TestClusterManagerTagsWrapsResourceErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	resources := mocks.NewMockForManagingClusterTagResources(ctrl)
-	manager := cluster_tag_manager.NewClusterTagManager(resources)
+	resources := mocks.NewMockForManagingClusterResources(ctrl)
+	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil)
 	errTest := errors.New("test error")
 
 	resources.EXPECT().SetTag(t.Context(), "cluster", "owner", "platform").Return(errTest)

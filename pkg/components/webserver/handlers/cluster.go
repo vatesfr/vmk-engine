@@ -21,10 +21,31 @@ type ClusterCreateParams struct {
 	Tags map[string]string `json:"tags,omitempty"`
 }
 
+type ClusterCreateTagParams struct {
+	// Kubernetes limits label values to 63 characters:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+	Value string `json:"value" validate:"max=63"`
+}
+
+type ClusterTagsResponse struct {
+	Result map[string]string `json:"result"`
+}
+
 type ClusterInfo struct {
-	Name                 string `json:"name"`
-	Phase                string `json:"phase"`
-	ControlPlaneEndpoint string `json:"controlPlaneEndpoint,omitempty"`
+	Name                 string            `json:"name"`
+	Phase                string            `json:"phase"`
+	CreatedAt            string            `json:"createdAt"`
+	ControlPlaneEndpoint string            `json:"controlPlaneEndpoint,omitempty"`
+	ControlPlaneStatus   NodeStatus        `json:"controlPlaneStatus,omitempty"`
+	WorkerStatus         NodeStatus        `json:"workerStatus,omitempty"`
+	Tags                 map[string]string `json:"tags,omitempty"`
+}
+
+type NodeStatus struct {
+	AvailableReplicas int `json:"availableReplicas"`
+	DesiredReplicas   int `json:"desiredReplicas"`
+	ReadyReplicas     int `json:"readyReplicas"`
+	Replicas          int `json:"replicas"`
 }
 
 type ClusterNodeInfo struct {
@@ -112,12 +133,53 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
 		Name:                 value.Name,
 		Phase:                value.Phase,
+		CreatedAt:            value.CreatedAt,
 		ControlPlaneEndpoint: value.ControlPlaneEndpoint,
+		ControlPlaneStatus:   NodeStatus(value.ControlPlanesStatus),
+		WorkerStatus:         NodeStatus(value.WorkersStatus),
+		Tags:                 value.Tags,
 	}
 }
 
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (string, error) {
 	if err := k.clusterService.DeleteCluster(c.Context(), c.PathParam("id")); err != nil {
+		return "", toHTTPError(err)
+	}
+
+	return "ok", nil
+}
+
+func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {
+	tags, err := k.clusterService.GetClusterTags(c.Context(), c.PathParam("id"))
+	if err != nil {
+		return ClusterTagsResponse{}, toHTTPError(err)
+	}
+	return ClusterTagsResponse{Result: tags}, nil
+}
+
+func (k ClusterHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
+	value, err := k.clusterService.GetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"))
+	if err != nil {
+		return "", toHTTPError(err)
+	}
+	return value, nil
+}
+
+func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[ClusterCreateTagParams]) (string, error) {
+	createParams, err := c.Body()
+	if err != nil {
+		return err.Error(), err
+	}
+
+	if err := k.clusterService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value); err != nil {
+		return "", toHTTPError(err)
+	}
+
+	return "ok", nil
+}
+
+func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (string, error) {
+	if err := k.clusterService.DeleteClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag")); err != nil {
 		return "", toHTTPError(err)
 	}
 

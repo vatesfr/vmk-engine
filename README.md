@@ -209,9 +209,10 @@ Tags may be supplied in the cluster creation request or managed later through
 are the persistent source of truth; tags previously kept only in process
 memory do not migrate across a deployment.
 
-The HTTP server delegates these operations to `ClusterTagManager`, which owns
+The HTTP server delegates these operations to `ClusterManager`, which owns
 the tag use cases and uses `ClusterClient` for Kubernetes label persistence.
-The client enforces the constraints specific to Kubernetes labels.
+The client enforces the constraints specific to Kubernetes labels. Tags are also
+included in cluster creation, detail, and list responses.
 
 View a cluster and its nodes:
 

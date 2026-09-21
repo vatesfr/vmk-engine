@@ -45,5 +45,17 @@ type MachineDeployment struct {
 type ClusterInfo struct {
 	Name                 string
 	Phase                string
+	CreatedAt            string
+	Version              string
 	ControlPlaneEndpoint string
+	ControlPlanesStatus  NodeTypeStatus
+	WorkersStatus        NodeTypeStatus
+	Tags                 map[string]string
+}
+
+type NodeTypeStatus struct {
+	AvailableReplicas int
+	DesiredReplicas   int
+	ReadyReplicas     int
+	Replicas          int
 }

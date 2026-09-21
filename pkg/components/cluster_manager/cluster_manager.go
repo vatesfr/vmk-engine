@@ -132,6 +132,36 @@ func (c ClusterManager) DeleteCluster(ctx context.Context, name string) error {
 	return nil
 }
 
+func (m ClusterManager) GetClusterTags(ctx context.Context, clusterName string) (map[string]string, error) {
+	tags, err := m.clusterResources.GetTags(ctx, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, err)
+	}
+	return tags, nil
+}
+
+func (m ClusterManager) GetClusterTag(ctx context.Context, clusterName, tag string) (string, error) {
+	value, err := m.clusterResources.GetTag(ctx, clusterName, tag)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, err)
+	}
+	return value, nil
+}
+
+func (m ClusterManager) SetClusterTag(ctx context.Context, clusterName, tag, value string) error {
+	if err := m.clusterResources.SetTag(ctx, clusterName, tag, value); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrClusterTagUpdateFailed, err)
+	}
+	return nil
+}
+
+func (m ClusterManager) DeleteClusterTag(ctx context.Context, clusterName, tag string) error {
+	if err := m.clusterResources.DeleteTag(ctx, clusterName, tag); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrClusterTagDeletionFailed, err)
+	}
+	return nil
+}
+
 func validateClusterName(name string) error {
 	if name == "" {
 		return strategies.ErrClusterNameRequired

@@ -57,7 +57,6 @@ flowchart LR
     subgraph http[HTTP component — pkg/components/webserver]
         fuego --> handlers[ClusterHandler]
         handlers -->|calls Strategy| port[ForManagingClusters]
-        handlers -->|calls Strategy| tagport[ForManagingClusterTags]
     end
 
     subgraph clustercomponent[Cluster management component — pkg/components/cluster_manager]
@@ -70,16 +69,8 @@ flowchart LR
         manager -->|calls required interface| defaultsport
     end
 
-    subgraph tagcomponent[Tag management component — pkg/components/cluster_tag_manager]
-        tagmanager[ClusterTagManager]
-        tagresourceport[ForManagingClusterTagResources]
-        tagmanager -->|calls required interface| tagresourceport
-    end
-
     port -->|implemented by| manager
-    tagport -->|implemented by| tagmanager
     clusterport -->|implemented by| clusters[ClusterClient]
-    tagresourceport -->|implemented by| clusters
     configport -->|implemented by| secrets[SecretClient]
     defaultsport -->|implemented by| defaults[ConfigMapClient]
     defaults --> api
@@ -103,8 +94,6 @@ The roles from Component + Strategy map to the code as follows:
 | Provided operations | `cluster_manager.ClusterManager` methods | Expose cluster-management use cases without declaring a producer-owned Go interface |
 | Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
 | Strategies | `ForManagingClusterResources`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
-| Component | `cluster_tag_manager.ClusterTagManager` | Exposes tag-management use cases and translates storage errors |
-| Strategy | `ForManagingClusterTagResources` | Describes label persistence required by `ClusterTagManager` |
 | Strategies | `ClusterClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
 | Configurator | `run` and `newK8sClient` in `cmd/http_server/main.go` | Select Kubernetes configuration, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
 
@@ -142,7 +131,6 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `cmd/http_server/` | Executable, CLI options, runtime configuration, and object wiring |
 | `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
-| `pkg/components/cluster_tag_manager/` | Cluster-tag use cases and orchestration |
 | `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
@@ -169,14 +157,14 @@ invalid configuration is propagated instead of being replaced by values built
 into the binary. The configurator injects this client into `ClusterManager`,
 keeping Kubernetes types out of the manager and shared contracts.
 
-`ClusterTagManager` implements `ForManagingClusterTags` for the HTTP component
-and requires `ForManagingClusterTagResources`, implemented by `ClusterClient`.
+`ClusterManager` implements `ForManagingClusters` for the HTTP component
+and requires `ForManagingClusterResources`, implemented by `ClusterClient`.
 The manager owns the use cases and application error handling; the client
 stores each tag as a label on the CAPI `Cluster` with the `tags.vmk.vates.tech/`
 prefix. Tags can be supplied during cluster creation or changed through the
 HTTP tag routes; the Kubernetes resource is the source of truth across process
 restarts. Label-specific validation stays in `ClusterClient`, so another
-`ForManagingClusterTagResources` implementation can apply the constraints of
+`ForManagingClusterResources` implementation can apply the constraints of
 its own storage technology.
 
 ## Current limitations and architectural gaps

@@ -95,7 +95,6 @@ type httpTestCase struct {
 	path           string
 	body           string
 	setupMock      func(context.Context, *mocks.MockForManagingClusters)
-	setupTagMock   func(context.Context, *mocks.MockForManagingClusterTags)
 	expectedStatus int
 	expectedJSON   string
 	expectedTitle  string
@@ -121,8 +120,12 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10"},
-				{"name":"cluster-2","phase":"Provisioning"}
+				{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
+                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
+                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}},
+				{"name":"cluster-2","phase":"Provisioning","createdAt":"",
+                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
+                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}
 			]`,
 		},
 		"get cluster": {
@@ -134,7 +137,9 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10"}`,
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
+                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
+                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
 		},
 		"get missing cluster": {
 			method: http.MethodGet,
@@ -180,7 +185,9 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10"}`,
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
+                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
+                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
 		},
 		"create cluster with tags": {
 			method: http.MethodPost,
@@ -189,10 +196,12 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				params := validCreateClusterParams()
 				params.Tags = map[string]string{"environment": "production"}
-				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName}, nil)
+				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `{"name":"cluster-1","phase":""}`,
+			expectedJSON: `{"name":"cluster-1","phase":"","tags":{"environment":"production"},"createdAt":"",
+                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
+                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
 		},
 		"create cluster service error": {
 			method: http.MethodPost,
@@ -236,7 +245,7 @@ func TestHTTPRoutes(t *testing.T) {
 		"get cluster tags": {
 			method: http.MethodGet,
 			path:   clusterTagsPath,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterTags(ctx, clusterName).Return(map[string]string{"environment": "production"}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -245,7 +254,7 @@ func TestHTTPRoutes(t *testing.T) {
 		"get cluster tag": {
 			method: http.MethodGet,
 			path:   clusterTagPath,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("production", nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -255,7 +264,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodPut,
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -264,7 +273,7 @@ func TestHTTPRoutes(t *testing.T) {
 		"delete cluster tag": {
 			method: http.MethodDelete,
 			path:   clusterTagPath,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -273,7 +282,7 @@ func TestHTTPRoutes(t *testing.T) {
 		"missing cluster tag": {
 			method: http.MethodGet,
 			path:   clusterTagPath,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("", strategies.ErrClusterTagNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
@@ -284,7 +293,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodPut,
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
-			setupTagMock: func(ctx context.Context, service *mocks.MockForManagingClusterTags) {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -342,15 +351,11 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 
 	ctrl := gomock.NewController(t)
 	clusterService := mocks.NewMockForManagingClusters(ctrl)
-	tagService := mocks.NewMockForManagingClusterTags(ctrl)
 	if testCase.setupMock != nil {
 		testCase.setupMock(t.Context(), clusterService)
 	}
-	if testCase.setupTagMock != nil {
-		testCase.setupTagMock(t.Context(), tagService)
-	}
 
-	handler := newTestHandler(clusterService, tagService)
+	handler := newTestHandler(clusterService)
 	request := httptest.NewRequestWithContext(t.Context(), testCase.method, testCase.path, strings.NewReader(testCase.body))
 	request.Header.Set(acceptHeader, "application/json, application/xml")
 	if testCase.body != "" {
@@ -407,9 +412,8 @@ func validCreateClusterParams() strategies.CreateClusterParams {
 
 func newTestHandler(
 	clusterService strategies.ForManagingClusters,
-	tagService strategies.ForManagingClusterTags,
 ) http.Handler {
 	return webserver.HttpServer{
 		SwaggerUI: webserver.SwaggerUIDisabled,
-	}.Handler(clusterService, tagService)
+	}.Handler(clusterService)
 }

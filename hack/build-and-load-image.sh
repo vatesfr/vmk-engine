@@ -69,6 +69,9 @@ for node_entry in "${NODE_HOSTS[@]}"; do
       nerdctl --namespace k8s.io load
     elif command -v docker >/dev/null 2>&1; then
       docker load
+    elif [ -x /var/lib/rancher/rke2/bin/ctr ]; then
+      # RKE2 uses containerd, but the ctr binary is not in PATH by default.
+      /var/lib/rancher/rke2/bin/ctr --namespace k8s.io -a /run/k3s/containerd/containerd.sock images import -
     else
       echo "No supported container runtime found (microk8s, k3s, ctr, nerdctl, or docker)." >&2
       exit 1

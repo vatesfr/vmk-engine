@@ -16,5 +16,8 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+      {{- with .Values.service.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
   selector:
     {{- include "go-capi-client.selectorLabels" . | nindent 4 }}

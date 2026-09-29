@@ -43,6 +43,8 @@ config:
 service:
   type: ClusterIP
   port: 80
+  # Fixed NodePort when type is NodePort; empty lets the cluster allocate one.
+  nodePort: ""
   annotations: {}
 
 ingress:

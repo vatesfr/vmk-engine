@@ -47,44 +47,44 @@ const (
 	unknownPath                    = "/unknown"
 	createClusterRequestBody       = `{
 		"name":"cluster-1",
-		"controlPlaneReplicas":1,
-		"workerReplicas":1,
-		"controlPlaneIP":"10.0.0.10",
-		"vmNamePrefix":"test"
+		"control_plane_replicas":1,
+		"worker_replicas":1,
+		"control_plane_IP":"10.0.0.10",
+		"vm_name_prefix":"test"
 	}`
 	malformedRequestBody   = `{"name":`
 	missingNameRequestBody = `{
-		"controlPlaneReplicas":1,
-		"workerReplicas":1,
-		"controlPlaneIP":"10.0.0.10",
-		"vmNamePrefix":"test"
+		"control_plane_replicas":1,
+		"worker_replicas":1,
+		"control_plane_IP":"10.0.0.10",
+		"vm_name_prefix":"test"
 	}`
 	invalidControlPlaneIPRequestBody = `{
 		"name":"cluster-1",
-		"controlPlaneReplicas":1,
-		"workerReplicas":1,
-		"controlPlaneIP":"invalid",
-		"vmNamePrefix":"test"
+		"control_plane_replicas":1,
+		"worker_replicas":1,
+		"control_plane_IP":"invalid",
+		"vm_name_prefix":"test"
 	}`
 	invalidControlPlaneReplicasRequestBody = `{
 		"name":"cluster-1",
-		"controlPlaneReplicas":0,
-		"workerReplicas":1,
-		"controlPlaneIP":"10.0.0.10",
-		"vmNamePrefix":"test"
+		"control_plane_replicas":0,
+		"worker_replicas":1,
+		"control_plane_IP":"10.0.0.10",
+		"vm_name_prefix":"test"
 	}`
 	invalidWorkerReplicasRequestBody = `{
 		"name":"cluster-1",
-		"controlPlaneReplicas":1,
-		"workerReplicas":0,
-		"controlPlaneIP":"10.0.0.10",
-		"vmNamePrefix":"test"
+		"control_plane_replicas":1,
+		"worker_replicas":0,
+		"control_plane_IP":"10.0.0.10",
+		"vm_name_prefix":"test"
 	}`
 	missingVMNamePrefixRequestBody = `{
 		"name":"cluster-1",
-		"controlPlaneReplicas":1,
-		"workerReplicas":1,
-		"controlPlaneIP":"10.0.0.10"
+		"control_plane_replicas":1,
+		"worker_replicas":1,
+		"control_plane_IP":"10.0.0.10"
 	}`
 )
 
@@ -120,12 +120,12 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
-                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
-                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}},
-				{"name":"cluster-2","phase":"Provisioning","createdAt":"",
-                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
-                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}
+				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}},
+				{"name":"cluster-2","phase":"Provisioning","created_at":"",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}
 			]`,
 		},
 		"get cluster": {
@@ -137,9 +137,9 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
-                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
-                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},
 		"get missing cluster": {
 			method: http.MethodGet,
@@ -185,23 +185,23 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","controlPlaneEndpoint":"10.0.0.10","createdAt":"",
-                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
-                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},
 		"create cluster with tags": {
 			method: http.MethodPost,
 			path:   clustersPath,
-			body:   strings.Replace(createClusterRequestBody, `"vmNamePrefix":"test"`, `"vmNamePrefix":"test","tags":{"environment":"production"}`, 1),
+			body:   strings.Replace(createClusterRequestBody, `"vm_name_prefix":"test"`, `"vm_name_prefix":"test","tags":{"environment":"production"}`, 1),
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				params := validCreateClusterParams()
 				params.Tags = map[string]string{"environment": "production"}
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"","tags":{"environment":"production"},"createdAt":"",
-                "controlPlaneStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0},
-                "workerStatus":{"availableReplicas":0,"desiredReplicas":0,"readyReplicas":0,"replicas":0}}`,
+			expectedJSON: `{"name":"cluster-1","phase":"","tags":{"environment":"production"},"created_at":"",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},
 		"create cluster service error": {
 			method: http.MethodPost,

@@ -12,10 +12,10 @@ type ClusterHandler struct {
 
 type ClusterCreateParams struct {
 	Name                 string `json:"name" validate:"required"`
-	ControlPlaneReplicas int32  `json:"controlPlaneReplicas" validate:"required,min=1"`
-	WorkerReplicas       int32  `json:"workerReplicas" validate:"required,min=1"`
-	ControlPlaneIP       string `json:"controlPlaneIP" validate:"required,ip"`
-	VMNamePrefix         string `json:"vmNamePrefix" validate:"required"`
+	ControlPlaneReplicas int32  `json:"control_plane_replicas" validate:"required,min=1"`
+	WorkerReplicas       int32  `json:"worker_replicas" validate:"required,min=1"`
+	ControlPlaneIP       string `json:"control_plane_ip" validate:"required,ip"`
+	VMNamePrefix         string `json:"vm_name_prefix" validate:"required"`
 	// Kubernetes limits label names and values to 63 characters:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
 	Tags map[string]string `json:"tags,omitempty"`
@@ -34,17 +34,17 @@ type ClusterTagsResponse struct {
 type ClusterInfo struct {
 	Name                 string            `json:"name"`
 	Phase                string            `json:"phase"`
-	CreatedAt            string            `json:"createdAt"`
-	ControlPlaneEndpoint string            `json:"controlPlaneEndpoint,omitempty"`
-	ControlPlaneStatus   NodeStatus        `json:"controlPlaneStatus,omitempty"`
-	WorkerStatus         NodeStatus        `json:"workerStatus,omitempty"`
+	CreatedAt            string            `json:"created_at"`
+	ControlPlaneEndpoint string            `json:"control_plane_endpoint,omitempty"`
+	ControlPlaneStatus   NodeStatus        `json:"control_plane_status,omitempty"`
+	WorkerStatus         NodeStatus        `json:"worker_status,omitempty"`
 	Tags                 map[string]string `json:"tags,omitempty"`
 }
 
 type NodeStatus struct {
-	AvailableReplicas int `json:"availableReplicas"`
-	DesiredReplicas   int `json:"desiredReplicas"`
-	ReadyReplicas     int `json:"readyReplicas"`
+	AvailableReplicas int `json:"available_replicas"`
+	DesiredReplicas   int `json:"desired_replicas"`
+	ReadyReplicas     int `json:"ready_replicas"`
 	Replicas          int `json:"replicas"`
 }
 

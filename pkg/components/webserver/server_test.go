@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,6 +100,7 @@ type httpTestCase struct {
 	expectedJSON   string
 	expectedTitle  string
 	expectedDetail string
+	expectedFields int
 }
 
 func TestHTTPRoutes(t *testing.T) {
@@ -356,6 +358,42 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedTitle:  "Cluster tag not found",
 			expectedDetail: strategies.ErrClusterTagNotFound.Error(),
 		},
+		"invalid tag value wrapped by service": {
+			method: http.MethodPut,
+			path:   clusterTagPath,
+			body:   `{"value":"invalid value"}`,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "invalid value").Return(fmt.Errorf("update: %w", strategies.ErrInvalidClusterTagValue))
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedTitle:  "Invalid cluster parameters",
+			expectedDetail: "update: invalid cluster tag value",
+		},
+		"invalid tag on cluster creation": {
+			method: http.MethodPost,
+			path:   clustersPath,
+			body:   strings.Replace(createClusterRequestBody, `"vmNamePrefix":"test"`, `"vmNamePrefix":"test","tags":{"invalid tag":"production"}`, 1),
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().CreateCluster(ctx, gomock.Any()).Return(strategies.ClusterInfo{}, fmt.Errorf("create: %w", strategies.ErrInvalidClusterTagName))
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+		},
+		"invalid tag on retrieval": {
+			method: http.MethodGet,
+			path:   clusterTagPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("", strategies.ErrInvalidClusterTagName)
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+		},
+		"invalid tag on deletion": {
+			method: http.MethodDelete,
+			path:   clusterTagPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(strategies.ErrInvalidClusterTagName)
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+		},
 		"invalid cluster tag": {
 			method: http.MethodPut,
 			path:   clusterTagPath,
@@ -363,7 +401,7 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(strategies.ErrInvalidClusterTagName)
 			},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusUnprocessableEntity,
 		},
 		"unknown route": {
 			method:         http.MethodGet,
@@ -386,7 +424,12 @@ func TestHTTPRoutes(t *testing.T) {
 
 func TestCreateClusterHTTPValidation(t *testing.T) {
 	testCases := map[string]httpTestCase{
-		"malformed JSON":                      {body: malformedRequestBody},
+		"malformed JSON":                      {body: malformedRequestBody, expectedStatus: http.StatusBadRequest},
+		"wrong type":                          {body: `{"control_plane_replicas":"one"}`, expectedStatus: http.StatusBadRequest},
+		"unknown field":                       {body: `{"unknown":true}`, expectedStatus: http.StatusBadRequest},
+		"empty body":                          {body: ""},
+		"negative control plane replicas":     {body: strings.Replace(createClusterRequestBody, `"control_plane_replicas":1`, `"control_plane_replicas":-1`, 1)},
+		"negative worker replicas":            {body: strings.Replace(createClusterRequestBody, `"worker_replicas":1`, `"worker_replicas":-1`, 1)},
 		"missing name":                        {body: missingNameRequestBody},
 		"invalid control plane IP":            {body: invalidControlPlaneIPRequestBody},
 		"invalid control plane replicas":      {body: invalidControlPlaneReplicasRequestBody},
@@ -398,7 +441,14 @@ func TestCreateClusterHTTPValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			testCase.method = http.MethodPost
 			testCase.path = clustersPath
-			testCase.expectedStatus = http.StatusBadRequest
+			if testCase.expectedStatus == 0 {
+				testCase.expectedStatus = http.StatusUnprocessableEntity
+				testCase.expectedTitle = "Validation Error"
+				testCase.expectedFields = 1
+				if name == "empty body" {
+					testCase.expectedFields = 5
+				}
+			}
 			executeHTTPTestCase(t, testCase)
 		})
 	}
@@ -409,7 +459,9 @@ func TestClusterTagValueHTTPValidation(t *testing.T) {
 		method:         http.MethodPut,
 		path:           clusterTagPath,
 		body:           `{"value":"` + strings.Repeat("a", 64) + `"}`,
-		expectedStatus: http.StatusBadRequest,
+		expectedTitle:  "Validation Error",
+		expectedFields: 1,
+		expectedStatus: http.StatusUnprocessableEntity,
 	})
 }
 
@@ -441,7 +493,26 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 		assertJSONErrorStatus(t, response, testCase.expectedStatus)
 	}
 	if testCase.expectedTitle != "" || testCase.expectedDetail != "" {
-		assertJSONError(t, response, testCase.expectedTitle, testCase.expectedDetail)
+		if testCase.expectedFields == 0 {
+			assertJSONError(t, response, testCase.expectedTitle, testCase.expectedDetail)
+		} else {
+			var problem struct {
+				Title  string `json:"title"`
+				Detail string `json:"detail"`
+				Errors []struct {
+					Name   string `json:"name"`
+					Reason string `json:"reason"`
+				} `json:"errors"`
+			}
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &problem))
+			assert.Equal(t, testCase.expectedTitle, problem.Title)
+			assert.NotEmpty(t, problem.Detail)
+			require.Len(t, problem.Errors, testCase.expectedFields)
+			for _, field := range problem.Errors {
+				assert.NotEmpty(t, field.Name)
+				assert.NotEmpty(t, field.Reason)
+			}
+		}
 	}
 }
 
@@ -483,4 +554,16 @@ func newTestHandler(
 	return webserver.HttpServer{
 		SwaggerUI: webserver.SwaggerUIDisabled,
 	}.Handler(clusterService)
+}
+
+func TestClusterTagBodyHTTPDecoding(t *testing.T) {
+	for name, body := range map[string]string{
+		"malformed JSON": `{"value":`,
+		"wrong type":     `{"value":123}`,
+		"unknown field":  `{"unknown":true}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{method: http.MethodPut, path: clusterTagPath, body: body, expectedStatus: http.StatusBadRequest})
+		})
+	}
 }

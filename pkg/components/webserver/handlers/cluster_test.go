@@ -202,10 +202,10 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 		err    error
 		status int
 	}{
-		"cluster name required":           {strategies.ErrClusterNameRequired, http.StatusBadRequest},
-		"control plane replicas required": {strategies.ErrControlPlaneReplicasRequired, http.StatusBadRequest},
-		"worker replicas required":        {strategies.ErrWorkerReplicasRequired, http.StatusBadRequest},
-		"control plane IP required":       {strategies.ErrControlPlaneIPRequired, http.StatusBadRequest},
+		"cluster name required":           {strategies.ErrClusterNameRequired, http.StatusUnprocessableEntity},
+		"control plane replicas required": {strategies.ErrControlPlaneReplicasRequired, http.StatusUnprocessableEntity},
+		"worker replicas required":        {strategies.ErrWorkerReplicasRequired, http.StatusUnprocessableEntity},
+		"control plane IP required":       {strategies.ErrControlPlaneIPRequired, http.StatusUnprocessableEntity},
 		"cluster already exists":          {strategies.ErrClusterAlreadyExists, http.StatusConflict},
 	}
 	body := handlers.ClusterCreateParams{

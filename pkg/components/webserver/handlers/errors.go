@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/go-fuego/fuego"
+	"github.com/go-playground/validator/v10"
 
 	"capv-proxy/pkg/strategies"
 )
@@ -11,6 +13,22 @@ import (
 // toHTTPError translates application errors at the HTTP boundary. Application
 // services remain independent from transport concerns and HTTP status codes.
 func toHTTPError(err error) error {
+	var validationErrors validator.ValidationErrors
+	if errors.As(err, &validationErrors) {
+		var problem fuego.HTTPError
+		if !errors.As(err, &problem) {
+			var problemPointer *fuego.HTTPError
+			if errors.As(err, &problemPointer) && problemPointer != nil {
+				problem = *problemPointer
+			} else {
+				problem.Title = "Validation Error"
+			}
+		}
+		problem.Err = err
+		problem.Status = http.StatusUnprocessableEntity
+		return problem
+	}
+
 	var httpError fuego.ErrorWithStatus
 	if errors.As(err, &httpError) {
 		return err
@@ -24,8 +42,9 @@ func toHTTPError(err error) error {
 		errors.Is(err, strategies.ErrClusterTagNameRequired),
 		errors.Is(err, strategies.ErrInvalidClusterTagName),
 		errors.Is(err, strategies.ErrInvalidClusterTagValue):
-		return fuego.BadRequestError{
+		return fuego.HTTPError{
 			Err:    err,
+			Status: http.StatusUnprocessableEntity,
 			Title:  "Invalid cluster parameters",
 			Detail: err.Error(),
 		}

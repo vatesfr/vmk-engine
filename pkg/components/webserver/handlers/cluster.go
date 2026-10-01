@@ -187,7 +187,7 @@ func (k ClusterHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
 func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[ClusterCreateTagParams]) (string, error) {
 	createParams, err := c.Body()
 	if err != nil {
-		return err.Error(), err
+		return "", toHTTPError(err)
 	}
 
 	if err := k.clusterService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value); err != nil {

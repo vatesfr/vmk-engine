@@ -79,18 +79,34 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	fuego.Get(clusterRouter, "", clusterHandler.GetClusters,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
 	)
-	fuego.Get(clusterRouter, "/{id}", clusterHandler.GetCluster)
+	fuego.Get(clusterRouter, "/{id}", clusterHandler.GetCluster, notFoundResponse("Cluster not found"), validationResponse())
 	fuego.Get(clusterRouter, "/{id}/nodes", clusterHandler.GetClusterNodesInfo,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
+		validationResponse(),
 	)
-	fuego.Get(clusterRouter, "/{id}/config", clusterHandler.GetClusterConfig)
-	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster)
-	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster)
+	fuego.Get(clusterRouter, "/{id}/config", clusterHandler.GetClusterConfig, notFoundResponse("Cluster not found"), validationResponse())
+	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster,
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster already exists", fuego.Response{Type: fuego.HTTPError{}}),
+		decodingResponse(), validationResponse(),
+	)
+	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster, notFoundResponse("Cluster not found"), validationResponse())
 
-	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags)
-	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag)
-	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag)
-	fuego.Delete(clusterRouter, "/{id}/tags/{tag}", clusterHandler.DeleteClusterTag)
+	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags, notFoundResponse("Cluster not found"))
+	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
+	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag, notFoundResponse("Cluster not found"), decodingResponse(), validationResponse())
+	fuego.Delete(clusterRouter, "/{id}/tags/{tag}", clusterHandler.DeleteClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
 
 	return server
+}
+
+func validationResponse() fuego.RouteOption {
+	return fuego.OptionAddResponse(http.StatusUnprocessableEntity, "Invalid cluster parameters or request body", fuego.Response{Type: fuego.HTTPError{}})
+}
+
+func decodingResponse() fuego.RouteOption {
+	return fuego.OptionAddResponse(http.StatusBadRequest, "Cannot decode request body (malformed input, incompatible type, or unknown field)", fuego.Response{Type: fuego.HTTPError{}})
+}
+
+func notFoundResponse(description string) fuego.RouteOption {
+	return fuego.OptionAddResponse(http.StatusNotFound, description, fuego.Response{Type: fuego.HTTPError{}})
 }

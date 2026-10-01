@@ -24,6 +24,48 @@ interface.
 - Kubernetes deployment through a Helm chart with namespace-scoped RBAC,
   probes, and optional Ingress and autoscaling.
 
+## HTTP errors
+
+Request validation now returns **422 Unprocessable Entity** instead of 400.
+Clients that handle validation failures by status must accept 422.
+
+| Status | Meaning |
+|---|---|
+| 400 | Request body cannot be decoded: malformed JSON, incompatible field type, or unknown field |
+| 422 | Missing required field, invalid IP, replica count below 1, or invalid tag name/value |
+| 404 | Cluster or tag not found |
+| 409 | Cluster already exists |
+| 500 | Internal failure or missing server configuration |
+
+Errors use the existing Fuego response format (`status`, `title`, `detail`,
+and optional `errors` for individual fields). For example, a missing cluster
+name returns:
+
+```json
+{
+  "status": 422,
+  "title": "Validation Error",
+  "detail": "Name is required",
+  "errors": [
+    {
+      "name": "ClusterCreateParams.Name",
+      "reason": "Key: 'ClusterCreateParams.Name' Error:Field validation for 'Name' failed on the 'required' tag",
+      "more": {
+        "nsField": "ClusterCreateParams.Name",
+        "field": "Name",
+        "tag": "required",
+        "param": "",
+        "value": ""
+      }
+    }
+  ]
+}
+```
+
+An empty cluster creation body also returns 422 because its required fields
+are absent. Empty tag values remain allowed. Validation failures returned
+directly by the Kubernetes API are not covered by this mapping.
+
 ## Requirements
 
 - Go `1.26.5`, or a version compatible with the `go.mod` file;

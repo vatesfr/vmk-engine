@@ -32,26 +32,35 @@ type ClusterTagsResponse struct {
 }
 
 type ClusterInfo struct {
-	Name                 string            `json:"name"`
-	Phase                string            `json:"phase"`
-	CreatedAt            string            `json:"created_at"`
+	Name                 string            `json:"name,omitempty"`
+	Phase                string            `json:"phase,omitempty"`
+	CreatedAt            string            `json:"created_at,omitempty"`
 	ControlPlaneEndpoint string            `json:"control_plane_endpoint,omitempty"`
-	ControlPlaneStatus   NodeStatus        `json:"control_plane_status,omitempty"`
-	WorkerStatus         NodeStatus        `json:"worker_status,omitempty"`
+	ControlPlaneStatus   *NodeStatus       `json:"control_plane_status,omitempty"`
+	WorkerStatus         *NodeStatus       `json:"worker_status,omitempty"`
 	Tags                 map[string]string `json:"tags,omitempty"`
 }
 
 type NodeStatus struct {
-	AvailableReplicas int `json:"available_replicas"`
-	DesiredReplicas   int `json:"desired_replicas"`
-	ReadyReplicas     int `json:"ready_replicas"`
-	Replicas          int `json:"replicas"`
+	AvailableReplicas *int `json:"available_replicas,omitempty"`
+	DesiredReplicas   *int `json:"desired_replicas,omitempty"`
+	ReadyReplicas     *int `json:"ready_replicas,omitempty"`
+	Replicas          *int `json:"replicas,omitempty"`
+}
+
+func NewFromStrategyStatus(status strategies.NodeTypeStatus) *NodeStatus {
+	n := NodeStatus{}
+	n.AvailableReplicas = &status.AvailableReplicas
+	n.DesiredReplicas = &status.DesiredReplicas
+	n.ReadyReplicas = &status.ReadyReplicas
+	n.Replicas = &status.Replicas
+	return &n
 }
 
 type ClusterNodeInfo struct {
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	Status   string `json:"status"`
+	Name     string `json:"name,omitempty"`
+	Role     string `json:"role,omitempty"`
+	Status   string `json:"status,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
@@ -62,6 +71,8 @@ func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHan
 }
 
 func (k ClusterHandler) GetClusters(c fuego.ContextNoBody) ([]ClusterInfo, error) {
+	fields := c.QueryParam("fields")
+
 	clusters, err := k.clusterService.GetClusters(c.Context())
 	if err != nil {
 		return nil, toHTTPError(err)
@@ -71,7 +82,7 @@ func (k ClusterHandler) GetClusters(c fuego.ContextNoBody) ([]ClusterInfo, error
 	for _, value := range clusters {
 		result = append(result, toClusterInfo(value))
 	}
-	return result, nil
+	return selectCollectionFields(result, fields)
 }
 
 func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
@@ -83,6 +94,8 @@ func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
 }
 
 func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
+	fields := c.QueryParam("fields")
+
 	nodes, err := k.clusterService.GetClusterNodesInfo(c.Context(), c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
@@ -94,7 +107,7 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 			Name: node.Name, Role: node.Role, Status: node.Status, Endpoint: node.Endpoint,
 		})
 	}
-	return result, nil
+	return selectCollectionFields(result, fields)
 }
 
 func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (string, error) {
@@ -135,8 +148,8 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		Phase:                value.Phase,
 		CreatedAt:            value.CreatedAt,
 		ControlPlaneEndpoint: value.ControlPlaneEndpoint,
-		ControlPlaneStatus:   NodeStatus(value.ControlPlanesStatus),
-		WorkerStatus:         NodeStatus(value.WorkersStatus),
+		ControlPlaneStatus:   NewFromStrategyStatus(value.ControlPlanesStatus),
+		WorkerStatus:         NewFromStrategyStatus(value.WorkersStatus),
 		Tags:                 value.Tags,
 	}
 }

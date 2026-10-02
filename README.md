@@ -143,12 +143,12 @@ Base URL: `http://localhost:8080`.
 | Method | Route | Description | Current status |
 | --- | --- | --- | --- |
 | `GET` | `/ping` | Checks service health | Working |
-| `GET` | `/api/kubernetes/clusters/` | Lists clusters in the namespace | Working |
+| `GET` | `/api/kubernetes/clusters/` | Lists clusters, or selected cluster fields, in the namespace | Working |
 | `GET` | `/api/kubernetes/clusters/{id}` | Returns one cluster | Working |
 | `POST` | `/api/kubernetes/clusters/` | Creates a topology-managed CAPI `Cluster` | Working with a ClusterClass |
 | `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
-| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes from CAPI Machines | Working |
+| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 
 ### Examples
 
@@ -168,6 +168,24 @@ Example response:
   }
 ]
 ```
+Use the `fields` query parameter to choose the response representation. An
+absent, empty value or `*` returns every field.
+Otherwise, provide comma-separated JSON field names. Dot-separated paths select
+nested fields. Unknown or malformed fields will be ignored.
+
+Return full cluster objects:
+
+```bash
+curl 'http://127.0.0.1:8080/api/kubernetes/clusters/?fields=*'
+```
+
+Return only the cluster name and the ready replica count:
+
+```bash
+curl 'http://127.0.0.1:8080/api/kubernetes/clusters/?fields=name,control_plane_status.ready_replicas'
+```
+
+The nodes collection uses the same selection syntax.
 
 Create a cluster:
 

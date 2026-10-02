@@ -44,7 +44,11 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
 			expected: []handlers.ClusterInfo{{
-				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
+				Name:                 clusterName,
+				Phase:                clusterPhase,
+				ControlPlaneEndpoint: controlPlaneIP,
+				ControlPlaneStatus:   handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
+				WorkerStatus:         handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
 			}},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -55,7 +59,8 @@ func TestGetClusters(t *testing.T) {
 			service, handler := newClusterHandler(t)
 			service.EXPECT().GetClusters(gomock.Any()).Return(testCase.serviceResult, testCase.serviceError)
 
-			result, err := handler.GetClusters(fuego.NewMockContextNoBody())
+			ctx := fuego.NewMockContextNoBody().SetQueryParam("fields", "*")
+			result, err := handler.GetClusters(ctx)
 
 			assert.Equal(t, testCase.expected, result)
 			assertHandlerError(t, err, testCase.serviceError)
@@ -75,7 +80,11 @@ func TestGetCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: expectedServiceResult,
 			expected: handlers.ClusterInfo{
-				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
+				Name:                 clusterName,
+				Phase:                clusterPhase,
+				ControlPlaneEndpoint: controlPlaneIP,
+				ControlPlaneStatus:   handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
+				WorkerStatus:         handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
 			},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -116,7 +125,8 @@ func TestGetClusterNodesInfo(t *testing.T) {
 			service, handler := newClusterHandler(t)
 			service.EXPECT().GetClusterNodesInfo(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
 
-			result, err := handler.GetClusterNodesInfo(newContextWithClusterID())
+			ctx := newContextWithClusterID().SetQueryParam("fields", "*")
+			result, err := handler.GetClusterNodesInfo(ctx)
 
 			assert.Equal(t, testCase.expected, result)
 			assertHandlerError(t, err, testCase.serviceError)
@@ -163,7 +173,12 @@ func TestCreateCluster(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase},
-			expected:      handlers.ClusterInfo{Name: clusterName, Phase: clusterPhase},
+			expected: handlers.ClusterInfo{
+				Name:               clusterName,
+				Phase:              clusterPhase,
+				ControlPlaneStatus: handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
+				WorkerStatus:       handlers.NewFromStrategyStatus(strategies.NodeTypeStatus{}),
+			},
 		},
 		testCaseServiceError: {serviceError: errTest},
 	}

@@ -120,12 +120,55 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}},
-				{"name":"cluster-2","phase":"Provisioning","created_at":"",
+				{"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}
+			]`,
+		},
+		"list empty clusters": {
+			method: http.MethodGet,
+			path:   clustersPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return(nil, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `[]`,
+		},
+		"list clusters with all fields": {
+			method: http.MethodGet,
+			path:   clustersPath + "?fields=*",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
+					{Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint},
+					{Name: secondClusterName, Phase: secondClusterPhase},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON: `[
+				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}},
+				{"name":"cluster-2","phase":"Provisioning",
+                "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
+                "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}
+			]`,
+		},
+		"list clusters with selected nested fields": {
+			method: http.MethodGet,
+			path:   clustersPath + "?fields=name,control_plane_status.ready_replicas",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
+					{Name: clusterName, Phase: clusterPhase},
+					{Name: secondClusterName, Phase: secondClusterPhase},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON: `[{
+				"name":"cluster-1","control_plane_status":{"ready_replicas":0}},
+				{"name":"cluster-2","control_plane_status":{"ready_replicas":0}}
 			]`,
 		},
 		"get cluster": {
@@ -137,7 +180,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},
@@ -166,6 +209,30 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedJSON: `[{"name":"control-plane-0","role":"control-plane",` +
 				`"status":"Ready","endpoint":"10.0.0.11"}]`,
 		},
+		"get cluster nodes with all fields": {
+			method: http.MethodGet,
+			path:   clusterNodesPath + "?fields=*",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
+					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
+					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+				}}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `[{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}]`,
+		},
+		"get cluster nodes with selected fields": {
+			method: http.MethodGet,
+			path:   clusterNodesPath + "?fields=name,status",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
+					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
+					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+				}}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `[{"name":"control-plane-0","status":"Ready"}]`,
+		},
 		"get cluster config": {
 			method: http.MethodGet,
 			path:   clusterConfigPath,
@@ -185,7 +252,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10","created_at":"",
+			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},
@@ -199,7 +266,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"","tags":{"environment":"production"},"created_at":"",
+			expectedJSON: `{"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0}}`,
 		},

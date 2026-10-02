@@ -33,5 +33,4 @@ run-local: ## Run the application locally
 		--kubeconfig="$(HOME)/.kube/config" \
 		--namespace=default \
 		--address=127.0.0.1 \
-		--port=8080 \
-		--swagger-ui=swagger
+		--port=8080

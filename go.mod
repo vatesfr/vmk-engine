@@ -3,6 +3,7 @@ module capv-proxy
 go 1.26.5
 
 require (
+	github.com/getkin/kin-openapi v0.142.0
 	github.com/go-fuego/fuego v0.20.0
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/gofrs/uuid v4.4.0+incompatible
@@ -27,7 +28,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
-	github.com/getkin/kin-openapi v0.142.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect

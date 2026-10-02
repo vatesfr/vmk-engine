@@ -352,6 +352,9 @@ Delete the cluster:
 curl --request DELETE http://127.0.0.1:8080/api/kubernetes/clusters/demo
 ```
 
+Successful cluster and tag deletions, as well as tag creation and updates, return
+`204 No Content` with an empty body.
+
 ## Docker image
 
 Build the image:

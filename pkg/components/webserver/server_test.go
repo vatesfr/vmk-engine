@@ -44,7 +44,6 @@ const (
 	contentTypeHeader              = "Content-Type"
 	acceptHeader                   = "Accept"
 	applicationJSON                = "application/json"
-	okJSON                         = `"ok"`
 	unknownPath                    = "/unknown"
 	createClusterRequestBody       = `{
 		"name":"cluster-1",
@@ -298,8 +297,7 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().DeleteCluster(ctx, clusterName).Return(nil)
 			},
-			expectedStatus: http.StatusOK,
-			expectedJSON:   okJSON,
+			expectedStatus: http.StatusNoContent,
 		},
 		"delete missing cluster": {
 			method: http.MethodDelete,
@@ -336,8 +334,7 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(nil)
 			},
-			expectedStatus: http.StatusOK,
-			expectedJSON:   okJSON,
+			expectedStatus: http.StatusNoContent,
 		},
 		"delete cluster tag": {
 			method: http.MethodDelete,
@@ -345,8 +342,7 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(nil)
 			},
-			expectedStatus: http.StatusOK,
-			expectedJSON:   okJSON,
+			expectedStatus: http.StatusNoContent,
 		},
 		"missing cluster tag": {
 			method: http.MethodGet,
@@ -486,6 +482,9 @@ func executeHTTPTestCase(t *testing.T, testCase httpTestCase) {
 
 	require.Equal(t, testCase.expectedStatus, response.Code, response.Body.String())
 	assert.Empty(t, response.Header().Get("Location"), "API routes must respond without redirecting")
+	if testCase.expectedStatus == http.StatusNoContent {
+		assert.Empty(t, response.Body.String())
+	}
 	if testCase.expectedJSON != "" {
 		assert.JSONEq(t, testCase.expectedJSON, response.Body.String())
 	} else if testCase.expectedStatus >= http.StatusBadRequest &&

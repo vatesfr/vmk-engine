@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-fuego/fuego"
 
 	"capv-proxy/pkg/components/webserver/handlers"
@@ -89,12 +90,21 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster already exists", fuego.Response{Type: fuego.HTTPError{}}),
 		decodingResponse(), validationResponse(),
 	)
-	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster, notFoundResponse("Cluster not found"), validationResponse())
+	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster,
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster not found"), validationResponse(),
+	)
 
 	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags, notFoundResponse("Cluster not found"))
 	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
-	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag, notFoundResponse("Cluster not found"), decodingResponse(), validationResponse())
-	fuego.Delete(clusterRouter, "/{id}/tags/{tag}", clusterHandler.DeleteClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
+	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag,
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster not found"), decodingResponse(), validationResponse(),
+	)
+	fuego.Delete(clusterRouter, "/{id}/tags/{tag}", clusterHandler.DeleteClusterTag,
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster or tag not found"), validationResponse(),
+	)
 
 	return server
 }
@@ -109,4 +119,13 @@ func decodingResponse() fuego.RouteOption {
 
 func notFoundResponse(description string) fuego.RouteOption {
 	return fuego.OptionAddResponse(http.StatusNotFound, description, fuego.Response{Type: fuego.HTTPError{}})
+}
+
+func noContentResponse() fuego.RouteOption {
+	return func(r *fuego.BaseRoute) {
+		// An empty content map prevents Fuego from generating a response body schema.
+		r.Operation.AddResponse(http.StatusNoContent, openapi3.NewResponse().
+			WithDescription(http.StatusText(http.StatusNoContent)).
+			WithContent(openapi3.Content{}))
+	}
 }

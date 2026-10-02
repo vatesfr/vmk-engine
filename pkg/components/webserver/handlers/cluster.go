@@ -160,12 +160,12 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	}
 }
 
-func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (string, error) {
+func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (any, error) {
 	if err := k.clusterService.DeleteCluster(c.Context(), c.PathParam("id")); err != nil {
-		return "", toHTTPError(err)
+		return nil, toHTTPError(err)
 	}
 
-	return "ok", nil
+	return nil, nil
 }
 
 func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {
@@ -184,23 +184,23 @@ func (k ClusterHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
 	return value, nil
 }
 
-func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[ClusterCreateTagParams]) (string, error) {
+func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[ClusterCreateTagParams]) (any, error) {
 	createParams, err := c.Body()
 	if err != nil {
-		return "", toHTTPError(err)
+		return nil, toHTTPError(err)
 	}
 
 	if err := k.clusterService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value); err != nil {
-		return "", toHTTPError(err)
+		return nil, toHTTPError(err)
 	}
 
-	return "ok", nil
+	return nil, nil
 }
 
-func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (string, error) {
+func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (any, error) {
 	if err := k.clusterService.DeleteClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag")); err != nil {
-		return "", toHTTPError(err)
+		return nil, toHTTPError(err)
 	}
 
-	return "ok", nil
+	return nil, nil
 }

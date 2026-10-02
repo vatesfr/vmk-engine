@@ -263,9 +263,8 @@ func TestClusterNotFoundApplicationErrors(t *testing.T) {
 func TestDeleteCluster(t *testing.T) {
 	testCases := map[string]struct {
 		serviceError error
-		expected     string
 	}{
-		testCaseSuccess:      {expected: "ok"},
+		testCaseSuccess:      {},
 		testCaseServiceError: {serviceError: errTest},
 	}
 
@@ -276,7 +275,7 @@ func TestDeleteCluster(t *testing.T) {
 
 			result, err := handler.DeleteCluster(newContextWithClusterID())
 
-			assert.Equal(t, testCase.expected, result)
+			assert.Nil(t, result)
 			assertHandlerError(t, err, testCase.serviceError)
 		})
 	}

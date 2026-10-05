@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/go-fuego/fuego"
 	"github.com/gofrs/uuid"
+	"github.com/samber/lo"
 
 	"capv-proxy/pkg/strategies"
 )
@@ -103,17 +104,7 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 		return nil, toHTTPError(err)
 	}
 
-	result := make([]ClusterNodeInfo, 0, len(nodes))
-	for _, node := range nodes {
-		result = append(result, ClusterNodeInfo{
-			Name:      node.Name,
-			Role:      node.Role,
-			Status:    node.Status,
-			Endpoint:  node.Endpoint,
-			MachineID: node.MachineID,
-		})
-	}
-	return selectCollectionFields(result, fields)
+	return selectCollectionFields(toNodesInfo(nodes), fields)
 }
 
 func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (string, error) {
@@ -160,6 +151,18 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	}
 }
 
+func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
+	return lo.Map(value, func(node strategies.ClusterNodeInfo, _ int) ClusterNodeInfo {
+		return ClusterNodeInfo{
+			Name:      node.Name,
+			Role:      node.Role,
+			Status:    node.Status,
+			Endpoint:  node.Endpoint,
+			MachineID: node.MachineID,
+		}
+	})
+}
+
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (any, error) {
 	if err := k.clusterService.DeleteCluster(c.Context(), c.PathParam("id")); err != nil {
 		return nil, toHTTPError(err)
@@ -203,4 +206,13 @@ func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func (k ClusterHandler) GetAllNodes(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
+	nodes, err := k.clusterService.GetAllNodes(c.Context())
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+
+	return toNodesInfo(nodes), nil
 }

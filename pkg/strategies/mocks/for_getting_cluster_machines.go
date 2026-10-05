@@ -41,6 +41,21 @@ func (m *MockForGettingClusterMachines) EXPECT() *MockForGettingClusterMachinesM
 	return m.recorder
 }
 
+// GetAllMachines mocks base method.
+func (m *MockForGettingClusterMachines) GetAllMachines(ctx context.Context) ([]strategies.ClusterNodeInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllMachines", ctx)
+	ret0, _ := ret[0].([]strategies.ClusterNodeInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllMachines indicates an expected call of GetAllMachines.
+func (mr *MockForGettingClusterMachinesMockRecorder) GetAllMachines(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllMachines", reflect.TypeOf((*MockForGettingClusterMachines)(nil).GetAllMachines), ctx)
+}
+
 // GetMachinesByCluster mocks base method.
 func (m *MockForGettingClusterMachines) GetMachinesByCluster(ctx context.Context, clusterName string) ([]strategies.ClusterNodeInfo, error) {
 	m.ctrl.T.Helper()

@@ -310,3 +310,41 @@ func errorStatusCode(t *testing.T, err error) int {
 	require.ErrorAs(t, err, &statusError)
 	return statusError.StatusCode()
 }
+
+func TestGetAllNodes(t *testing.T) {
+	testCases := map[string]struct {
+		serviceResult []strategies.ClusterNodeInfo
+		serviceError  error
+		expected      []handlers.ClusterNodeInfo
+	}{
+		"maps all node fields and preserves order": {
+			serviceResult: []strategies.ClusterNodeInfo{
+				{Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
+				{Name: "worker-0", Role: "worker", Status: "NotReady"},
+			},
+			expected: []handlers.ClusterNodeInfo{
+				{Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
+				{Name: "worker-0", Role: "worker", Status: "NotReady"},
+			},
+		},
+		"empty result":                      {serviceResult: []strategies.ClusterNodeInfo{}, expected: []handlers.ClusterNodeInfo{}},
+		"nil result becomes an empty slice": {expected: []handlers.ClusterNodeInfo{}},
+		"service error discards partial result": {
+			serviceResult: []strategies.ClusterNodeInfo{{Name: nodeName}},
+			serviceError:  errTest,
+		},
+		"retrieval error": {serviceError: strategies.ErrClusterNodesRetrievalFailed},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			service, handler := newClusterHandler(t)
+			ctx := fuego.NewMockContextNoBody()
+			service.EXPECT().GetAllNodes(ctx.Context()).Return(tc.serviceResult, tc.serviceError)
+
+			nodes, err := handler.GetAllNodes(ctx)
+
+			assert.Equal(t, tc.expected, nodes)
+			assertHandlerError(t, err, tc.serviceError)
+		})
+	}
+}

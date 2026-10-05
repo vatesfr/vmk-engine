@@ -166,7 +166,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		vmID := uuid.Must(uuid.NewV4())
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
 		machine.Spec.ProviderID = xok8scommon.GetProviderID(uuid.Nil, &xosdk.VM{ID: vmID})
-		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -179,7 +179,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	t.Run("non-xo provider id is ignored", func(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
 		machine.Spec.ProviderID = "aws:///us-east-1a/i-1234567890abcdef0"
-		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -239,6 +239,89 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
 			assert.Equal(t, tc.want, nodes[0].Endpoint)
+		})
+	}
+}
+
+type testAllMachinesParams struct {
+	objects         []client.Object
+	namespace       string
+	listErr         error
+	want            []strategies.ClusterNodeInfo
+	wantErr         error
+	wantErrContains string
+}
+
+func TestMachineClientGetAllMachines(t *testing.T) {
+	first := machineWithStatus("z-machine", testNamespace, clusterName, true, metav1.ConditionTrue,
+		capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: controlPlaneIP})
+	first.Status.NodeRef = capiv1.MachineNodeReference{Name: "a-node"}
+	second := machineWithStatus("a-machine", testNamespace, "other-cluster", false, metav1.ConditionFalse,
+		capiv1.MachineAddress{Type: capiv1.MachineExternalIP, Address: externalIP})
+	second.Status.NodeRef = capiv1.MachineNodeReference{Name: "z-node"}
+	unlabelled := machineWithStatus("unlabelled", testNamespace, "", false, "")
+	unlabelled.Labels = nil
+	unlabelled.Status.Phase = provisioningPhase
+
+	testCases := map[string]testAllMachinesParams{
+		"maps machines across clusters in the configured namespace sorted by node name": {
+			objects: []client.Object{
+				second, first, unlabelled,
+				machineWithStatus("excluded", "other-namespace", clusterName, false, metav1.ConditionTrue),
+			},
+			namespace: testNamespace,
+			want: []strategies.ClusterNodeInfo{
+				{Name: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP)},
+				{Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
+				{Name: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP)},
+			},
+		},
+		"empty namespace returns an empty slice": {
+			objects: []client.Object{
+				machineWithStatus("excluded", "other-namespace", clusterName, false, ""),
+			},
+			namespace: testNamespace,
+			want:      []strategies.ClusterNodeInfo{},
+		},
+		"namespace is required before calling Kubernetes": {
+			wantErr: strategies.ErrClusterNamespaceRequired,
+		},
+		"Kubernetes error preserves cause and namespace": {
+			namespace:       testNamespace,
+			listErr:         errTest,
+			wantErr:         errTest,
+			wantErrContains: "list Machines in namespace " + testNamespace,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var kubeClient client.Client
+			if tc.namespace != "" {
+				if tc.listErr != nil {
+					kubeClient = newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, tc.listErr)})
+				} else {
+					kubeClient = newFakeClient(t, tc.objects...)
+				}
+			}
+			machineClient := NewMachineClient(kubeClient, tc.namespace)
+
+			nodes, err := machineClient.GetAllMachines(t.Context())
+
+			if tc.wantErr != nil {
+				assert.Nil(t, nodes)
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.wantErr)
+				if tc.wantErrContains != "" {
+					assert.Contains(t, err.Error(), tc.wantErrContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, nodes)
 		})
 	}
 }

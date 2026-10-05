@@ -7,6 +7,7 @@ require (
 	github.com/go-fuego/fuego v0.20.0
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/samber/lo v1.53.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vatesfr/xenorchestra-go-sdk v1.18.0

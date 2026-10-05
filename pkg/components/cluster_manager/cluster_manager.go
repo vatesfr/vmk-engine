@@ -97,6 +97,14 @@ func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, name string) ([
 	return nodes, nil
 }
 
+func (c ClusterManager) GetAllNodes(ctx context.Context) ([]strategies.ClusterNodeInfo, error) {
+	nodes, err := c.clusterMachines.GetAllMachines(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
+	}
+	return nodes, nil
+}
+
 func (c ClusterManager) GetClusterConfig(ctx context.Context, name string) (string, error) {
 	if err := validateClusterName(name); err != nil {
 		return "", err

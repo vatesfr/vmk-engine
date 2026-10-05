@@ -423,3 +423,38 @@ func newTestClusterManager(t *testing.T) (
 
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
 }
+
+func TestGetAllNodes(t *testing.T) {
+	testCases := map[string]struct {
+		nodes []strategies.ClusterNodeInfo
+		err   error
+	}{
+		"success": {nodes: []strategies.ClusterNodeInfo{
+			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP},
+			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
+		}},
+		"empty result": {nodes: []strategies.ClusterNodeInfo{}},
+		"retrieval error discards partial result": {
+			nodes: []strategies.ClusterNodeInfo{{Name: workerNodeName}}, err: errTest,
+		},
+		"missing namespace": {err: strategies.ErrClusterNamespaceRequired},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, _, machines, manager := newTestClusterManager(t)
+			machines.EXPECT().GetAllMachines(t.Context()).Return(tc.nodes, tc.err)
+
+			nodes, err := manager.GetAllNodes(t.Context())
+
+			if tc.err != nil {
+				assert.Nil(t, nodes)
+				assert.ErrorIs(t, err, strategies.ErrClusterNodesRetrievalFailed)
+				assert.ErrorIs(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.nodes, nodes)
+		})
+	}
+}

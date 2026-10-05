@@ -18,6 +18,7 @@ type ForManagingClusters interface {
 	GetClusterTag(ctx context.Context, clusterID, tag string) (string, error)
 	SetClusterTag(ctx context.Context, clusterID, tag, value string) error
 	DeleteClusterTag(ctx context.Context, clusterID, tag string) error
+	GetAllNodes(ctx context.Context) ([]ClusterNodeInfo, error)
 }
 
 type ClusterNodeInfo struct {

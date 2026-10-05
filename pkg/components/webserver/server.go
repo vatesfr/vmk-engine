@@ -106,6 +106,8 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		noContentResponse(), notFoundResponse("Cluster or tag not found"), validationResponse(),
 	)
 
+	fuego.Get(apiRouter, "/nodes", clusterHandler.GetAllNodes)
+
 	return server
 }
 

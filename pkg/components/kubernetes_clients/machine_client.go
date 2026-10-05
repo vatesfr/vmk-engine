@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/gofrs/uuid"
+	"github.com/samber/lo"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,10 +53,30 @@ func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName str
 		return nil, fmt.Errorf("list Machines for cluster %s/%s: %w", m.namespace, clusterName, err)
 	}
 
-	result := make([]strategies.ClusterNodeInfo, 0, len(machines.Items))
-	for i := range machines.Items {
-		result = append(result, toClusterNodeInfo(&machines.Items[i]))
+	result := lo.Map(machines.Items, func(machine capiv1.Machine, _ int) strategies.ClusterNodeInfo {
+		return toClusterNodeInfo(&machine)
+	})
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func (m MachineClient) GetAllMachines(ctx context.Context) ([]strategies.ClusterNodeInfo, error) {
+	if m.namespace == "" {
+		return nil, strategies.ErrClusterNamespaceRequired
 	}
+
+	machines := &capiv1.MachineList{}
+	if err := m.kubernetesClient.List(
+		ctx,
+		machines,
+		client.InNamespace(m.namespace),
+	); err != nil {
+		return nil, fmt.Errorf("list Machines in namespace %s: %w", m.namespace, err)
+	}
+
+	result := lo.Map(machines.Items, func(machine capiv1.Machine, _ int) strategies.ClusterNodeInfo {
+		return toClusterNodeInfo(&machine)
+	})
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
 }

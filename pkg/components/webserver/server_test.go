@@ -37,6 +37,7 @@ const (
 	pingPath                       = "/ping"
 	clustersPath                   = "/api/kubernetes/clusters"
 	getClusterPath                 = "/api/kubernetes/clusters/cluster-1"
+	allNodesPath                   = "/api/kubernetes/nodes"
 	clusterNodesPath               = "/api/kubernetes/clusters/cluster-1/nodes"
 	clusterConfigPath              = "/api/kubernetes/clusters/cluster-1/config"
 	clusterTagsPath                = "/api/kubernetes/clusters/cluster-1/tags"
@@ -563,6 +564,56 @@ func TestClusterTagBodyHTTPDecoding(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			executeHTTPTestCase(t, httpTestCase{method: http.MethodPut, path: clusterTagPath, body: body, expectedStatus: http.StatusBadRequest})
+		})
+	}
+}
+
+func TestGetAllNodesHTTP(t *testing.T) {
+	testCases := map[string]httpTestCase{
+		"list all nodes": {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{
+					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint},
+					{Name: "worker-0", Role: "worker", Status: "NotReady"},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON: `[
+				{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"},
+				{"name":"worker-0","role":"worker","status":"NotReady"}
+			]`,
+		},
+		"empty list": {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   "[]",
+		},
+		"nil list": {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllNodes(ctx).Return(nil, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   "[]",
+		},
+		"retrieval error": {
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllNodes(ctx).Return(nil,
+					fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, errTest))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedTitle:  "Internal Server Error",
+		},
+		"method not allowed": {method: http.MethodPost, expectedStatus: http.StatusMethodNotAllowed},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			tc.path = allNodesPath
+			if tc.method == "" {
+				tc.method = http.MethodGet
+			}
+			executeHTTPTestCase(t, tc)
 		})
 	}
 }

@@ -138,9 +138,9 @@ func TestGetClusterConfig(t *testing.T) {
 	testCases := map[string]struct {
 		serviceResult string
 		serviceError  error
-		expected      string
+		expected      handlers.ClusterConfigResponse
 	}{
-		testCaseSuccess:      {serviceResult: clusterConfig, expected: clusterConfig},
+		testCaseSuccess:      {serviceResult: clusterConfig, expected: handlers.ClusterConfigResponse{Kubeconfig: clusterConfig}},
 		testCaseServiceError: {serviceError: errTest},
 	}
 

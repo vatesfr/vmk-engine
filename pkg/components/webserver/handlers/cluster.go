@@ -37,6 +37,10 @@ type AllClusterTagsResponse struct {
 	Result map[string]map[string]string `json:"result"`
 }
 
+type ClusterConfigResponse struct {
+	Kubeconfig string `json:"kubeconfig"`
+}
+
 type ClusterInfo struct {
 	Name                 string            `json:"name,omitempty"`
 	Phase                string            `json:"phase,omitempty"`
@@ -111,12 +115,12 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 	return selectCollectionFields(toNodesInfo(nodes), fields)
 }
 
-func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (string, error) {
+func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (ClusterConfigResponse, error) {
 	config, err := k.clusterService.GetClusterConfig(c.Context(), c.PathParam("id"))
 	if err != nil {
-		return "", toHTTPError(err)
+		return ClusterConfigResponse{}, toHTTPError(err)
 	}
-	return config, nil
+	return ClusterConfigResponse{Kubeconfig: config}, nil
 }
 
 func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParams]) (ClusterInfo, error) {

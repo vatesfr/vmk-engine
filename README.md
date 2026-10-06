@@ -353,7 +353,11 @@ curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/config
 ```
 
 The service looks for the `demo-kubeconfig` `Secret` in the configured
-namespace and returns the value stored under its `value` key.
+namespace and returns the value stored under its `value` key in a JSON object:
+
+```json
+{"kubeconfig":"apiVersion: v1\nkind: Config"}
+```
 
 Delete the cluster:
 

@@ -245,7 +245,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().GetClusterConfig(ctx, clusterName).Return(clusterConfig, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `"apiVersion: v1\nkind: Config"`,
+			expectedJSON:   `{"kubeconfig":"apiVersion: v1\nkind: Config"}`,
 		},
 		"create cluster": {
 			method: http.MethodPost,

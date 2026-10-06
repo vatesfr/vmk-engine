@@ -117,7 +117,7 @@ For a typical request such as `GET /api/kubernetes/clusters/{id}`:
 For creation, `CreateClusterParams` carries the cluster name, control-plane and
 worker replica counts, control-plane IP, and VM name prefix through
 `ForManagingClusters`. `ClusterManager` enriches this intent through `ForGettingClusterCreationDefaults` with its
-ClusterClass, Kubernetes version, MachineDeployment identity, endpoint network
+VM and bootstrap configuration, Kubernetes version, MachineDeployment identity, endpoint network
 settings, and load-balancer choice. It then sends the resulting
 `CreateClusterResourceParams` through `ForManagingClusterResources`.
 
@@ -152,8 +152,8 @@ without changing the component.
 Cluster creation defaults are provided by the
 `ForGettingClusterCreationDefaults` Strategy. The `kubernetes_clients.ConfigMapClient`
 implements this contract and reads `cluster-defaults` in the configured namespace
-on every call. The ConfigMap and each of its seven keys are required; missing or
-invalid configuration is propagated instead of being replaced by values built
+on every call. The ConfigMap and the keys documented in the README are required;
+missing keys or decoding errors are propagated instead of being replaced by values built
 into the binary. The configurator injects this client into `ClusterManager`,
 keeping Kubernetes types out of the manager and shared contracts.
 
@@ -185,3 +185,14 @@ its own storage technology.
 These limitations do not change the dependency direction, but they mean the
 component's replaceability and isolation are design properties that still need
 to be demonstrated by tests.
+
+### Cluster creation
+
+`ClusterClient` builds cluster resources directly from the request and the
+`cluster-defaults` ConfigMap. `ClusterManager` passes network, VM and kubeadm
+configuration through `ForGettingClusterCreationDefaults`. No template resources
+are read from Kubernetes. The VM/bootstrap YAML blocks are decoded and checked for the expected object shape
+before creation, then copied into per-cluster resources owned by the Cluster.
+The Cluster stays paused during assembly and is activated after successful
+creation. Partial failures can be cleaned up through the delete endpoint.
+See README for configuration keys and image prerequisites.

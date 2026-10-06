@@ -1,4 +1,4 @@
-package kubernetes_clients_test
+package kubernetes_clients
 
 import (
 	"testing"
@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"capv-proxy/pkg/components/kubernetes_clients"
 	"capv-proxy/pkg/strategies"
 
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +32,7 @@ func secretWithName(name string, data map[string][]byte) *corev1.Secret {
 func TestSecretClientGet(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{kubeconfigKey: []byte(kubeconfig)})
-		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
+		secretClient := NewSecretClient(newFakeClient(t, secret), testNamespace)
 
 		config, err := secretClient.Get(t.Context(), clusterName)
 
@@ -43,7 +42,7 @@ func TestSecretClientGet(t *testing.T) {
 
 	t.Run("empty value", func(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{kubeconfigKey: {}})
-		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
+		secretClient := NewSecretClient(newFakeClient(t, secret), testNamespace)
 
 		config, err := secretClient.Get(t.Context(), clusterName)
 
@@ -53,7 +52,7 @@ func TestSecretClientGet(t *testing.T) {
 
 	t.Run("missing value", func(t *testing.T) {
 		secret := secretWithName(clusterName+kubeconfigSuffix, map[string][]byte{"other": []byte("x")})
-		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t, secret), testNamespace)
+		secretClient := NewSecretClient(newFakeClient(t, secret), testNamespace)
 
 		config, err := secretClient.Get(t.Context(), clusterName)
 
@@ -62,7 +61,7 @@ func TestSecretClientGet(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t), testNamespace)
+		secretClient := NewSecretClient(newFakeClient(t), testNamespace)
 
 		config, err := secretClient.Get(t.Context(), clusterName)
 
@@ -75,7 +74,7 @@ func TestSecretClientGet(t *testing.T) {
 func TestSecretClientGetSecretData(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		expected := map[string][]byte{secretDataKey: []byte(secretDataValue)}
-		secretClient := kubernetes_clients.NewSecretClient(
+		secretClient := NewSecretClient(
 			newFakeClient(t, secretWithName(secretDataName, expected)), testNamespace,
 		)
 
@@ -86,7 +85,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 	})
 
 	t.Run("nil data", func(t *testing.T) {
-		secretClient := kubernetes_clients.NewSecretClient(
+		secretClient := NewSecretClient(
 			newFakeClient(t, secretWithName(secretDataName, nil)), testNamespace,
 		)
 
@@ -97,7 +96,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		secretClient := kubernetes_clients.NewSecretClient(newFakeClient(t), testNamespace)
+		secretClient := NewSecretClient(newFakeClient(t), testNamespace)
 
 		data, err := secretClient.GetSecretData(t.Context(), secretDataName)
 
@@ -107,7 +106,7 @@ func TestSecretClientGetSecretData(t *testing.T) {
 	})
 
 	t.Run("kubernetes error", func(t *testing.T) {
-		secretClient := kubernetes_clients.NewSecretClient(
+		secretClient := NewSecretClient(
 			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(t, errTest)}), testNamespace,
 		)
 

@@ -10,8 +10,7 @@ interface.
 
 > [!WARNING]
 > This project is currently a prototype. The authentication middleware allows
-> every request. Cluster creation requires an existing compatible ClusterClass
-> and uses configurable topology defaults. Do not expose the service
+> every request. Cluster creation requires a configured `cluster-defaults` ConfigMap. Do not expose the service
 > publicly as-is.
 
 ## Features
@@ -145,7 +144,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/ping` | Checks service health | Working |
 | `GET` | `/api/kubernetes/clusters/` | Lists clusters, or selected cluster fields, in the namespace | Working |
 | `GET` | `/api/kubernetes/clusters/{id}` | Returns one cluster | Working |
-| `POST` | `/api/kubernetes/clusters/` | Creates a topology-managed CAPI `Cluster` | Working with a ClusterClass |
+| `POST` | `/api/kubernetes/clusters/` | Creates a CAPI cluster and its associated resources | Requires configured defaults |
 | `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
@@ -196,24 +195,73 @@ curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
     "name": "demo",
     "controlPlaneReplicas": 3,
     "workerReplicas": 2,
-    "controlPlaneIP": "10.30.138.134",
+    "controlPlaneIP": "192.0.2.10",
     "vmNamePrefix": "jls-capi-generated-",
     "tags": {"environment": "production"}
   }'
 ```
 
-The HTTP API supplies the cluster-specific sizing, control-plane IP, and VM
-name prefix. `ClusterManager` gets the Vates defaults through the
-`ForGettingClusterCreationDefaults` Strategy. Its `kubernetes_clients.ConfigMapClient` implementation reads the `cluster-defaults`
-ConfigMap in `--namespace` on each creation. This ConfigMap and all seven keys
-are required; the client returns an error when configuration is missing or
-invalid instead of silently using values embedded in the binary.
+The HTTP API supplies the cluster name, replica counts, control-plane IPv4
+address, VM name prefix and tags. The `cluster-defaults` ConfigMap in
+`--namespace` is read on each creation; changes affect new clusters only.
 
-The ConfigMap is included in `k8s/deployment.yaml` and the Helm chart. Configure
-its seven camelCase keys through `clusterDefaults` in Helm values. Changes apply
-to subsequent cluster creations without restarting the server. Present string
-values are used as-is; invalid ports (outside 1–65535) or IPv4 subnet prefixes
-(outside 0–32) return an error, as do Kubernetes read errors.
+Cluster creation creates a Cluster without `spec.topology`, an XOCluster, a
+KubeadmControlPlane, one MachineDeployment, two per-cluster XOMachineTemplates,
+and a per-cluster KubeadmConfigTemplate. The Cluster network comes from the
+ConfigMap. The endpoint is configured on XOCluster and propagated by the provider.
+The requested control-plane IP is also added to the API server certificate SANs.
+
+Required ConfigMap keys:
+
+| Key | Purpose |
+| --- | --- |
+| `kubernetesVersion` | Version for control plane and workers |
+| `workerName` | Worker deployment suffix, e.g. `md-0` |
+| `podCIDR`, `serviceCIDR`, `serviceDomain` | Cluster network |
+| `controlPlaneEndpointPort`, `controlPlaneEndpointSubnet` | Endpoint port and IPv4 prefix length |
+| `controlPlaneLoadBalancer` | `kube-vip` or an explicitly empty string |
+| `cni` | Provider CNI setting, e.g. `cilium` or `none` |
+| `controlPlaneMachineSpec`, `workerMachineSpec` | YAML objects containing the respective XOMachine spec: image, pool, networks, resources |
+| `controlPlaneKubeadmConfig`, `workerKubeadmConfig` | YAML objects containing the respective kubeadm configuration and bootstrap commands |
+
+No Kubernetes templates need to be installed beforehand. The service builds
+all resources from the request and ConfigMap, including the per-cluster machine
+and worker bootstrap templates required by CAPI. It does not create or read a
+KubeadmControlPlaneTemplate. Each YAML block contains configuration fields only,
+without `apiVersion`, `kind`, `metadata` or a surrounding `spec`.
+
+Before deploying, replace the `<your-xo-...-uuid>` placeholders in both machine
+specs with the real XO VM image, pool and network identifiers. These are Xen
+Orchestra identifiers, not Kubernetes resource names. The provider also accepts
+`templateName` and `poolName`; omitting the pool uses the template's pool.
+The service decodes these configuration objects and leaves provider field
+validation to Kubernetes and the Vates provider. The sample kubeadm
+configuration follows the working AlmaLinux/RHEL cluster: it installs the exact
+`kubernetesVersion`, containerd and runc, disables swap, configures kernel modules
+and sysctls, and enables the services. It requires a compatible dnf-based VM image
+and access to the package repositories. Adapt these commands for other images.
+Within `preKubeadmCommands`, the service replaces only `{{KUBERNETES_VERSION}}`
+and `{{CONTROL_PLANE_IP}}` with the configured version and requested endpoint.
+Shell variables such as `$FULL`, `$IP` and `$(hostname)` remain intact.
+Credentials remain in provider-managed Secrets (the provider's global credentials
+are used by this configuration).
+
+The service sets VM name prefixes, replicas, Kubernetes version and resource
+references from the request/defaults, and adds the endpoint IP to certificate
+SANs. Other configured VM/bootstrap fields are preserved. MachineHealthChecks
+are not created. The ConfigMap is decoded and all resources are built before
+the first write. Generated resources belong to the Cluster. XOCluster additionally marks this
+owner as its controller for compatibility with older Vates providers using
+`GetControllerOf`; other resource ownership is unchanged. Cilium (or the configured
+CNI), CCM and CSI are explicitly requested on XOCluster. The Cluster stays paused
+until creation succeeds. On partial failure, delete the cluster through the HTTP
+API and wait for cleanup before retrying. An activation timeout can leave the
+cluster active: inspect its state before retrying.
+
+When upgrading from the earlier configuration, replace the four template-name
+keys with the four YAML blocks above and deploy the new service image. Updating
+only the binary or only the ConfigMap is insufficient. The supplied Helm values
+and `k8s/deployment.yaml` include the new structure.
 
 Cluster tags are stored as labels on the CAPI `Cluster` resource under the
 `tags.vmk.vates.tech/` prefix. For example, the tag `environment=production`
@@ -341,7 +389,11 @@ The service uses the following minimum permissions in the target namespace:
 | --- | --- | --- |
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
 | `cluster.x-k8s.io` | `machines` | `list` |
-| core group | `secrets` | `get` |
+| core group | `secrets`, `configmaps` | `get` |
+| `cluster.x-k8s.io` | `machinedeployments` | `create` |
+| `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |
+| `controlplane.cluster.x-k8s.io` | `kubeadmcontrolplanes` | `create` |
+| `bootstrap.cluster.x-k8s.io` | `kubeadmconfigtemplates` | `create` |
 
 Secret access allows the service to read kubeconfigs. Treat the ServiceAccount
 and API access as sensitive.

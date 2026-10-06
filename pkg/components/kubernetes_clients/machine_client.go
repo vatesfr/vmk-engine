@@ -15,6 +15,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	workerRole    = "worker"
+	unknownStatus = "Unknown"
+)
+
 type MachineClient struct {
 	kubernetesClient client.Client
 	namespace        string
@@ -58,7 +63,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		name = machine.Status.NodeRef.Name
 	}
 
-	role := "worker"
+	role := workerRole
 	if _, isControlPlane := machine.Labels[capiv1.MachineControlPlaneLabel]; isControlPlane {
 		role = "control-plane"
 	}
@@ -71,11 +76,11 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		case metav1.ConditionFalse:
 			status = "NotReady"
 		default:
-			status = "Unknown"
+			status = unknownStatus
 		}
 	}
 	if status == "" {
-		status = "Unknown"
+		status = unknownStatus
 	}
 
 	return strategies.ClusterNodeInfo{

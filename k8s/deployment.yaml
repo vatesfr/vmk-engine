@@ -12,6 +12,18 @@ metadata:
   labels:
     app.kubernetes.io/name: go-capi-client
 rules:
+  - apiGroups: ["cluster.x-k8s.io"]
+    resources: ["machinedeployments"]
+    verbs: ["create"]
+  - apiGroups: ["vates.infrastructure.cluster.x-k8s.io"]
+    resources: ["xoclusters", "xomachinetemplates"]
+    verbs: ["create"]
+  - apiGroups: ["controlplane.cluster.x-k8s.io"]
+    resources: ["kubeadmcontrolplanes"]
+    verbs: ["create"]
+  - apiGroups: ["bootstrap.cluster.x-k8s.io"]
+    resources: ["kubeadmconfigtemplates"]
+    verbs: ["create"]
   - apiGroups:
       - cluster.x-k8s.io
     resources:
@@ -136,10 +148,135 @@ metadata:
   labels:
     app.kubernetes.io/name: go-capi-client
 data:
-  clusterClassName: "vates-rhel-from-scratch"
-  kubernetesVersion: "v1.36.3"
-  workerName: "worker-md-0"
-  workerClass: "worker-from-scratch"
+  kubernetesVersion: "v1.36.1"
+  workerName: "md-0"
   controlPlaneEndpointPort: "6443"
   controlPlaneEndpointSubnet: "16"
   controlPlaneLoadBalancer: "kube-vip"
+  podCIDR: "172.31.0.0/16"
+  serviceCIDR: "192.168.0.0/16"
+  serviceDomain: "cluster.local"
+  cni: "cilium"
+  controlPlaneMachineSpec: |
+    templateID: <your-xo-template-uuid>
+    poolID: <your-xo-pool-uuid>
+    resourceSet:
+      cpus: 4
+      memory: 8Gi
+      diskSize: 30Gi
+    networkConfig:
+      networks:
+        - networkID: <your-xo-network-uuid>
+  workerMachineSpec: |
+    templateID: <your-xo-template-uuid>
+    poolID: <your-xo-pool-uuid>
+    resourceSet:
+      cpus: 4
+      memory: 8Gi
+      diskSize: 30Gi
+    networkConfig:
+      networks:
+        - networkID: <your-xo-network-uuid>
+  controlPlaneKubeadmConfig: |
+    clusterConfiguration:
+      apiServer:
+        certSANs:
+        - localhost
+        - 127.0.0.1
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+        - name: cgroup-driver
+          value: systemd
+        - name: cloud-provider
+          value: external
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+        - name: cgroup-driver
+          value: systemd
+        - name: cloud-provider
+          value: external
+    preKubeadmCommands:
+    - |
+      IP=$(hostname -I | awk '{print $1}')
+      hostnamectl set-hostname "cp-$(echo "$IP" | tr '.' '-')"
+      echo "$IP $(hostname) $(hostname -s)" >> /etc/hosts
+    - printf 'overlay\nbr_netfilter\n' > /etc/modules-load.d/k8s.conf
+    - modprobe overlay; modprobe br_netfilter
+    - |
+      printf 'net.bridge.bridge-nf-call-iptables  = 1\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.ipv4.ip_forward                 = 1\nnet.ipv4.conf.all.rp_filter         = 0\nnet.ipv4.conf.eth0.rp_filter        = 0\n' > /etc/sysctl.d/k8s.conf
+    - sysctl --system
+    - swapoff -a; sed -i '/ swap /d' /etc/fstab 2>/dev/null; true
+    - dnf install -y epel-release
+    - |
+      FULL="{{KUBERNETES_VERSION}}"
+      MINOR=$(echo "$FULL" | sed 's/\(v[0-9]*\.[0-9]*\).*/\1/')
+      # Pin the exact requested version so KCP does not consider the node
+      # out-of-date (and roll it forever) when the repo would install a
+      # newer patch release.
+      echo "$FULL" > /etc/kubernetes-version
+      cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/$MINOR/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/$MINOR/rpm/repodata/repomd.xml.key
+      EOF
+    - |
+      VERSION=$(sed 's/^v//' /etc/kubernetes-version)
+      dnf install -y --disableexcludes=kubernetes --setopt=install_weak_deps=False containerd runc "kubelet-$VERSION" "kubeadm-$VERSION" "kubectl-$VERSION"
+    - |
+      containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | tee /etc/containerd/config.toml
+      sed -i "s|config_path = ''|config_path = '/etc/containerd/certs.d'|" /etc/containerd/config.toml
+    - mkdir -p /etc/containerd/certs.d/registry.k8s.io && printf 'server = "https://registry.k8s.io"\n\n[host."https://mirror.gcr.io"]\n  capabilities
+      = ["pull", "resolve"]\n' > /etc/containerd/certs.d/registry.k8s.io/hosts.toml
+    - systemctl enable --now containerd
+    - systemctl enable --now kubelet
+  workerKubeadmConfig: |
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+        - name: cgroup-driver
+          value: systemd
+        - name: cloud-provider
+          value: external
+    preKubeadmCommands:
+    - |
+      IP=$(hostname -I | awk '{print $1}')
+      hostnamectl set-hostname "worker-$(echo "$IP" | tr '.' '-')"
+      echo "$IP $(hostname) $(hostname -s)" >> /etc/hosts
+    - printf 'overlay\nbr_netfilter\n' > /etc/modules-load.d/k8s.conf
+    - modprobe overlay; modprobe br_netfilter
+    - |
+      printf 'net.bridge.bridge-nf-call-iptables  = 1\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.ipv4.ip_forward                 = 1\nnet.ipv4.conf.all.rp_filter         = 0\nnet.ipv4.conf.eth0.rp_filter        = 0\n' > /etc/sysctl.d/k8s.conf
+    - sysctl --system
+    - swapoff -a; sed -i '/ swap /d' /etc/fstab 2>/dev/null; true
+    - dnf install -y epel-release
+    - |
+      FULL="{{KUBERNETES_VERSION}}"
+      MINOR=$(echo "$FULL" | sed 's/\(v[0-9]*\.[0-9]*\).*/\1/')
+      # Pin the exact requested version so KCP does not consider the node
+      # out-of-date (and roll it forever) when the repo would install a
+      # newer patch release.
+      echo "$FULL" > /etc/kubernetes-version
+      cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/$MINOR/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/$MINOR/rpm/repodata/repomd.xml.key
+      EOF
+    - |
+      VERSION=$(sed 's/^v//' /etc/kubernetes-version)
+      dnf install -y --disableexcludes=kubernetes --setopt=install_weak_deps=False containerd runc "kubelet-$VERSION" "kubeadm-$VERSION"
+    - |
+      containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | tee /etc/containerd/config.toml
+      sed -i "s|config_path = ''|config_path = '/etc/containerd/certs.d'|" /etc/containerd/config.toml
+    - mkdir -p /etc/containerd/certs.d/registry.k8s.io && printf 'server = "https://registry.k8s.io"\n\n[host."https://mirror.gcr.io"]\n  capabilities
+      = ["pull", "resolve"]\n' > /etc/containerd/certs.d/registry.k8s.io/hosts.toml
+    - systemctl enable --now containerd
+    - systemctl enable --now kubelet
+    - arping -I eth0 -c 3 {{CONTROL_PLANE_IP}} 2>/dev/null || true

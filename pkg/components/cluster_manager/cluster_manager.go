@@ -53,26 +53,12 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 
 	clusterInfo, err := c.clusterResources.Create(ctx, strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
-		ClusterClassName:     defaults.ClusterClassName,
-		KubernetesVersion:    defaults.KubernetesVersion,
+		Defaults:             defaults,
+		ControlPlaneIP:       params.ControlPlaneIP,
+		VMNamePrefix:         params.VMNamePrefix,
 		ControlPlaneReplicas: &params.ControlPlaneReplicas,
-		MachineDeployments: []strategies.MachineDeployment{
-			{
-				Name:     defaults.WorkerName,
-				Class:    defaults.WorkerClass,
-				Replicas: &params.WorkerReplicas,
-			},
-		},
-		Variables: map[string]any{
-			"controlPlaneEndpoint": map[string]any{
-				"host":   params.ControlPlaneIP,
-				"port":   defaults.ControlPlaneEndpointPort,
-				"subnet": defaults.ControlPlaneEndpointSubnet,
-			},
-			"vmNamePrefix":   params.VMNamePrefix,
-			"controlPlaneLB": defaults.ControlPlaneLoadBalancer,
-		},
-		Tags: params.Tags,
+		MachineDeployments:   []strategies.MachineDeployment{{Name: defaults.WorkerName, Replicas: &params.WorkerReplicas}},
+		Tags:                 params.Tags,
 	})
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationFailed, err)

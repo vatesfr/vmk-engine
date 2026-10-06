@@ -1,7 +1,8 @@
-package kubernetes_clients_test
+package kubernetes_clients
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,137 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"capv-proxy/pkg/components/kubernetes_clients"
 	"capv-proxy/pkg/strategies"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 )
 
 const (
-	clusterClassName  = "capv"
-	creatingPhase     = "Creating"
-	k8sVersion        = "v1.32.0"
-	mdName            = "md-a"
-	mdClass           = "md-class-a"
-	failureDomain     = "fd-1"
-	variableRegion    = "region"
-	variableSize      = "size"
-	variableRegionVal = "eu-west-1"
-	variableSizeVal   = "2"
+	k8sVersion          = "v1.32.0"
+	clusterName         = "test-cluster"
+	testNamespace       = "capv"
+	provisionedPhase    = "Provisioned"
+	provisioningPhase   = "Provisioning"
+	caseEmptyName       = "empty name"
+	caseEmptyNamespace  = "empty namespace"
+	errClusterName      = "cluster name is required"
+	errClusterNamespace = "cluster namespace is required"
+	errNotFound         = "not found"
+	caseEmptyTagValue   = "empty value"
+	testTagLabelPrefix  = "tags.vmk.vates.tech/"
+	ownerTag            = "owner"
+	platformValue       = "platform"
+	productionValue     = "production"
 )
 
-type testClusterCreateParams struct {
-	params          strategies.CreateClusterResourceParams
-	namespace       string
-	createErr       error
-	oracleErr       error
-	wantErrContains string
-}
-
-func TestClusterClientCreate(t *testing.T) {
-	replicas := int32(3)
-	testCases := map[string]testClusterCreateParams{
-		"success": {
-			params: strategies.CreateClusterResourceParams{
-				Name:                 clusterName,
-				ClusterClassName:     clusterClassName,
-				KubernetesVersion:    k8sVersion,
-				ControlPlaneReplicas: &replicas,
-				MachineDeployments: []strategies.MachineDeployment{
-					{Name: mdName, Class: mdClass, Replicas: &replicas, FailureDomain: failureDomain},
-				},
-				Variables: map[string]any{variableSize: int64(2), variableRegion: variableRegionVal},
-			},
-			namespace: testNamespace,
-		},
-		caseEmptyName: {
-			params:          strategies.CreateClusterResourceParams{ClusterClassName: clusterClassName},
-			namespace:       testNamespace,
-			wantErrContains: errClusterName,
-		},
-		caseEmptyNamespace: {
-			params:          strategies.CreateClusterResourceParams{Name: clusterName},
-			wantErrContains: errClusterNamespace,
-		},
-		"invalid variable encoding error": {
-			params: strategies.CreateClusterResourceParams{
-				Name:      clusterName,
-				Variables: map[string]any{"invalid": make(chan int)},
-			},
-			namespace:       testNamespace,
-			wantErrContains: `encode cluster variable "invalid"`,
-		},
-		"kubernetes error": {
-			params:          strategies.CreateClusterResourceParams{Name: clusterName},
-			namespace:       testNamespace,
-			createErr:       errTest,
-			oracleErr:       errTest,
-			wantErrContains: "create Cluster " + testNamespace + "/" + clusterName,
-		},
-	}
-
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			kubeClient := newFakeClient(t)
-			if tc.createErr != nil {
-				kubeClient = newErrorClient(t, interceptor.Funcs{Create: createErrorFunc(t, tc.createErr)})
-			}
-			clusterClient := kubernetes_clients.NewClusterClient(kubeClient, tc.namespace)
-
-			info, err := clusterClient.Create(t.Context(), tc.params)
-
-			if tc.wantErrContains != "" {
-				assert.Empty(t, info)
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.wantErrContains)
-				if tc.oracleErr != nil {
-					assert.ErrorIs(t, err, tc.oracleErr)
-				}
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, strategies.ClusterInfo{Name: clusterName, Phase: creatingPhase}, info)
-			assertCreatedCluster(t, kubeClient, tc.namespace, replicas)
-		})
-	}
-
-	t.Run("cluster already exists", func(t *testing.T) {
-		existing := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, existing), testNamespace)
-
-		info, err := clusterClient.Create(t.Context(), strategies.CreateClusterResourceParams{Name: clusterName})
-
-		assert.Empty(t, info)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, strategies.ErrClusterAlreadyExists)
-	})
-}
-
-func assertCreatedCluster(t *testing.T, kubeClient client.Client, namespace string, replicas int32) {
-	t.Helper()
-
-	stored := &capiv1.Cluster{}
-	require.NoError(t, kubeClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: clusterName}, stored))
-	assert.Equal(t, clusterClassName, stored.Spec.Topology.ClassRef.Name)
-	assert.Equal(t, k8sVersion, stored.Spec.Topology.Version)
-	require.NotNil(t, stored.Spec.Topology.ControlPlane.Replicas)
-	assert.Equal(t, replicas, *stored.Spec.Topology.ControlPlane.Replicas)
-	assert.Equal(t, []capiv1.MachineDeploymentTopology{
-		{Name: mdName, Class: mdClass, Replicas: &replicas, FailureDomain: failureDomain},
-	}, stored.Spec.Topology.Workers.MachineDeployments)
-	require.Len(t, stored.Spec.Topology.Variables, 2)
-	assert.Equal(t, variableRegion, stored.Spec.Topology.Variables[0].Name)
-	assert.Equal(t, variableSize, stored.Spec.Topology.Variables[1].Name)
-	assert.JSONEq(t, `"`+variableRegionVal+`"`, string(stored.Spec.Topology.Variables[0].Value.Raw))
-	assert.JSONEq(t, variableSizeVal, string(stored.Spec.Topology.Variables[1].Value.Raw))
-}
+var errTest = errors.New("test error")
 
 func TestClusterClientList(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
@@ -149,7 +51,7 @@ func TestClusterClientList(t *testing.T) {
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioned", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisionedPhase}},
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioning", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisioningPhase}},
 		}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, objects...), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, objects...), testNamespace)
 
 		clusters, err := clusterClient.List(t.Context())
 
@@ -161,7 +63,7 @@ func TestClusterClientList(t *testing.T) {
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
 
 		clusters, err := clusterClient.List(t.Context())
 
@@ -171,7 +73,7 @@ func TestClusterClientList(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(
+		clusterClient := NewClusterClient(
 			newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)}), testNamespace,
 		)
 
@@ -189,7 +91,7 @@ func TestClusterClientGet(t *testing.T) {
 			Spec:       capiv1.ClusterSpec{ControlPlaneEndpoint: capiv1.APIEndpoint{Host: controlPlaneIP, Port: 6443}},
 			Status:     capiv1.ClusterStatus{Phase: provisionedPhase},
 		}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -215,7 +117,7 @@ func TestClusterClientGet(t *testing.T) {
 				},
 			},
 		}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -235,7 +137,7 @@ func TestClusterClientGet(t *testing.T) {
 				Workers:      &capiv1.WorkersStatus{Replicas: ptr.To(int32(2))},
 			},
 		}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -249,7 +151,7 @@ func TestClusterClientGet(t *testing.T) {
 
 	t.Run("invalid endpoint", func(t *testing.T) {
 		cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -258,7 +160,7 @@ func TestClusterClientGet(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(
+		clusterClient := NewClusterClient(
 			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(t, errTest)}), testNamespace,
 		)
 
@@ -269,7 +171,7 @@ func TestClusterClientGet(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -283,7 +185,7 @@ func TestClusterClientDelete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
 		kubeClient := newFakeClient(t, cluster)
-		clusterClient := kubernetes_clients.NewClusterClient(kubeClient, testNamespace)
+		clusterClient := NewClusterClient(kubeClient, testNamespace)
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -293,7 +195,7 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
 
 		err := clusterClient.Delete(t.Context(), "")
 
@@ -301,7 +203,7 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("empty namespace", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), "")
+		clusterClient := NewClusterClient(newFakeClient(t), "")
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -309,7 +211,7 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(
+		clusterClient := NewClusterClient(
 			newErrorClient(t, interceptor.Funcs{Delete: deleteErrorFunc(t, errTest)}), testNamespace,
 		)
 
@@ -321,57 +223,13 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
 	})
-}
-
-const caseEmptyTagValue = "empty value"
-
-const testTagLabelPrefix = "tags.vmk.vates.tech/"
-
-const (
-	ownerTag        = "owner"
-	platformValue   = "platform"
-	productionValue = "production"
-)
-
-func TestClusterClientCreatesClusterWithTags(t *testing.T) {
-	testCases := map[string]struct {
-		tags    map[string]string
-		labels  map[string]string
-		wantErr error
-	}{
-		"multiple tags": {
-			tags:   map[string]string{"environment": productionValue, ownerTag: platformValue},
-			labels: map[string]string{testTagLabelPrefix + "environment": productionValue, testTagLabelPrefix + ownerTag: platformValue},
-		},
-		"no tags":         {},
-		caseEmptyTagValue: {tags: map[string]string{ownerTag: ""}, labels: map[string]string{testTagLabelPrefix + ownerTag: ""}},
-		"invalid name":    {tags: map[string]string{strings.Repeat("a", 64): "value"}, wantErr: strategies.ErrInvalidClusterTagName},
-	}
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			kubeClient := newFakeClient(t)
-			clusterClient := kubernetes_clients.NewClusterClient(kubeClient, testNamespace)
-			info, err := clusterClient.Create(t.Context(), strategies.CreateClusterResourceParams{Name: clusterName, Tags: tc.tags})
-			if tc.wantErr != nil {
-				require.ErrorIs(t, err, tc.wantErr)
-				assert.Empty(t, info)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tc.tags, info.Tags)
-			stored := &capiv1.Cluster{}
-			require.NoError(t, kubeClient.Get(t.Context(), types.NamespacedName{Namespace: testNamespace, Name: clusterName}, stored))
-			assert.Equal(t, tc.labels, stored.Labels)
-		})
-	}
 }
 
 func TestClusterClientReadsClusterTags(t *testing.T) {
@@ -390,7 +248,7 @@ func TestClusterClientReadsClusterTags(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: tc.labels}}
-			clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
 			tags, err := clusterClient.GetTags(t.Context(), clusterName)
 			require.NoError(t, err)
 			if tc.tags == nil {
@@ -440,7 +298,7 @@ func TestClusterClientUpdatesClusterTags(t *testing.T) {
 			}
 			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: labels}}
 			kubeClient := newFakeClient(t, cluster)
-			clusterClient := kubernetes_clients.NewClusterClient(kubeClient, testNamespace)
+			clusterClient := NewClusterClient(kubeClient, testNamespace)
 			var err error
 			if tc.deleteTag {
 				err = clusterClient.DeleteTag(t.Context(), clusterName, tc.tag)
@@ -468,27 +326,308 @@ func TestClusterClientUpdatesClusterTags(t *testing.T) {
 }
 
 func TestClusterClientTagMissingCluster(t *testing.T) {
-	testCases := map[string]func(context.Context, kubernetes_clients.ClusterClient) error{
-		"list": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+	testCases := map[string]func(context.Context, ClusterClient) error{
+		"list": func(ctx context.Context, c ClusterClient) error {
 			_, err := c.GetTags(ctx, clusterName)
 			return err
 		},
-		"get": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+		"get": func(ctx context.Context, c ClusterClient) error {
 			_, err := c.GetTag(ctx, clusterName, ownerTag)
 			return err
 		},
-		"set": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+		"set": func(ctx context.Context, c ClusterClient) error {
 			return c.SetTag(ctx, clusterName, ownerTag, platformValue)
 		},
-		"delete": func(ctx context.Context, c kubernetes_clients.ClusterClient) error {
+		"delete": func(ctx context.Context, c ClusterClient) error {
 			return c.DeleteTag(ctx, clusterName, ownerTag)
 		},
 	}
 	for name, operation := range testCases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			clusterClient := kubernetes_clients.NewClusterClient(newFakeClient(t), testNamespace)
+			clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
 			assert.ErrorIs(t, operation(t.Context(), clusterClient), strategies.ErrClusterNotFound)
 		})
 	}
 }
+
+func newTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("register Kubernetes types: %v", err)
+	}
+	if err := capiv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("register Cluster API types: %v", err)
+	}
+	return scheme
+}
+
+func newFakeClient(t *testing.T, objects ...client.Object) client.Client {
+	t.Helper()
+
+	return fake.NewClientBuilder().
+		WithScheme(newTestScheme(t)).
+		WithObjects(objects...).
+		Build()
+}
+
+func newErrorClient(t *testing.T, funcs interceptor.Funcs) client.Client {
+	t.Helper()
+
+	return fake.NewClientBuilder().
+		WithScheme(newTestScheme(t)).
+		WithInterceptorFuncs(funcs).
+		Build()
+}
+
+func getErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
+}
+
+func listErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
+}
+
+func deleteErrorFunc(t *testing.T, err error) func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+	t.Helper()
+	return func(ctx context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+		require.Same(t, t.Context(), ctx)
+		return err
+	}
+}
+
+func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResourceParams, []client.Object, *runtime.Scheme) {
+	t.Helper()
+	d := strategies.ClusterCreationDefaults{
+		KubernetesVersion:         fixtureVersion,
+		PodCIDR:                   fixturePodCIDR,
+		ServiceCIDR:               fixtureServiceCIDR,
+		ServiceDomain:             fixtureDomain,
+		EndpointPort:              6443,
+		EndpointSubnet:            16,
+		LoadBalancer:              kubeVIP,
+		CNI:                       ciliumCNI,
+		ControlPlaneKubeadmConfig: map[string]any{commandsKey: []any{"echo preserved"}},
+		WorkerKubeadmConfig:       map[string]any{commandsKey: []any{"echo worker"}},
+		ControlPlaneMachineSpec:   getValidXOMachineSpec(),
+		WorkerMachineSpec:         getValidXOMachineSpec(),
+	}
+	p := strategies.CreateClusterResourceParams{
+		Name:                 fixtureCluster,
+		Defaults:             d,
+		ControlPlaneIP:       "192.0.2.10",
+		VMNamePrefix:         "custom",
+		ControlPlaneReplicas: ptr.To(int32(3)),
+		MachineDeployments: []strategies.MachineDeployment{{
+			Name:     fixtureWorkerName,
+			Replicas: ptr.To(int32(2)),
+		}},
+		Tags: map[string]string{"env": "test"},
+	}
+	objects := []client.Object{}
+	scheme := runtime.NewScheme()
+	require.NoError(t, capiv1.AddToScheme(scheme))
+	return p, objects, scheme
+}
+
+func TestClusterResourceCreation(t *testing.T) {
+	p, objects, scheme := newClusterCreationTestSetup(t)
+	creating := true
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if creating {
+				require.Fail(t, "creation must not read Kubernetes templates")
+				return errors.New("unexpected Get")
+			}
+			return c.Get(ctx, key, obj, opts...)
+		},
+	}).Build()
+	info, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	creating = false
+	require.NoError(t, err)
+	require.Equal(t, fixtureCluster, info.Name)
+	require.Equal(t, p.Tags, info.Tags)
+	cluster := &capiv1.Cluster{}
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: fixtureCluster, Namespace: fixtureNamespace}, cluster))
+	require.Nil(t, cluster.Spec.Paused)
+	require.Empty(t, cluster.Spec.Topology.ClassRef.Name)
+	require.Equal(t, []string{fixturePodCIDR}, cluster.Spec.ClusterNetwork.Pods.CIDRBlocks)
+	require.Equal(t, fixtureControlPlane, cluster.Spec.ControlPlaneRef.Name)
+	require.Equal(t, fixtureCluster, cluster.Labels[capiv1.ClusterNameLabel])
+	require.Equal(t, "test", cluster.Labels[clusterTagLabelPrefix+"env"])
+	get := func(group, kind, name string) *unstructured.Unstructured {
+		t.Helper()
+		obj := resource(group, kind, name, fixtureNamespace, nil)
+		require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(obj), obj))
+		return obj
+	}
+	xo := get(xoGroup, xoClusterKind, fixtureCluster)
+	owner := metav1.GetControllerOf(xo)
+	require.NotNil(t, owner)
+	require.Equal(t, cluster.Name, owner.Name)
+	require.Equal(t, cluster.UID, owner.UID)
+	addons, _, err := unstructured.NestedMap(xo.Object, specKey, "addons")
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{cniKey: ciliumCNI, "ccm": true, "csi": true}, addons)
+	host, _, _ := unstructured.NestedString(xo.Object, specKey, endpointKey, "host")
+	require.Equal(t, p.ControlPlaneIP, host)
+	cp := get(cpGroup, controlPlaneKind, fixtureControlPlane)
+	require.Nil(t, metav1.GetControllerOf(cp))
+	replicas, _, _ := unstructured.NestedInt64(cp.Object, specKey, "replicas")
+	require.Equal(t, int64(3), replicas)
+	sans, _, _ := unstructured.NestedStringSlice(cp.Object, specKey, kubeadmConfigSpecKey, clusterConfigurationKey, apiServerKey, certSANsKey)
+	require.Contains(t, sans, p.ControlPlaneIP)
+	commands, _, _ := unstructured.NestedStringSlice(cp.Object, specKey, kubeadmConfigSpecKey, commandsKey)
+	require.Equal(t, []string{"echo preserved"}, commands)
+	vm := get(xoGroup, xoMachineTemplateKind, fixtureControlPlane)
+	prefix, _, _ := unstructured.NestedString(vm.Object, specKey, templateKey, specKey, namePrefixKey)
+	require.Equal(t, "custom-cp", prefix)
+	require.Equal(t, fixtureCluster, vm.GetOwnerReferences()[0].Name)
+	require.Equal(t, fixtureOriginalPrefix, p.Defaults.ControlPlaneMachineSpec[namePrefixKey])
+	md := &capiv1.MachineDeployment{}
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: "demo-md-0", Namespace: fixtureNamespace}, md))
+	require.Equal(t, int32(2), *md.Spec.Replicas)
+	require.Equal(t, fixtureVersion, md.Spec.Template.Spec.Version)
+	get(bootstrapGroup, bootstrapTemplateKind, "demo-worker")
+	_, err = NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	require.ErrorIs(t, err, strategies.ErrClusterAlreadyExists)
+}
+
+func TestClusterResourcePreflightAndPartialFailure(t *testing.T) {
+	for _, missing := range []bool{true, false} {
+		t.Run(map[bool]string{true: "missing VM configuration", false: "create fails"}[missing], func(t *testing.T) {
+			p, objects, scheme := newClusterCreationTestSetup(t)
+			if missing {
+				p.Defaults.ControlPlaneMachineSpec = nil
+			}
+			injected := errors.New("write denied")
+			kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{Create: func(ctx context.Context,
+				c client.WithWatch,
+				obj client.Object,
+				opts ...client.CreateOption,
+			) error {
+				if obj.GetObjectKind().GroupVersionKind().Kind == xoClusterKind {
+					return injected
+				}
+				return c.Create(ctx, obj, opts...)
+			}}).Build()
+			_, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+			require.Error(t, err)
+			clusters := &capiv1.ClusterList{}
+			require.NoError(t, kube.List(t.Context(), clusters))
+			if missing {
+				require.Empty(t, clusters.Items)
+			} else {
+				require.ErrorIs(t, err, injected)
+				require.Len(t, clusters.Items, 1)
+				require.True(t, *clusters.Items[0].Spec.Paused)
+			}
+		})
+	}
+}
+
+func TestClusterResourceVersionFromStatus(t *testing.T) {
+	cluster := &capiv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: fixtureCluster},
+		Status:     capiv1.ClusterStatus{ControlPlane: &capiv1.ClusterControlPlaneStatus{Versions: []capiv1.StatusVersion{{Version: fixtureVersion}}}},
+	}
+	require.Equal(t, fixtureVersion, toInfo(cluster).Version)
+}
+
+func TestDeletePausedCluster(t *testing.T) {
+	_, _, scheme := newClusterCreationTestSetup(t)
+	cluster := &capiv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       fixtureCluster,
+			Namespace:  fixtureNamespace,
+			Finalizers: []string{"cluster.cluster.x-k8s.io"},
+		},
+		Spec: capiv1.ClusterSpec{Paused: ptr.To(true)},
+	}
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	require.NoError(t, NewClusterClient(kube, fixtureNamespace).Delete(t.Context(), fixtureCluster))
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(cluster), cluster))
+	require.False(t, cluster.DeletionTimestamp.IsZero())
+	require.Nil(t, cluster.Spec.Paused)
+}
+
+const (
+	fixtureCluster        = "demo"
+	fixtureNamespace      = "default"
+	fixtureVersion        = "v1.36.1"
+	fixturePodCIDR        = "172.31.0.0/16"
+	fixtureControlPlane   = "demo-cp"
+	fixtureOriginalPrefix = "original"
+)
+
+const (
+	fixtureServiceCIDR = "192.168.0.0/16"
+	fixtureDomain      = "cluster.local"
+	fixtureWorkerName  = "md-0"
+)
+
+func TestClusterCreationValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		modify func(*strategies.CreateClusterResourceParams, *string)
+		want   error
+	}{
+		{"missing name", func(p *strategies.CreateClusterResourceParams, _ *string) { p.Name = "" }, strategies.ErrClusterNameRequired},
+		{"missing namespace", func(_ *strategies.CreateClusterResourceParams, ns *string) { *ns = "" }, strategies.ErrClusterNamespaceRequired},
+		{"invalid tag", func(p *strategies.CreateClusterResourceParams, _ *string) {
+			p.Tags = map[string]string{"invalid/key": "value"}
+		}, strategies.ErrInvalidClusterTagName},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, objects, scheme := newClusterCreationTestSetup(t)
+			ns := fixtureNamespace
+			tc.modify(&p, &ns)
+			kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+			_, err := NewClusterClient(kube, ns).Create(t.Context(), p)
+			require.ErrorIs(t, err, tc.want)
+			clusters := &capiv1.ClusterList{}
+			require.NoError(t, kube.List(t.Context(), clusters))
+			require.Empty(t, clusters.Items)
+		})
+	}
+}
+
+func TestClusterCreateAPIError(t *testing.T) {
+	p, objects, scheme := newClusterCreationTestSetup(t)
+	injected := errors.New("API unavailable")
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error { return injected },
+	}).Build()
+	_, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	require.ErrorIs(t, err, injected)
+}
+
+func getValidXOMachineSpec() map[string]any {
+	return map[string]any{
+		"templateID": "image", "poolID": "pool", namePrefixKey: fixtureOriginalPrefix,
+		"networkConfig": map[string]any{"networks": []any{map[string]any{"networkID": "network"}}},
+	}
+}
+
+func TestRenderBootstrapCommands(t *testing.T) {
+	config := map[string]any{commandsKey: []any{`FULL="{{KUBERNETES_VERSION}}"; echo "$FULL $(hostname) ${IP}"; arping {{CONTROL_PLANE_IP}}`}}
+	require.NoError(t, renderBootstrapCommands(config, "v1.36.2", "10.0.0.8"))
+	require.Equal(t, []any{`FULL="v1.36.2"; echo "$FULL $(hostname) ${IP}"; arping 10.0.0.8`}, config[commandsKey])
+	require.NoError(t, renderBootstrapCommands(map[string]any{}, "v1.36.2", "10.0.0.8"))
+	require.Error(t, renderBootstrapCommands(map[string]any{commandsKey: []any{int64(1)}}, "v1.36.2", "10.0.0.8"))
+}
+
+const (
+	kubeVIP   = "kube-vip"
+	ciliumCNI = "cilium"
+)

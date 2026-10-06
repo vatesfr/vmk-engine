@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"capv-proxy/pkg/strategies"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 const ClusterDefaultsConfigMapName = "cluster-defaults"
@@ -33,47 +36,108 @@ func (c ConfigMapClient) GetClusterCreationDefaults(ctx context.Context) (strate
 		return strategies.ClusterCreationDefaults{}, fmt.Errorf("get cluster defaults ConfigMap: %w", err)
 	}
 
-	defaults := strategies.ClusterCreationDefaults{}
+	return parseClusterDefaults(configMap.Data)
+}
+
+func missingConfigMapKeyError(key string) error {
+	return fmt.Errorf("ConfigMap %q is missing required key %q", ClusterDefaultsConfigMapName, key)
+}
+
+const (
+	versionKey                   = "kubernetesVersion"
+	workerNameKey                = "workerName"
+	podCIDRKey                   = "podCIDR"
+	serviceCIDRKey               = "serviceCIDR"
+	serviceDomainKey             = "serviceDomain"
+	controlPlaneKubeadmConfigKey = "controlPlaneKubeadmConfig"
+	controlPlaneMachineSpecKey   = "controlPlaneMachineSpec"
+	workerMachineSpecKey         = "workerMachineSpec"
+	workerKubeadmConfigKey       = "workerKubeadmConfig"
+	cniKey                       = "cni"
+	endpointPortKey              = "controlPlaneEndpointPort"
+	endpointSubnetKey            = "controlPlaneEndpointSubnet"
+	loadBalancerKey              = "controlPlaneLoadBalancer"
+)
+
+func parseClusterDefaults(data map[string]string) (strategies.ClusterCreationDefaults, error) {
+	result := strategies.ClusterCreationDefaults{}
+	d := &result
 	for _, field := range []struct {
 		key    string
 		target *string
 	}{
-		{"clusterClassName", &defaults.ClusterClassName},
-		{"kubernetesVersion", &defaults.KubernetesVersion},
-		{"workerName", &defaults.WorkerName},
-		{"workerClass", &defaults.WorkerClass},
-		{"controlPlaneLoadBalancer", &defaults.ControlPlaneLoadBalancer},
+		{versionKey, &result.KubernetesVersion},
+		{workerNameKey, &result.WorkerName},
+		{podCIDRKey, &d.PodCIDR},
+		{serviceCIDRKey, &d.ServiceCIDR},
+		{serviceDomainKey, &d.ServiceDomain},
+		{cniKey, &d.CNI},
 	} {
-		value, ok := configMap.Data[field.key]
-		if !ok || value == "" {
-			return strategies.ClusterCreationDefaults{}, missingConfigMapKeyError(field.key)
+		if strings.TrimSpace(data[field.key]) == "" {
+			return result, missingConfigMapKeyError(field.key)
 		}
-		*field.target = value
+		*field.target = data[field.key]
 	}
 	for _, field := range []struct {
 		key      string
 		target   *int
 		min, max int
 	}{
-		{"controlPlaneEndpointPort", &defaults.ControlPlaneEndpointPort, 1, 65535},
-		{"controlPlaneEndpointSubnet", &defaults.ControlPlaneEndpointSubnet, 0, 32},
+		{endpointPortKey, &d.EndpointPort, 1, 65535}, {endpointSubnetKey, &d.EndpointSubnet, 1, 32},
 	} {
-		value, ok := configMap.Data[field.key]
-		if !ok {
-			return strategies.ClusterCreationDefaults{}, missingConfigMapKeyError(field.key)
+		v, err := strconv.Atoi(data[field.key])
+		if err != nil || v < field.min || v > field.max {
+			return result, fmt.Errorf("invalid %s: expected integer between %d and %d", field.key, field.min, field.max)
 		}
-		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < field.min || parsed > field.max {
-			return strategies.ClusterCreationDefaults{}, fmt.Errorf(
-				"ConfigMap %q key %q must be an integer between %d and %d, got %q",
-				ClusterDefaultsConfigMapName, field.key, field.min, field.max, value,
-			)
-		}
-		*field.target = parsed
+		*field.target = v
 	}
-	return defaults, nil
+	var ok bool
+	d.LoadBalancer, ok = data[loadBalancerKey]
+	if !ok {
+		return result, missingConfigMapKeyError(loadBalancerKey)
+	}
+	for _, field := range []struct {
+		key    string
+		target *map[string]any
+	}{
+		{controlPlaneMachineSpecKey, &d.ControlPlaneMachineSpec},
+		{workerMachineSpecKey, &d.WorkerMachineSpec},
+		{controlPlaneKubeadmConfigKey, &d.ControlPlaneKubeadmConfig},
+		{workerKubeadmConfigKey, &d.WorkerKubeadmConfig},
+	} {
+		if strings.TrimSpace(data[field.key]) == "" {
+			return result, missingConfigMapKeyError(field.key)
+		}
+		raw, err := yaml.YAMLToJSONStrict([]byte(data[field.key]))
+		if err != nil {
+			return result, fmt.Errorf("invalid %s: %w", field.key, err)
+		}
+		if err := json.Unmarshal(raw, field.target); err != nil {
+			return result, fmt.Errorf("invalid %s: expected an object: %w", field.key, err)
+		}
+	}
+	return result, validateConfigurationObjects(result)
 }
 
-func missingConfigMapKeyError(key string) error {
-	return fmt.Errorf("ConfigMap %q is missing required key %q", ClusterDefaultsConfigMapName, key)
+// Check the shape expected by the builder; provider fields are validated by Kubernetes and the provider.
+func validateConfigurationObjects(d strategies.ClusterCreationDefaults) error {
+	for _, field := range []struct {
+		key   string
+		value map[string]any
+	}{
+		{controlPlaneMachineSpecKey, d.ControlPlaneMachineSpec},
+		{workerMachineSpecKey, d.WorkerMachineSpec},
+		{controlPlaneKubeadmConfigKey, d.ControlPlaneKubeadmConfig},
+		{workerKubeadmConfigKey, d.WorkerKubeadmConfig},
+	} {
+		if len(field.value) == 0 {
+			return fmt.Errorf("%s must be a non-empty configuration object", field.key)
+		}
+		for _, key := range []string{"apiVersion", "kind", "metadata", "spec"} {
+			if _, ok := field.value[key]; ok {
+				return fmt.Errorf("%s must contain configuration fields, not a resource manifest", field.key)
+			}
+		}
+	}
+	return nil
 }

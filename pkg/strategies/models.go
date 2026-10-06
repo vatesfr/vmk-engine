@@ -10,35 +10,39 @@ type CreateClusterParams struct {
 	Tags                 map[string]string
 }
 
-// ClusterCreationDefaults contains the server-side topology values used to
-// turn a cluster creation intent into a complete Cluster resource.
+// ClusterCreationDefaults contains VM and bootstrap configuration read from the ConfigMap.
+// Credentials remain in provider-managed Secrets.
 type ClusterCreationDefaults struct {
-	ClusterClassName           string
-	KubernetesVersion          string
-	WorkerName                 string
-	WorkerClass                string
-	ControlPlaneEndpointPort   int
-	ControlPlaneEndpointSubnet int
-	ControlPlaneLoadBalancer   string
+	KubernetesVersion         string
+	WorkerName                string
+	PodCIDR                   string
+	ServiceCIDR               string
+	ServiceDomain             string
+	ControlPlaneKubeadmConfig map[string]any
+	ControlPlaneMachineSpec   map[string]any
+	WorkerMachineSpec         map[string]any
+	WorkerKubeadmConfig       map[string]any
+	CNI                       string
+	EndpointPort              int
+	EndpointSubnet            int
+	LoadBalancer              string
 }
 
-// CreateClusterResourceParams describes the complete topology required by the
+// CreateClusterResourceParams describes the resources required by the
 // cluster resource Strategy.
 type CreateClusterResourceParams struct {
+	Defaults             ClusterCreationDefaults
+	ControlPlaneIP       string
+	VMNamePrefix         string
 	Name                 string
-	ClusterClassName     string
-	KubernetesVersion    string
 	ControlPlaneReplicas *int32
 	MachineDeployments   []MachineDeployment
-	Variables            map[string]any
 	Tags                 map[string]string
 }
 
 type MachineDeployment struct {
-	Name          string
-	Class         string
-	Replicas      *int32
-	FailureDomain string
+	Name     string
+	Replicas *int32
 }
 
 // ClusterInfo is the shared representation returned by cluster Strategies.

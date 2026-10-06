@@ -2,9 +2,8 @@ package kubernetes_clients
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"sort"
+	"net/netip"
 	"strings"
 
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -12,20 +11,43 @@ import (
 
 	"capv-proxy/pkg/strategies"
 
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
 )
 
-const clusterTagLabelPrefix = "tags.vmk.vates.tech/"
-
 type ClusterClient struct {
 	kubernetesClient client.Client
 	namespace        string
 }
+
+const (
+	xoGroup                 = "vates.infrastructure.cluster.x-k8s.io"
+	cpGroup                 = "controlplane.cluster.x-k8s.io"
+	bootstrapGroup          = "bootstrap.cluster.x-k8s.io"
+	specKey                 = "spec"
+	templateKey             = "template"
+	metadataKey             = "metadata"
+	nameKey                 = "name"
+	namePrefixKey           = "namePrefix"
+	kubeadmConfigSpecKey    = "kubeadmConfigSpec"
+	clusterConfigurationKey = "clusterConfiguration"
+	apiServerKey            = "apiServer"
+	certSANsKey             = "certSANs"
+	xoClusterKind           = "XOCluster"
+	xoMachineTemplateKind   = "XOMachineTemplate"
+	controlPlaneKind        = "KubeadmControlPlane"
+	bootstrapTemplateKind   = "KubeadmConfigTemplate"
+	endpointKey             = "controlPlaneEndpoint"
+	bootstrapKey            = "bootstrap"
+	commandsKey             = "preKubeadmCommands"
+	kindKey                 = "kind"
+	clusterTagLabelPrefix   = "tags.vmk.vates.tech/"
+)
 
 var _ strategies.ForManagingClusterResources = ClusterClient{}
 
@@ -46,80 +68,7 @@ func (c ClusterClient) Create(ctx context.Context, params strategies.CreateClust
 		return strategies.ClusterInfo{}, err
 	}
 
-	clusterResource := &capiv1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      params.Name,
-			Namespace: c.namespace,
-			Labels:    labels,
-		},
-		Spec: capiv1.ClusterSpec{
-			Topology: capiv1.Topology{
-				ClassRef: capiv1.ClusterClassRef{
-					Name: params.ClusterClassName,
-				},
-				Version: params.KubernetesVersion,
-				ControlPlane: capiv1.ControlPlaneTopology{
-					Replicas: params.ControlPlaneReplicas,
-				},
-				Workers: capiv1.WorkersTopology{
-					MachineDeployments: toMachineDeployments(params.MachineDeployments),
-				},
-			},
-		},
-	}
-
-	variables, err := toClusterVariables(params.Variables)
-	if err != nil {
-		return strategies.ClusterInfo{}, err
-	}
-	clusterResource.Spec.Topology.Variables = variables
-
-	if err := c.kubernetesClient.Create(ctx, clusterResource); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterAlreadyExists, err)
-		}
-		return strategies.ClusterInfo{}, fmt.Errorf("create Cluster %s/%s: %w", c.namespace, params.Name, err)
-	}
-
-	return strategies.ClusterInfo{
-		Name:  clusterResource.GetName(),
-		Phase: "Creating",
-		Tags:  optionalClusterTags(clusterResource.Labels),
-	}, nil
-}
-
-func toMachineDeployments(machineDeployments []strategies.MachineDeployment) []capiv1.MachineDeploymentTopology {
-	result := make([]capiv1.MachineDeploymentTopology, 0, len(machineDeployments))
-	for _, machineDeployment := range machineDeployments {
-		result = append(result, capiv1.MachineDeploymentTopology{
-			Name:          machineDeployment.Name,
-			Class:         machineDeployment.Class,
-			Replicas:      machineDeployment.Replicas,
-			FailureDomain: machineDeployment.FailureDomain,
-		})
-	}
-	return result
-}
-
-func toClusterVariables(variables map[string]any) ([]capiv1.ClusterVariable, error) {
-	names := make([]string, 0, len(variables))
-	for name := range variables {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	result := make([]capiv1.ClusterVariable, 0, len(names))
-	for _, name := range names {
-		value, err := json.Marshal(variables[name])
-		if err != nil {
-			return nil, fmt.Errorf("encode cluster variable %q: %w", name, err)
-		}
-		result = append(result, capiv1.ClusterVariable{
-			Name:  name,
-			Value: apiextensionsv1.JSON{Raw: value},
-		})
-	}
-	return result, nil
+	return c.createResources(ctx, params, labels)
 }
 
 func (c ClusterClient) List(ctx context.Context) ([]strategies.ClusterInfo, error) {
@@ -177,7 +126,70 @@ func (c ClusterClient) Delete(ctx context.Context, name string) error {
 		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, name, err)
 	}
 
+	// A partial creation may still be paused. Unpause only after
+	// deletion is requested, so controllers reconcile cleanup, not provisioning.
+	if err := c.kubernetesClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("read deleting Cluster %s: %w", name, err)
+	}
+	if ptr.Deref(cluster.Spec.Paused, false) && !cluster.DeletionTimestamp.IsZero() {
+		before := cluster.DeepCopy()
+		cluster.Spec.Paused = nil
+		if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(before)); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("unpause deleting Cluster %s: %w", name, err)
+		}
+	}
+
 	return nil
+}
+
+func (c ClusterClient) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
+	cluster, err := c.getClusterResource(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	return clusterTagsFromLabels(cluster.Labels), nil
+}
+
+func (c ClusterClient) GetTag(ctx context.Context, clusterName, tag string) (string, error) {
+	if err := validateClusterTag(tag, ""); err != nil {
+		return "", err
+	}
+	cluster, err := c.getClusterResource(ctx, clusterName)
+	if err != nil {
+		return "", err
+	}
+	value, found := cluster.Labels[clusterTagLabelPrefix+tag]
+	if !found {
+		return "", strategies.ErrClusterTagNotFound
+	}
+	return value, nil
+}
+
+func (c ClusterClient) SetTag(ctx context.Context, clusterName, tag, value string) error {
+	if err := validateClusterTag(tag, value); err != nil {
+		return err
+	}
+	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
+		labels[clusterTagLabelPrefix+tag] = value
+		return nil
+	})
+}
+
+func (c ClusterClient) DeleteTag(ctx context.Context, clusterName, tag string) error {
+	if err := validateClusterTag(tag, ""); err != nil {
+		return err
+	}
+	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
+		labelName := clusterTagLabelPrefix + tag
+		if _, found := labels[labelName]; !found {
+			return strategies.ErrClusterTagNotFound
+		}
+		delete(labels, labelName)
+		return nil
+	})
 }
 
 func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
@@ -192,6 +204,9 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 		ControlPlaneEndpoint: controlPlaneEndpoint,
 		Version:              value.Spec.Topology.Version,
 		Tags:                 optionalClusterTags(value.Labels),
+	}
+	if info.Version == "" && value.Status.ControlPlane != nil && len(value.Status.ControlPlane.Versions) == 1 {
+		info.Version = value.Status.ControlPlane.Versions[0].Version
 	}
 	info.CreatedAt = value.CreationTimestamp.String()
 	if status := value.Status.ControlPlane; status != nil {
@@ -243,14 +258,6 @@ func validateClusterTag(name, value string) error {
 	return nil
 }
 
-func (c ClusterClient) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
-	cluster, err := c.getClusterResource(ctx, clusterName)
-	if err != nil {
-		return nil, err
-	}
-	return clusterTagsFromLabels(cluster.Labels), nil
-}
-
 func clusterTagsFromLabels(labels map[string]string) map[string]string {
 	tags := make(map[string]string)
 	for name, value := range labels {
@@ -259,45 +266,6 @@ func clusterTagsFromLabels(labels map[string]string) map[string]string {
 		}
 	}
 	return tags
-}
-
-func (c ClusterClient) GetTag(ctx context.Context, clusterName, tag string) (string, error) {
-	if err := validateClusterTag(tag, ""); err != nil {
-		return "", err
-	}
-	cluster, err := c.getClusterResource(ctx, clusterName)
-	if err != nil {
-		return "", err
-	}
-	value, found := cluster.Labels[clusterTagLabelPrefix+tag]
-	if !found {
-		return "", strategies.ErrClusterTagNotFound
-	}
-	return value, nil
-}
-
-func (c ClusterClient) SetTag(ctx context.Context, clusterName, tag, value string) error {
-	if err := validateClusterTag(tag, value); err != nil {
-		return err
-	}
-	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
-		labels[clusterTagLabelPrefix+tag] = value
-		return nil
-	})
-}
-
-func (c ClusterClient) DeleteTag(ctx context.Context, clusterName, tag string) error {
-	if err := validateClusterTag(tag, ""); err != nil {
-		return err
-	}
-	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
-		labelName := clusterTagLabelPrefix + tag
-		if _, found := labels[labelName]; !found {
-			return strategies.ErrClusterTagNotFound
-		}
-		delete(labels, labelName)
-		return nil
-	})
 }
 
 func (c ClusterClient) updateClusterTags(ctx context.Context, clusterName string, update func(map[string]string) error) error {
@@ -338,4 +306,159 @@ func optionalClusterTags(labels map[string]string) map[string]string {
 		return nil
 	}
 	return tags
+}
+
+func resource(group, kind, name, namespace string, spec map[string]any) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": group + "/v1beta2",
+		kindKey:      kind,
+		metadataKey: map[string]any{
+			nameKey:     name,
+			"namespace": namespace,
+		},
+		specKey: spec,
+	}}
+}
+
+func reference(group, kind, name string) map[string]any {
+	return map[string]any{"apiGroup": group, kindKey: kind, nameKey: name}
+}
+
+func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateClusterResourceParams, labels map[string]string) (strategies.ClusterInfo, error) {
+	d := p.Defaults
+	ip, err := netip.ParseAddr(p.ControlPlaneIP)
+	if err != nil || !ip.Is4() {
+		return strategies.ClusterInfo{}, fmt.Errorf("controlPlaneIP must be an IPv4 address")
+	}
+	if p.ControlPlaneReplicas == nil || *p.ControlPlaneReplicas < 1 || len(p.MachineDeployments) != 1 || p.MachineDeployments[0].Replicas == nil || *p.MachineDeployments[0].Replicas < 1 {
+		return strategies.ClusterInfo{}, fmt.Errorf("cluster creation requires control-plane replicas and one worker deployment")
+	}
+	worker := p.MachineDeployments[0]
+	cpName, workerTemplateName, mdName := p.Name+"-cp", p.Name+"-worker", p.Name+"-"+worker.Name
+	for _, name := range []string{p.Name, cpName, workerTemplateName, mdName} {
+		if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
+			return strategies.ClusterInfo{}, fmt.Errorf("invalid resource name %q: %v", name, errs)
+		}
+	}
+	if err := validateConfigurationObjects(d); err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	cpSpec := map[string]any{kubeadmConfigSpecKey: runtime.DeepCopyJSON(d.ControlPlaneKubeadmConfig)}
+	cpMachine := runtime.DeepCopyJSON(d.ControlPlaneMachineSpec)
+	workerMachine := runtime.DeepCopyJSON(d.WorkerMachineSpec)
+	bootstrap := runtime.DeepCopyJSON(d.WorkerKubeadmConfig)
+	for _, config := range []map[string]any{cpSpec[kubeadmConfigSpecKey].(map[string]any), bootstrap} {
+		if err := renderBootstrapCommands(config, d.KubernetesVersion, p.ControlPlaneIP); err != nil {
+			return strategies.ClusterInfo{}, err
+		}
+	}
+	prefix := p.VMNamePrefix
+	if prefix == "" {
+		prefix = p.Name
+	}
+	cpMachine[namePrefixKey] = prefix + "-cp"
+	workerMachine[namePrefixKey] = prefix + "-worker"
+	cpSpec["version"] = p.Defaults.KubernetesVersion
+	cpSpec["replicas"] = int64(*p.ControlPlaneReplicas)
+	if err := unstructured.SetNestedMap(cpSpec, reference(xoGroup, xoMachineTemplateKind, cpName), "machineTemplate", specKey, "infrastructureRef"); err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	sans, _, err := unstructured.NestedStringSlice(cpSpec, kubeadmConfigSpecKey, clusterConfigurationKey, apiServerKey, certSANsKey)
+	if err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	sans = append(sans, p.ControlPlaneIP)
+	if err := unstructured.SetNestedStringSlice(cpSpec, sans, kubeadmConfigSpecKey, clusterConfigurationKey, apiServerKey, certSANsKey); err != nil {
+		return strategies.ClusterInfo{}, err
+	}
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[capiv1.ClusterNameLabel] = p.Name
+	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: p.Name, Namespace: c.namespace, Labels: labels}, Spec: capiv1.ClusterSpec{
+		Paused: ptr.To(true),
+		ClusterNetwork: capiv1.ClusterNetwork{
+			Pods:          capiv1.NetworkRanges{CIDRBlocks: []string{d.PodCIDR}},
+			Services:      capiv1.NetworkRanges{CIDRBlocks: []string{d.ServiceCIDR}},
+			ServiceDomain: d.ServiceDomain,
+		},
+		ControlPlaneRef:   capiv1.ContractVersionedObjectReference{APIGroup: cpGroup, Kind: controlPlaneKind, Name: cpName},
+		InfrastructureRef: capiv1.ContractVersionedObjectReference{APIGroup: xoGroup, Kind: xoClusterKind, Name: p.Name},
+	}}
+
+	xoSpec := map[string]any{
+		endpointKey:     map[string]any{"host": p.ControlPlaneIP, "port": int64(d.EndpointPort), "subnet": int64(d.EndpointSubnet)},
+		"injectSSHKeys": false,
+		"addons":        map[string]any{cniKey: d.CNI, "ccm": true, "csi": true},
+	}
+	if d.LoadBalancer != "" {
+		xoSpec["controlPlaneLB"] = d.LoadBalancer
+	}
+	deploymentLabels := map[string]any{"cluster.x-k8s.io/deployment-name": mdName}
+	workerSpec := map[string]any{
+		"clusterName":       p.Name,
+		"version":           p.Defaults.KubernetesVersion,
+		bootstrapKey:        map[string]any{"configRef": reference(bootstrapGroup, bootstrapTemplateKind, workerTemplateName)},
+		"infrastructureRef": reference(xoGroup, xoMachineTemplateKind, workerTemplateName),
+	}
+	deploymentSpec := map[string]any{
+		"clusterName": p.Name,
+		"replicas":    int64(*worker.Replicas),
+		"selector":    map[string]any{"matchLabels": deploymentLabels},
+		templateKey:   map[string]any{metadataKey: map[string]any{"labels": deploymentLabels}, specKey: workerSpec},
+	}
+	objects := []*unstructured.Unstructured{
+		resource(xoGroup, xoMachineTemplateKind, cpName, c.namespace, map[string]any{templateKey: map[string]any{specKey: cpMachine}}),
+		resource(xoGroup, xoMachineTemplateKind, workerTemplateName, c.namespace, map[string]any{templateKey: map[string]any{specKey: workerMachine}}),
+		resource(bootstrapGroup, bootstrapTemplateKind, workerTemplateName, c.namespace, map[string]any{templateKey: map[string]any{specKey: bootstrap}}),
+		resource(xoGroup, xoClusterKind, p.Name, c.namespace, xoSpec),
+		resource(cpGroup, controlPlaneKind, cpName, c.namespace, cpSpec),
+		resource("cluster.x-k8s.io", "MachineDeployment", mdName, c.namespace, deploymentSpec),
+	}
+
+	if err := c.kubernetesClient.Create(ctx, cluster); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterAlreadyExists, err)
+		}
+		return strategies.ClusterInfo{}, err
+	}
+	// Keep partial creations paused and identifiable for explicit cleanup. Never
+	// delete resources after an ambiguous API timeout or adopt existing objects.
+	for _, obj := range objects {
+		obj.SetLabels(map[string]string{capiv1.ClusterNameLabel: p.Name})
+		owner := metav1.OwnerReference{APIVersion: capiv1.GroupVersion.String(), Kind: "Cluster", Name: p.Name, UID: cluster.UID}
+		// Older Vates controllers resolve the Cluster with GetControllerOf.
+		// Restrict this compatibility reference to XOCluster; other resources keep
+		// their normal CAPI ownership. No blockOwnerDeletion permission is needed.
+		if obj.GetKind() == xoClusterKind {
+			owner.Controller = ptr.To(true)
+		}
+		obj.SetOwnerReferences([]metav1.OwnerReference{owner})
+		if err := c.kubernetesClient.Create(ctx, obj); err != nil {
+			return strategies.ClusterInfo{}, fmt.Errorf("create %s %s: %w; Cluster %s remains paused; delete it before retrying", obj.GetKind(), obj.GetName(), err, p.Name)
+		}
+	}
+	before := cluster.DeepCopy()
+	cluster.Spec.Paused = nil
+	if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(before)); err != nil {
+		return strategies.ClusterInfo{}, fmt.Errorf("activate Cluster %s: %w; inspect its paused state before retrying", p.Name, err)
+	}
+	return strategies.ClusterInfo{Name: p.Name, Phase: "Creating", Tags: optionalClusterTags(labels)}, nil
+}
+
+// Replace only our two explicit tokens, leaving shell variables and command
+// substitutions intact. ConfigMap values are never executed by the proxy.
+func renderBootstrapCommands(config map[string]any, version, endpoint string) error {
+	commands, found, err := unstructured.NestedStringSlice(config, commandsKey)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", commandsKey, err)
+	}
+	if !found {
+		return nil
+	}
+	replace := strings.NewReplacer("{{KUBERNETES_VERSION}}", version, "{{CONTROL_PLANE_IP}}", endpoint)
+	for i, command := range commands {
+		commands[i] = replace.Replace(command)
+	}
+	return unstructured.SetNestedStringSlice(config, commands, commandsKey)
 }

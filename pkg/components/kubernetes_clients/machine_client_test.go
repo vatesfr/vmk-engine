@@ -1,4 +1,4 @@
-package kubernetes_clients_test
+package kubernetes_clients
 
 import (
 	"testing"
@@ -9,13 +9,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"capv-proxy/pkg/components/kubernetes_clients"
 	"capv-proxy/pkg/strategies"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const controlPlaneRole = "control-plane"
+const (
+	controlPlaneRole = "control-plane"
+	readyStatus      = "Ready"
+	notReadyStatus   = "NotReady"
+	controlPlaneIP   = "10.0.0.1"
+	workerIP         = "10.0.0.2"
+	externalIP       = "1.1.1.1"
+	hostname         = "host.example"
+)
 
 func machineWithStatus(name, namespace, cluster string, controlPlane bool, conditionStatus metav1.ConditionStatus, addresses ...capiv1.MachineAddress) *capiv1.Machine {
 	labels := map[string]string{capiv1.ClusterNameLabel: cluster}
@@ -80,23 +87,23 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		},
 		"not ready condition maps to NotReady": {
 			objects: []client.Object{
-				machineWithStatus("worker", testNamespace, clusterName, false, metav1.ConditionFalse,
+				machineWithStatus(workerRole, testNamespace, clusterName, false, metav1.ConditionFalse,
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP}),
 			},
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "worker", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP)},
+				{Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP)},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
 			objects: []client.Object{
-				machineWithStatus("worker", testNamespace, clusterName, false, metav1.ConditionUnknown),
+				machineWithStatus(workerRole, testNamespace, clusterName, false, metav1.ConditionUnknown),
 			},
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "worker", Role: workerRole, Status: "Unknown"},
+				{Name: workerRole, Role: workerRole, Status: unknownStatus},
 			},
 		},
 	}
@@ -105,7 +112,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, tc.objects...), tc.namespace)
+			machineClient := NewMachineClient(newFakeClient(t, tc.objects...), tc.namespace)
 			nodes, err := machineClient.GetMachinesByCluster(t.Context(), tc.clusterName)
 
 			if tc.wantErrContains != "" {
@@ -127,7 +134,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 	t.Run("kubernetes error", func(t *testing.T) {
 		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
-		machineClient := kubernetes_clients.NewMachineClient(kubeClient, testNamespace)
+		machineClient := NewMachineClient(kubeClient, testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -141,7 +148,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
 		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
 		machine.Status.Phase = "Provisioning"
-		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -195,8 +202,8 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			machine := machineWithStatus("worker", testNamespace, clusterName, false, "", tc.addresses...)
-			machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+			machine := machineWithStatus(workerRole, testNamespace, clusterName, false, "", tc.addresses...)
+			machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
 
 			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 			require.NoError(t, err)
@@ -205,3 +212,5 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 		})
 	}
 }
+
+func nodeEndpoint(ip string) string { return "https://" + ip + ":10250" }

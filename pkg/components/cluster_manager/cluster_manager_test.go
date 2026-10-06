@@ -42,17 +42,16 @@ const (
 	clusterConfig        = "apiVersion: v1\nkind: Config"
 )
 
-var errTest = errors.New("test error")
-
-var clusterCreationDefaults = strategies.ClusterCreationDefaults{
-	ClusterClassName:           "test-class",
-	KubernetesVersion:          "v1.2.3",
-	WorkerName:                 "test-workers",
-	WorkerClass:                "test-worker-class",
-	ControlPlaneEndpointPort:   6443,
-	ControlPlaneEndpointSubnet: 24,
-	ControlPlaneLoadBalancer:   "test-lb",
-}
+var (
+	errTest                 = errors.New("test error")
+	clusterCreationDefaults = strategies.ClusterCreationDefaults{
+		KubernetesVersion: "v1.2.3",
+		WorkerName:        "test-workers",
+		EndpointPort:      6443,
+		EndpointSubnet:    24,
+		LoadBalancer:      "test-lb",
+	}
+)
 
 func TestCreateCluster(t *testing.T) {
 	testCases := map[string]testCreateClusterParams{
@@ -199,24 +198,16 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
 	clusterResources.EXPECT().Create(t.Context(), strategies.CreateClusterResourceParams{
+		ControlPlaneIP:       params.ControlPlaneIP,
+		VMNamePrefix:         params.VMNamePrefix,
 		Name:                 clusterName,
-		ClusterClassName:     clusterCreationDefaults.ClusterClassName,
-		KubernetesVersion:    clusterCreationDefaults.KubernetesVersion,
+		Defaults:             clusterCreationDefaults,
 		ControlPlaneReplicas: &params.ControlPlaneReplicas,
 		MachineDeployments: []strategies.MachineDeployment{{
 			Name:     clusterCreationDefaults.WorkerName,
-			Class:    clusterCreationDefaults.WorkerClass,
 			Replicas: &params.WorkerReplicas,
 		}},
-		Variables: map[string]any{
-			"controlPlaneEndpoint": map[string]any{
-				"host":   controlPlaneIP,
-				"port":   clusterCreationDefaults.ControlPlaneEndpointPort,
-				"subnet": clusterCreationDefaults.ControlPlaneEndpointSubnet,
-			},
-			"vmNamePrefix":   vmNamePrefix,
-			"controlPlaneLB": clusterCreationDefaults.ControlPlaneLoadBalancer,
-		},
+
 		Tags: params.Tags,
 	}).Return(strategies.ClusterInfo{Name: clusterName}, nil)
 

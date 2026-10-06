@@ -126,6 +126,14 @@ func (c ClusterManager) DeleteCluster(ctx context.Context, name string) error {
 	return nil
 }
 
+func (m ClusterManager) GetAllTags(ctx context.Context) (map[string]map[string]string, error) {
+	tags, err := m.clusterResources.GetAllTags(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, err)
+	}
+	return tags, nil
+}
+
 func (m ClusterManager) GetClusterTags(ctx context.Context, clusterName string) (map[string]string, error) {
 	tags, err := m.clusterResources.GetTags(ctx, clusterName)
 	if err != nil {

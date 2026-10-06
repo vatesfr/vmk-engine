@@ -322,6 +322,15 @@ the tag use cases and uses `ClusterClient` for Kubernetes label persistence.
 The client enforces the constraints specific to Kubernetes labels. Tags are also
 included in cluster creation, detail, and list responses.
 
+`GET /api/kubernetes/tags` returns all tags grouped by cluster name in the
+configured namespace, including clusters without tags:
+
+```json
+{"result":{"demo":{"environment":"production"},"no-tags":{}}}
+```
+
+When there are no clusters, the response is `{"result":{}}`.
+
 View a cluster and its nodes:
 
 ```bash

@@ -232,6 +232,96 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 }
 
+func TestClusterClientCreatesClusterWithTags(t *testing.T) {
+	testCases := map[string]struct {
+		tags    map[string]string
+		labels  map[string]string
+		wantErr error
+	}{
+		"multiple tags": {
+			tags: map[string]string{"environment": productionValue, ownerTag: platformValue},
+			labels: map[string]string{
+				capiv1.ClusterNameLabel:            clusterName,
+				testTagLabelPrefix + "environment": productionValue, testTagLabelPrefix + ownerTag: platformValue,
+			},
+		},
+		"no tags": {labels: map[string]string{capiv1.ClusterNameLabel: clusterName}},
+		caseEmptyTagValue: {
+			tags:   map[string]string{ownerTag: ""},
+			labels: map[string]string{capiv1.ClusterNameLabel: clusterName, testTagLabelPrefix + ownerTag: ""},
+		},
+		"invalid name": {tags: map[string]string{strings.Repeat("a", 64): platformValue}, wantErr: strategies.ErrInvalidClusterTagName},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			params, objects, scheme := newClusterCreationTestSetup(t)
+			params.Name = clusterName
+			params.Tags = tc.tags
+			kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+			clusterClient := NewClusterClient(kubeClient, testNamespace)
+			info, err := clusterClient.Create(t.Context(), params)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, info)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.tags, info.Tags)
+			stored := &capiv1.Cluster{}
+			require.NoError(t, kubeClient.Get(t.Context(), types.NamespacedName{Namespace: testNamespace, Name: clusterName}, stored))
+			assert.Equal(t, tc.labels, stored.Labels)
+		})
+	}
+}
+
+func TestClusterClientGetAllTags(t *testing.T) {
+	testCases := map[string]struct {
+		objects []client.Object
+		tags    map[string]map[string]string
+		wantErr error
+	}{
+		"tags by cluster": {
+			objects: []client.Object{
+				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: map[string]string{
+					capiv1.ClusterNameLabel:       clusterName,
+					testTagLabelPrefix + ownerTag: platformValue,
+					testTagLabelPrefix + "env":    productionValue,
+				}}},
+				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "empty-value", Namespace: testNamespace, Labels: map[string]string{testTagLabelPrefix + ownerTag: ""}}},
+				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "no-tags", Namespace: testNamespace}},
+				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "other-namespace", Labels: map[string]string{testTagLabelPrefix + ownerTag: "different-owner"}}},
+			},
+			tags: map[string]map[string]string{
+				clusterName:   {ownerTag: platformValue, "env": productionValue},
+				"empty-value": {ownerTag: ""},
+				"no-tags":     {},
+			},
+		},
+		"no clusters": {tags: map[string]map[string]string{}},
+		"list error":  {wantErr: errTest},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			kubeClient := newFakeClient(t, tc.objects...)
+			if tc.wantErr != nil {
+				kubeClient = newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, tc.wantErr)})
+			}
+			clusterClient := NewClusterClient(kubeClient, testNamespace)
+
+			tags, err := clusterClient.GetAllTags(t.Context())
+
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.tags, tags)
+		})
+	}
+}
+
 func TestClusterClientReadsClusterTags(t *testing.T) {
 	testCases := map[string]struct {
 		labels map[string]string
@@ -585,7 +675,7 @@ func TestClusterCreationValidation(t *testing.T) {
 		{"missing name", func(p *strategies.CreateClusterResourceParams, _ *string) { p.Name = "" }, strategies.ErrClusterNameRequired},
 		{"missing namespace", func(_ *strategies.CreateClusterResourceParams, ns *string) { *ns = "" }, strategies.ErrClusterNamespaceRequired},
 		{"invalid tag", func(p *strategies.CreateClusterResourceParams, _ *string) {
-			p.Tags = map[string]string{"invalid/key": "value"}
+			p.Tags = map[string]string{"invalid/key": platformValue}
 		}, strategies.ErrInvalidClusterTagName},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

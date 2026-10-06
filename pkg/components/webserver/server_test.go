@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	productionValue                = "production"
+	environmentTag                 = "environment"
 	clusterName                    = "cluster-1"
 	secondClusterName              = "cluster-2"
 	clusterPhase                   = "Provisioned"
@@ -38,6 +40,7 @@ const (
 	clustersPath                   = "/api/kubernetes/clusters"
 	getClusterPath                 = "/api/kubernetes/clusters/cluster-1"
 	allNodesPath                   = "/api/kubernetes/nodes"
+	allTagsPath                    = "/api/kubernetes/tags"
 	clusterNodesPath               = "/api/kubernetes/clusters/cluster-1/nodes"
 	clusterConfigPath              = "/api/kubernetes/clusters/cluster-1/config"
 	clusterTagsPath                = "/api/kubernetes/clusters/cluster-1/tags"
@@ -264,7 +267,7 @@ func TestHTTPRoutes(t *testing.T) {
 			body:   strings.Replace(createClusterRequestBody, `"vm_name_prefix":"test"`, `"vm_name_prefix":"test","tags":{"environment":"production"}`, 1),
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				params := validCreateClusterParams()
-				params.Tags = map[string]string{"environment": "production"}
+				params.Tags = map[string]string{environmentTag: productionValue}
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -310,11 +313,40 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedTitle:  "Cluster not found",
 			expectedDetail: strategies.ErrClusterNotFound.Error(),
 		},
+		"get all tags": {
+			method: http.MethodGet,
+			path:   allTagsPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllTags(ctx).Return(map[string]map[string]string{
+					clusterName:       {environmentTag: productionValue, "owner": "platform"},
+					secondClusterName: {},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `{"result":{"cluster-1":{"environment":"production","owner":"platform"},"cluster-2":{}}}`,
+		},
+		"get all tags without clusters": {
+			method: http.MethodGet,
+			path:   allTagsPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllTags(ctx).Return(map[string]map[string]string{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `{"result":{}}`,
+		},
+		"get all tags service error": {
+			method: http.MethodGet,
+			path:   allTagsPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetAllTags(ctx).Return(nil, fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, errTest))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
 		"get cluster tags": {
 			method: http.MethodGet,
 			path:   clusterTagsPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTags(ctx, clusterName).Return(map[string]string{"environment": "production"}, nil)
+				service.EXPECT().GetClusterTags(ctx, clusterName).Return(map[string]string{environmentTag: productionValue}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `{"result":{"environment":"production"}}`,
@@ -323,7 +355,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("production", nil)
+				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return(productionValue, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `"production"`,
@@ -333,7 +365,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(nil)
+				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, productionValue).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
@@ -341,7 +373,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodDelete,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(nil)
+				service.EXPECT().DeleteClusterTag(ctx, clusterName, environmentTag).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
@@ -349,7 +381,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("", strategies.ErrClusterTagNotFound)
+				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return("", strategies.ErrClusterTagNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedTitle:  "Cluster tag not found",
@@ -360,7 +392,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"invalid value"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "invalid value").Return(fmt.Errorf("update: %w", strategies.ErrInvalidClusterTagValue))
+				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, "invalid value").Return(fmt.Errorf("update: %w", strategies.ErrInvalidClusterTagValue))
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedTitle:  "Invalid cluster parameters",
@@ -379,7 +411,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, "environment").Return("", strategies.ErrInvalidClusterTagName)
+				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return("", strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
@@ -387,7 +419,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodDelete,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteClusterTag(ctx, clusterName, "environment").Return(strategies.ErrInvalidClusterTagName)
+				service.EXPECT().DeleteClusterTag(ctx, clusterName, environmentTag).Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
@@ -396,7 +428,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, "environment", "production").Return(strategies.ErrInvalidClusterTagName)
+				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, productionValue).Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},

@@ -33,6 +33,10 @@ type ClusterTagsResponse struct {
 	Result map[string]string `json:"result"`
 }
 
+type AllClusterTagsResponse struct {
+	Result map[string]map[string]string `json:"result"`
+}
+
 type ClusterInfo struct {
 	Name                 string            `json:"name,omitempty"`
 	Phase                string            `json:"phase,omitempty"`
@@ -169,6 +173,14 @@ func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func (k ClusterHandler) GetAllTags(c fuego.ContextNoBody) (AllClusterTagsResponse, error) {
+	tags, err := k.clusterService.GetAllTags(c.Context())
+	if err != nil {
+		return AllClusterTagsResponse{}, toHTTPError(err)
+	}
+	return AllClusterTagsResponse{Result: tags}, nil
 }
 
 func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {

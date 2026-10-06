@@ -145,6 +145,22 @@ func (c ClusterClient) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
+// GetAllTags returns tags keyed by cluster name in the configured namespace.
+// Clusters without tags are included with an empty map.
+func (c ClusterClient) GetAllTags(ctx context.Context) (map[string]map[string]string, error) {
+	clusters := &capiv1.ClusterList{}
+	if err := c.kubernetesClient.List(ctx, clusters, client.InNamespace(c.namespace)); err != nil {
+		return nil, err
+	}
+
+	tags := make(map[string]map[string]string, len(clusters.Items))
+	for i := range clusters.Items {
+		cluster := &clusters.Items[i]
+		tags[cluster.Name] = clusterTagsFromLabels(cluster.Labels)
+	}
+	return tags, nil
+}
+
 func (c ClusterClient) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
 	cluster, err := c.getClusterResource(ctx, clusterName)
 	if err != nil {

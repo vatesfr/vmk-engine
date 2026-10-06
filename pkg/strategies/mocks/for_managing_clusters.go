@@ -99,6 +99,21 @@ func (mr *MockForManagingClustersMockRecorder) GetAllNodes(ctx any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllNodes", reflect.TypeOf((*MockForManagingClusters)(nil).GetAllNodes), ctx)
 }
 
+// GetAllTags mocks base method.
+func (m *MockForManagingClusters) GetAllTags(ctx context.Context) (map[string]map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllTags", ctx)
+	ret0, _ := ret[0].(map[string]map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllTags indicates an expected call of GetAllTags.
+func (mr *MockForManagingClustersMockRecorder) GetAllTags(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllTags", reflect.TypeOf((*MockForManagingClusters)(nil).GetAllTags), ctx)
+}
+
 // GetCluster mocks base method.
 func (m *MockForManagingClusters) GetCluster(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()

@@ -184,19 +184,19 @@ Base URL: `http://localhost:8080`.
 | Method | Route | Description | Current status |
 | --- | --- | --- | --- |
 | `GET` | `/ping` | Checks service health | Working |
-| `GET` | `/api/kubernetes/clusters/` | Lists clusters, or selected cluster fields, in the namespace | Working |
-| `GET` | `/api/kubernetes/clusters/{id}` | Returns one cluster | Working |
-| `POST` | `/api/kubernetes/clusters/` | Creates a CAPI cluster and its associated resources | Requires configured defaults |
-| `DELETE` | `/api/kubernetes/clusters/{id}` | Deletes a cluster | Working |
-| `GET` | `/api/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
-| `GET` | `/api/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
+| `GET` | `/kubernetes/clusters/` | Lists clusters, or selected cluster fields, in the namespace | Working |
+| `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
+| `POST` | `/kubernetes/clusters/` | Creates a CAPI cluster and its associated resources | Requires configured defaults |
+| `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
+| `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
+| `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 
 ### Examples
 
 List clusters:
 
 ```bash
-curl http://127.0.0.1:8080/api/kubernetes/clusters/
+curl http://127.0.0.1:8080/kubernetes/clusters/
 ```
 
 Example response:
@@ -217,13 +217,13 @@ nested fields. Unknown or malformed fields will be ignored.
 Return full cluster objects:
 
 ```bash
-curl 'http://127.0.0.1:8080/api/kubernetes/clusters/?fields=*'
+curl 'http://127.0.0.1:8080/kubernetes/clusters/?fields=*'
 ```
 
 Return only the cluster name and the ready replica count:
 
 ```bash
-curl 'http://127.0.0.1:8080/api/kubernetes/clusters/?fields=name,control_plane_status.ready_replicas'
+curl 'http://127.0.0.1:8080/kubernetes/clusters/?fields=name,control_plane_status.ready_replicas'
 ```
 
 The nodes collection uses the same selection syntax.
@@ -231,21 +231,24 @@ The nodes collection uses the same selection syntax.
 Create a cluster:
 
 ```bash
-curl --request POST http://127.0.0.1:8080/api/kubernetes/clusters/ \
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/ \
   --header 'Content-Type: application/json' \
   --data '{
-    "name": "demo",
-    "controlPlaneReplicas": 3,
-    "workerReplicas": 2,
-    "controlPlaneIP": "192.0.2.10",
-    "vmNamePrefix": "jls-capi-generated-",
-    "tags": {"environment": "production"}
+    "name": "my-cluster",
+    "control_plane_replicas": 3,
+    "worker_replicas": 2,
+    "control_plane_ip": "10.30.138.14",
+    "vm_name_prefix": "jls-capi-dev-"
   }'
 ```
 
 The HTTP API supplies the cluster name, replica counts, control-plane IPv4
 address, VM name prefix and tags. The `cluster-defaults` ConfigMap in
 `--namespace` is read on each creation; changes affect new clusters only.
+
+This example reproduces the test cluster configuration. If `my-cluster`
+already exists, creation returns 409. To create another cluster alongside it,
+use a different name, an unused control-plane IP and a distinct VM name prefix.
 
 Cluster creation creates a Cluster without `spec.topology`, an XOCluster, a
 KubeadmControlPlane, one MachineDeployment, two per-cluster XOMachineTemplates,
@@ -272,8 +275,9 @@ and worker bootstrap templates required by CAPI. It does not create or read a
 KubeadmControlPlaneTemplate. Each YAML block contains configuration fields only,
 without `apiVersion`, `kind`, `metadata` or a surrounding `spec`.
 
-Before deploying, replace the `<your-xo-...-uuid>` placeholders in both machine
-specs with the real XO VM image, pool and network identifiers. These are Xen
+The chart defaults use the test cluster's XO VM image, pool and network
+identifiers, with kubeadm, cloud-init and kube-vip enabled in both machine specs.
+Before deploying in another environment, update these identifiers. These are Xen
 Orchestra identifiers, not Kubernetes resource names. The provider also accepts
 `templateName` and `poolName`; omitting the pool uses the template's pool.
 The service decodes these configuration objects and leaves provider field
@@ -313,7 +317,7 @@ must follow Kubernetes label syntax and are limited to 63 characters by the
 Tags may be supplied in the cluster creation request or managed later through
 `GET /clusters/{id}/tags`, `GET /clusters/{id}/tags/{tag}`,
 `PUT /clusters/{id}/tags/{tag}` with `{"value":"production"}`, and
-`DELETE /clusters/{id}/tags/{tag}` under `/api/kubernetes`. The cluster labels
+`DELETE /clusters/{id}/tags/{tag}` under `/kubernetes`. The cluster labels
 are the persistent source of truth; tags previously kept only in process
 memory do not migrate across a deployment.
 
@@ -322,7 +326,7 @@ the tag use cases and uses `ClusterClient` for Kubernetes label persistence.
 The client enforces the constraints specific to Kubernetes labels. Tags are also
 included in cluster creation, detail, and list responses.
 
-`GET /api/kubernetes/tags` returns all tags grouped by cluster name in the
+`GET /kubernetes/tags` returns all tags grouped by cluster name in the
 configured namespace, including clusters without tags:
 
 ```json
@@ -334,8 +338,8 @@ When there are no clusters, the response is `{"result":{}}`.
 View a cluster and its nodes:
 
 ```bash
-curl http://127.0.0.1:8080/api/kubernetes/clusters/demo
-curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/nodes
+curl http://127.0.0.1:8080/kubernetes/clusters/demo
+curl http://127.0.0.1:8080/kubernetes/clusters/demo/nodes
 ```
 
 Each node entry includes a `machine_id` field when the CAPI `Machine` exposes a
@@ -349,7 +353,7 @@ Orchestra VM without exposing provider strings in the API response.
 Retrieve its kubeconfig:
 
 ```bash
-curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/config
+curl http://127.0.0.1:8080/kubernetes/clusters/demo/config
 ```
 
 The service looks for the `demo-kubeconfig` `Secret` in the configured
@@ -362,7 +366,7 @@ namespace and returns the value stored under its `value` key in a JSON object:
 Delete the cluster:
 
 ```bash
-curl --request DELETE http://127.0.0.1:8080/api/kubernetes/clusters/demo
+curl --request DELETE http://127.0.0.1:8080/kubernetes/clusters/demo
 ```
 
 Successful cluster and tag deletions, as well as tag creation and updates, return

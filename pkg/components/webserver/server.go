@@ -66,7 +66,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		fuego.OptionTags("Health"),
 	)
 
-	apiRouter := fuego.Group(server, "/api/kubernetes",
+	apiRouter := fuego.Group(server, "/kubernetes",
 		fuego.OptionTags("Clusters"),
 	)
 	fuego.Use(apiRouter, middlewares.AuthRequired())

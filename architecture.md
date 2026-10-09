@@ -172,7 +172,9 @@ its own storage technology.
 - Component and conversion unit tests exist, but the HTTP boundary and the
   Kubernetes Strategies still need integration tests.
 - `GetClusterNodesInfo` currently derives its flat node information from CAPI
-  Machines. Workload-cluster Node enrichment is not wired yet.
+  Machines. Workload-cluster Node enrichment is not wired yet, although the
+  machine list already exposes the Xen Orchestra VM UUID as `machine_id` when a
+  valid machine `providerID` is available.
 - Authentication middleware currently lets every request through.
 - Kubernetes errors pass through without an explicit mapping to HTTP status
   codes.

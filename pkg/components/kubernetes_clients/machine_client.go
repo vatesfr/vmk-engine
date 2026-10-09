@@ -6,10 +6,13 @@ import (
 	"net"
 	"sort"
 
+	"github.com/gofrs/uuid"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/strategies"
+
+	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,11 +86,21 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		status = unknownStatus
 	}
 
+	var machineID *uuid.UUID
+	if machine.Spec.ProviderID != "" {
+		// Silently ignore errors, as the provider ID may not be XenOrchestra,
+		// and we don't want to fail the whole operation because of that.
+		if parsedID, err := xok8scommon.GetVMID(machine.Spec.ProviderID); err == nil {
+			machineID = &parsedID
+		}
+	}
+
 	return strategies.ClusterNodeInfo{
-		Name:     name,
-		Role:     role,
-		Status:   status,
-		Endpoint: machineEndpoint(machine.Status.Addresses),
+		Name:      name,
+		Role:      role,
+		Status:    status,
+		Endpoint:  machineEndpoint(machine.Status.Addresses),
+		MachineID: machineID,
 	}
 }
 

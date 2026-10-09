@@ -1,6 +1,10 @@
 package strategies
 
-import "context"
+import (
+	"context"
+
+	"github.com/gofrs/uuid"
+)
 
 //go:generate go run -mod=mod go.uber.org/mock/mockgen -source=for_managing_clusters.go -destination=mocks/for_managing_clusters.go -package=mocks
 type ForManagingClusters interface {
@@ -17,8 +21,9 @@ type ForManagingClusters interface {
 }
 
 type ClusterNodeInfo struct {
-	Name     string
-	Role     string
-	Status   string
-	Endpoint string
+	Name      string
+	Role      string
+	Status    string
+	Endpoint  string
+	MachineID *uuid.UUID
 }

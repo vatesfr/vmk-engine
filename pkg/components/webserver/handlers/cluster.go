@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/go-fuego/fuego"
+	"github.com/gofrs/uuid"
 
 	"capv-proxy/pkg/strategies"
 )
@@ -58,10 +59,11 @@ func NewFromStrategyStatus(status strategies.NodeTypeStatus) *NodeStatus {
 }
 
 type ClusterNodeInfo struct {
-	Name     string `json:"name,omitempty"`
-	Role     string `json:"role,omitempty"`
-	Status   string `json:"status,omitempty"`
-	Endpoint string `json:"endpoint,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	Role      string     `json:"role,omitempty"`
+	Status    string     `json:"status,omitempty"`
+	Endpoint  string     `json:"endpoint,omitempty"`
+	MachineID *uuid.UUID `json:"machine_id,omitempty"`
 }
 
 func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHandler {
@@ -104,7 +106,11 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 	result := make([]ClusterNodeInfo, 0, len(nodes))
 	for _, node := range nodes {
 		result = append(result, ClusterNodeInfo{
-			Name: node.Name, Role: node.Role, Status: node.Status, Endpoint: node.Endpoint,
+			Name:      node.Name,
+			Role:      node.Role,
+			Status:    node.Status,
+			Endpoint:  node.Endpoint,
+			MachineID: node.MachineID,
 		})
 	}
 	return selectCollectionFields(result, fields)

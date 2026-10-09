@@ -287,6 +287,14 @@ curl http://127.0.0.1:8080/api/kubernetes/clusters/demo
 curl http://127.0.0.1:8080/api/kubernetes/clusters/demo/nodes
 ```
 
+Each node entry includes a `machine_id` field when the CAPI `Machine` exposes a
+Xen Orchestra `providerID` (for example `xenorchestra://<pool>/<vm-uuid>`). The
+server extracts the VM UUID and exposes it as the machine identifier; if the
+provider ID is missing or not from Xen Orchestra, the field is omitted.
+
+This lets callers correlate a Kubernetes `Machine` with the corresponding Xen
+Orchestra VM without exposing provider strings in the API response.
+
 Retrieve its kubeconfig:
 
 ```bash

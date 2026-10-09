@@ -3,6 +3,7 @@ package kubernetes_clients
 import (
 	"testing"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -10,6 +11,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"capv-proxy/pkg/strategies"
+
+	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
+	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -156,6 +160,32 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		require.Len(t, nodes, 1)
 		assert.Equal(t, "node-name", nodes[0].Name)
 		assert.Equal(t, "Provisioning", nodes[0].Status)
+	})
+
+	t.Run("provider id is decoded into VM uuid", func(t *testing.T) {
+		vmID := uuid.Must(uuid.NewV4())
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
+		machine.Spec.ProviderID = xok8scommon.GetProviderID(uuid.Nil, &xosdk.VM{ID: vmID})
+		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		require.Len(t, nodes, 1)
+		require.NotNil(t, nodes[0].MachineID)
+		assert.Equal(t, vmID, *nodes[0].MachineID)
+	})
+
+	t.Run("non-xo provider id is ignored", func(t *testing.T) {
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
+		machine.Spec.ProviderID = "aws:///us-east-1a/i-1234567890abcdef0"
+		machineClient := kubernetes_clients.NewMachineClient(newFakeClient(t, machine), testNamespace)
+
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		require.Len(t, nodes, 1)
+		assert.Nil(t, nodes[0].MachineID)
 	})
 }
 

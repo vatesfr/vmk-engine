@@ -160,6 +160,10 @@ data:
   controlPlaneMachineSpec: |
     templateID: <your-xo-template-uuid>
     poolID: <your-xo-pool-uuid>
+    bootstrapProvider: kubeadm
+    bootstrap:
+      cloudInit: true
+      kubeVIP: true
     resourceSet:
       cpus: 4
       memory: 8Gi
@@ -170,6 +174,10 @@ data:
   workerMachineSpec: |
     templateID: <your-xo-template-uuid>
     poolID: <your-xo-pool-uuid>
+    bootstrapProvider: kubeadm
+    bootstrap:
+      cloudInit: true
+      kubeVIP: true
     resourceSet:
       cpus: 4
       memory: 8Gi

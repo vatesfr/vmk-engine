@@ -105,7 +105,7 @@ needed in the current graph.
 
 ## Request flow
 
-For a typical request such as `GET /api/kubernetes/clusters/{id}`:
+For a typical request such as `GET /kubernetes/clusters/{id}`:
 
 1. Fuego matches the route and invokes `ClusterHandler.GetCluster`.
 2. The handler extracts the path parameter and calls `ForManagingClusters`.

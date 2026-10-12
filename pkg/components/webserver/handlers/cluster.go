@@ -52,10 +52,17 @@ type ClusterInfo struct {
 }
 
 type NodeStatus struct {
-	AvailableReplicas *int `json:"available_replicas,omitempty"`
-	DesiredReplicas   *int `json:"desired_replicas,omitempty"`
-	ReadyReplicas     *int `json:"ready_replicas,omitempty"`
-	Replicas          *int `json:"replicas,omitempty"`
+	AvailableReplicas *int                `json:"available_replicas,omitempty"`
+	DesiredReplicas   *int                `json:"desired_replicas,omitempty"`
+	ReadyReplicas     *int                `json:"ready_replicas,omitempty"`
+	Replicas          *int                `json:"replicas,omitempty"`
+	UpToDateReplicas  *int                `json:"up_to_date_replicas,omitempty"`
+	Versions          []VersionNodeStatus `json:"versions,omitempty"`
+}
+
+type VersionNodeStatus struct {
+	Replicas *int   `json:"replicas,omitempty"`
+	Version  string `json:"version,omitempty"`
 }
 
 func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
@@ -64,6 +71,13 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 	n.DesiredReplicas = &status.DesiredReplicas
 	n.ReadyReplicas = &status.ReadyReplicas
 	n.Replicas = &status.Replicas
+	n.UpToDateReplicas = &status.UpToDateReplicas
+	for _, version := range status.Versions {
+		n.Versions = append(n.Versions, VersionNodeStatus{
+			Replicas: &version.Replicas,
+			Version:  version.Version,
+		})
+	}
 	return &n
 }
 

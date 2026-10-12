@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
@@ -32,6 +33,41 @@ const (
 )
 
 var errTest = errors.New("test error")
+
+func TestNewFromNodeStatus(t *testing.T) {
+	testCases := map[string]struct {
+		status strategies.NodeTypeStatus
+		json   string
+	}{
+		"empty status": {
+			json: `{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}`,
+		},
+		"empty versions": {
+			status: strategies.NodeTypeStatus{Versions: []strategies.VersionNodeStatus{}},
+			json:   `{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}`,
+		},
+		"multiple versions": {
+			status: strategies.NodeTypeStatus{
+				AvailableReplicas: 1, DesiredReplicas: 2, ReadyReplicas: 3, Replicas: 4, UpToDateReplicas: 5,
+				Versions: []strategies.VersionNodeStatus{{Version: "v1.36.0", Replicas: 2}, {Version: "v1.35.0", Replicas: 3}},
+			},
+			json: `{"available_replicas":1,"desired_replicas":2,"ready_replicas":3,"replicas":4,"up_to_date_replicas":5,
+				"versions":[{"version":"v1.36.0","replicas":2},{"version":"v1.35.0","replicas":3}]}`,
+		},
+		"zero version replicas": {
+			status: strategies.NodeTypeStatus{Versions: []strategies.VersionNodeStatus{{Version: "v1.36.0"}}},
+			json: `{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0,
+				"versions":[{"version":"v1.36.0","replicas":0}]}`,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			encoded, err := json.Marshal(handlers.NewFromNodeStatus(testCase.status))
+			require.NoError(t, err)
+			assert.JSONEq(t, testCase.json, string(encoded))
+		})
+	}
+}
 
 func TestGetClusters(t *testing.T) {
 	testCases := map[string]struct {

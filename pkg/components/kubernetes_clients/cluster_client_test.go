@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	otherK8sVersion     = "v1.35.0"
 	k8sVersion          = "v1.32.0"
 	clusterName         = "test-cluster"
 	testNamespace       = "capv"
@@ -110,10 +111,14 @@ func TestClusterClientGet(t *testing.T) {
 				ControlPlane: &capiv1.ClusterControlPlaneStatus{
 					AvailableReplicas: ptr.To(int32(1)), DesiredReplicas: ptr.To(int32(3)),
 					ReadyReplicas: ptr.To(int32(2)), Replicas: ptr.To(int32(4)),
+					UpToDateReplicas: ptr.To(int32(1)),
+					Versions:         []capiv1.StatusVersion{{Version: k8sVersion, Replicas: 1}, {Version: otherK8sVersion, Replicas: 3}},
 				},
 				Workers: &capiv1.WorkersStatus{
 					AvailableReplicas: ptr.To(int32(5)), DesiredReplicas: ptr.To(int32(7)),
 					ReadyReplicas: ptr.To(int32(6)), Replicas: ptr.To(int32(8)),
+					UpToDateReplicas: ptr.To(int32(5)),
+					Versions:         []capiv1.StatusVersion{{Version: otherK8sVersion, Replicas: 3}, {Version: k8sVersion, Replicas: 5}},
 				},
 			},
 		}
@@ -124,8 +129,47 @@ func TestClusterClientGet(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
 			Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
-			ControlPlanesStatus: strategies.NodeTypeStatus{AvailableReplicas: 1, DesiredReplicas: 3, ReadyReplicas: 2, Replicas: 4},
-			WorkersStatus:       strategies.NodeTypeStatus{AvailableReplicas: 5, DesiredReplicas: 7, ReadyReplicas: 6, Replicas: 8},
+			ControlPlanesStatus: strategies.NodeTypeStatus{
+				AvailableReplicas: 1, DesiredReplicas: 3, ReadyReplicas: 2, Replicas: 4, UpToDateReplicas: 1,
+				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion, Replicas: 1}, {Version: otherK8sVersion, Replicas: 3}},
+			},
+			WorkersStatus: strategies.NodeTypeStatus{
+				AvailableReplicas: 5, DesiredReplicas: 7, ReadyReplicas: 6, Replicas: 8, UpToDateReplicas: 5,
+				Versions: []strategies.VersionNodeStatus{{Version: otherK8sVersion, Replicas: 3}, {Version: k8sVersion, Replicas: 5}},
+			},
+		}, info)
+
+		clusters, err := clusterClient.List(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, []strategies.ClusterInfo{info}, clusters)
+	})
+
+	t.Run("versions with zero replicas", func(t *testing.T) {
+		cluster := &capiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+			Status: capiv1.ClusterStatus{
+				ControlPlane: &capiv1.ClusterControlPlaneStatus{
+					UpToDateReplicas: ptr.To(int32(0)),
+					Versions:         []capiv1.StatusVersion{{Version: k8sVersion}},
+				},
+				Workers: &capiv1.WorkersStatus{
+					Versions: []capiv1.StatusVersion{{Version: otherK8sVersion}},
+				},
+			},
+		}
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+
+		info, err := clusterClient.Get(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		assert.Equal(t, strategies.ClusterInfo{
+			Name: clusterName, Version: k8sVersion, CreatedAt: time.Time{}.String(),
+			ControlPlanesStatus: strategies.NodeTypeStatus{
+				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion}},
+			},
+			WorkersStatus: strategies.NodeTypeStatus{
+				Versions: []strategies.VersionNodeStatus{{Version: otherK8sVersion}},
+			},
 		}, info)
 	})
 

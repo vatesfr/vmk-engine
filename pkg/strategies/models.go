@@ -62,4 +62,11 @@ type NodeTypeStatus struct {
 	DesiredReplicas   int
 	ReadyReplicas     int
 	Replicas          int
+	UpToDateReplicas  int
+	Versions          []VersionNodeStatus
+}
+
+type VersionNodeStatus struct {
+	Replicas int
+	Version  string
 }

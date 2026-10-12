@@ -231,6 +231,8 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 			DesiredReplicas:   int(ptr.Deref(status.DesiredReplicas, 0)),
 			ReadyReplicas:     int(ptr.Deref(status.ReadyReplicas, 0)),
 			Replicas:          int(ptr.Deref(status.Replicas, 0)),
+			UpToDateReplicas:  int(ptr.Deref(status.UpToDateReplicas, 0)),
+			Versions:          toVersionNodeStatuses(status.Versions),
 		}
 	}
 	if status := value.Status.Workers; status != nil {
@@ -239,9 +241,22 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 			DesiredReplicas:   int(ptr.Deref(status.DesiredReplicas, 0)),
 			ReadyReplicas:     int(ptr.Deref(status.ReadyReplicas, 0)),
 			Replicas:          int(ptr.Deref(status.Replicas, 0)),
+			UpToDateReplicas:  int(ptr.Deref(status.UpToDateReplicas, 0)),
+			Versions:          toVersionNodeStatuses(status.Versions),
 		}
 	}
 	return info
+}
+
+func toVersionNodeStatuses(versions []capiv1.StatusVersion) []strategies.VersionNodeStatus {
+	var result []strategies.VersionNodeStatus
+	for _, version := range versions {
+		result = append(result, strategies.VersionNodeStatus{
+			Replicas: int(version.Replicas),
+			Version:  version.Version,
+		})
+	}
+	return result
 }
 
 func toClusterTagLabels(tags map[string]string) (map[string]string, error) {

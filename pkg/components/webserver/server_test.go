@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"capv-proxy/pkg/components/cluster_manager"
+	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
 )
@@ -53,6 +55,7 @@ const (
 	unknownPath                    = "/unknown"
 	createClusterRequestBody       = `{
 		"name":"cluster-1",
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":1,
 		"worker_replicas":1,
 		"control_plane_IP":"10.0.0.10",
@@ -60,6 +63,7 @@ const (
 	}`
 	malformedRequestBody   = `{"name":`
 	missingNameRequestBody = `{
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":1,
 		"worker_replicas":1,
 		"control_plane_IP":"10.0.0.10",
@@ -67,6 +71,7 @@ const (
 	}`
 	invalidControlPlaneIPRequestBody = `{
 		"name":"cluster-1",
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":1,
 		"worker_replicas":1,
 		"control_plane_IP":"invalid",
@@ -74,6 +79,7 @@ const (
 	}`
 	invalidControlPlaneReplicasRequestBody = `{
 		"name":"cluster-1",
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":0,
 		"worker_replicas":1,
 		"control_plane_IP":"10.0.0.10",
@@ -81,6 +87,7 @@ const (
 	}`
 	invalidWorkerReplicasRequestBody = `{
 		"name":"cluster-1",
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":1,
 		"worker_replicas":0,
 		"control_plane_IP":"10.0.0.10",
@@ -88,6 +95,7 @@ const (
 	}`
 	missingVMNamePrefixRequestBody = `{
 		"name":"cluster-1",
+		"kubernetes_version":"1.36.9",
 		"control_plane_replicas":1,
 		"worker_replicas":1,
 		"control_plane_IP":"10.0.0.10"
@@ -505,6 +513,8 @@ func TestCreateClusterHTTPValidation(t *testing.T) {
 		"empty body":                          {body: ""},
 		"negative control plane replicas":     {body: strings.Replace(createClusterRequestBody, `"control_plane_replicas":1`, `"control_plane_replicas":-1`, 1)},
 		"negative worker replicas":            {body: strings.Replace(createClusterRequestBody, `"worker_replicas":1`, `"worker_replicas":-1`, 1)},
+		"missing version":                     {body: strings.Replace(createClusterRequestBody, `"kubernetes_version":"1.36.9",`, "", 1)},
+		"empty version":                       {body: strings.Replace(createClusterRequestBody, `"kubernetes_version":"1.36.9"`, `"kubernetes_version":""`, 1)},
 		"missing name":                        {body: missingNameRequestBody},
 		"invalid control plane IP":            {body: invalidControlPlaneIPRequestBody},
 		"invalid control plane replicas":      {body: invalidControlPlaneReplicasRequestBody},
@@ -521,7 +531,7 @@ func TestCreateClusterHTTPValidation(t *testing.T) {
 				testCase.expectedTitle = "Validation Error"
 				testCase.expectedFields = 1
 				if name == "empty body" {
-					testCase.expectedFields = 5
+					testCase.expectedFields = 6
 				}
 			}
 			executeHTTPTestCase(t, testCase)
@@ -618,6 +628,7 @@ func assertJSONError(t *testing.T, response *httptest.ResponseRecorder, expected
 
 func validCreateClusterParams() strategies.CreateClusterParams {
 	return strategies.CreateClusterParams{
+		Version:              "1.36.9",
 		Name:                 clusterName,
 		ControlPlaneReplicas: controlPlaneReplicas,
 		WorkerReplicas:       workerReplicas,
@@ -631,7 +642,7 @@ func newTestHandler(
 ) http.Handler {
 	return HttpServer{
 		SwaggerUI: SwaggerUIDisabled,
-	}.Handler(clusterService)
+	}.Handler(clusterService, versionmanager.NewVersionManager())
 }
 
 func TestClusterTagBodyHTTPDecoding(t *testing.T) {
@@ -756,7 +767,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 
 func TestNodeDeletionOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
 	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeName}")
 	require.NotNil(t, route)
 	require.NotNil(t, route.Delete)
@@ -769,5 +780,25 @@ func TestNodeDeletionOpenAPI(t *testing.T) {
 		ref := route.Delete.Parameters.GetByInAndName("path", parameter)
 		require.NotNil(t, ref)
 		assert.True(t, ref.Required)
+	}
+}
+
+func TestCreateClusterHTTPRejectsUnavailableVersion(t *testing.T) {
+	for _, version := range []string{"1.36.99", "1.36", "v1.36.9"} {
+		t.Run(version, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			versions := versionmanager.NewVersionManager()
+			manager := cluster_manager.NewClusterManager(
+				mocks.NewMockForManagingClusterResources(ctrl), nil, nil,
+				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versions,
+			)
+			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, versions)
+			body := strings.Replace(createClusterRequestBody, `"kubernetes_version":"1.36.9"`, `"kubernetes_version":"`+version+`"`, 1)
+			request := httptest.NewRequest(http.MethodPost, clustersPath, strings.NewReader(body))
+			request.Header.Set(contentTypeHeader, applicationJSON)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			assert.Equal(t, http.StatusUnprocessableEntity, response.Code, response.Body.String())
+		})
 	}
 }

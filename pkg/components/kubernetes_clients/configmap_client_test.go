@@ -24,8 +24,8 @@ import (
 
 func validConfigMapData(overrides map[string]string) map[string]string {
 	data := map[string]string{
-		versionKey: fixtureVersion, workerNameKey: fixtureWorkerName,
-		podCIDRKey: fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
+		workerNameKey: fixtureWorkerName,
+		podCIDRKey:    fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
 		controlPlaneKubeadmConfigKey: fixtureBootstrapYAML, controlPlaneMachineSpecKey: fixtureMachineYAML,
 		workerMachineSpecKey: fixtureMachineYAML, workerKubeadmConfigKey: fixtureBootstrapYAML,
 		endpointPortKey: "6443", endpointSubnetKey: "16", loadBalancerKey: kubeVIP, cniKey: ciliumCNI,
@@ -36,8 +36,8 @@ func validConfigMapData(overrides map[string]string) map[string]string {
 
 func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 	want := strategies.ClusterCreationDefaults{
-		KubernetesVersion: fixtureVersion, WorkerName: fixtureWorkerName,
-		PodCIDR: fixturePodCIDR, ServiceCIDR: fixtureServiceCIDR, ServiceDomain: fixtureDomain,
+		WorkerName: fixtureWorkerName,
+		PodCIDR:    fixturePodCIDR, ServiceCIDR: fixtureServiceCIDR, ServiceDomain: fixtureDomain,
 		EndpointPort: 6443, EndpointSubnet: 16, LoadBalancer: kubeVIP, CNI: ciliumCNI,
 		ControlPlaneMachineSpec: map[string]any{
 			"templateID": "image", "poolID": "pool",
@@ -67,12 +67,13 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 	updated := want
 	updated.WorkerName = "updated-workers"
 	testCases := map[string]testConfigMapParams{
-		"valid configuration":   {data: validConfigMapData(nil), want: want},
-		"empty load balancer":   {data: validConfigMapData(map[string]string{loadBalancerKey: ""}), want: withoutLoadBalancer},
-		"missing ConfigMap":     {missing: true, wantErrContains: "get cluster defaults ConfigMap"},
-		"empty ConfigMap":       {wantErrContains: versionKey},
-		"partial ConfigMap":     {data: map[string]string{workerNameKey: "custom"}, wantErrContains: versionKey},
-		"Kubernetes read error": {getErr: readErr, wantErr: readErr, wantErrContains: "get cluster defaults ConfigMap"},
+		"legacy version key is ignored": {data: validConfigMapData(map[string]string{"kubernetesVersion": "invalid"}), want: want},
+		"valid configuration":           {data: validConfigMapData(nil), want: want},
+		"empty load balancer":           {data: validConfigMapData(map[string]string{loadBalancerKey: ""}), want: withoutLoadBalancer},
+		"missing ConfigMap":             {missing: true, wantErrContains: "get cluster defaults ConfigMap"},
+		"empty ConfigMap":               {wantErrContains: workerNameKey},
+		"partial ConfigMap":             {data: map[string]string{workerNameKey: "custom"}, wantErrContains: podCIDRKey},
+		"Kubernetes read error":         {getErr: readErr, wantErr: readErr, wantErrContains: "get cluster defaults ConfigMap"},
 		"reloads defaults on every call": {
 			data: validConfigMapData(nil), want: want,
 			updatedData: validConfigMapData(map[string]string{workerNameKey: updated.WorkerName}),
@@ -190,7 +191,7 @@ func TestInvalidResourceBlocks(t *testing.T) {
 	for _, raw := range []string{"[broken", "[]", "null", "{}", "templateID: one\ntemplateID: two", "apiVersion: example/v1"} {
 		t.Run(raw, func(t *testing.T) {
 			data := map[string]string{
-				versionKey: fixtureVersion, workerNameKey: fixtureWorkerName, podCIDRKey: fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
+				workerNameKey: fixtureWorkerName, podCIDRKey: fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
 				endpointPortKey: "6443", endpointSubnetKey: "16", loadBalancerKey: kubeVIP, cniKey: ciliumCNI,
 				controlPlaneMachineSpecKey: raw, workerMachineSpecKey: fixtureMachineYAML,
 				controlPlaneKubeadmConfigKey: fixtureBootstrapYAML, workerKubeadmConfigKey: fixtureBootstrapYAML,
@@ -234,7 +235,7 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			require.NoError(t, err)
 			p, _, scheme := newClusterCreationTestSetup(t)
 			p.Defaults = defaults
-			p.Defaults.KubernetesVersion = "v1.36.2"
+			p.Version = "v1.36.2"
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
 			_, err = NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
 			require.NoError(t, err)

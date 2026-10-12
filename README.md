@@ -184,20 +184,27 @@ Base URL: `http://localhost:8080`.
 | Method | Route | Description | Current status |
 | --- | --- | --- | --- |
 | `GET` | `/ping` | Checks service health | Working |
-| `GET` | `/kubernetes/clusters/` | Lists clusters, or selected cluster fields, in the namespace | Working |
+| `GET` | `/kubernetes/clusters` | Lists clusters, or selected cluster fields, in the namespace | Working |
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
-| `POST` | `/kubernetes/clusters/` | Creates a CAPI cluster and its associated resources | Requires configured defaults |
+| `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
+| `GET` | `/kubernetes/nodes` | Returns all CAPI Machines in the namespace | Working |
+| `GET` | `/kubernetes/versions-available` | Lists available Kubernetes releases grouped by minor version, newest first | Static catalog |
+| `GET` | `/kubernetes/tags` | Lists tags grouped by cluster name | Working |
+| `GET` | `/kubernetes/clusters/{id}/tags` | Lists cluster tags | Working |
+| `GET` | `/kubernetes/clusters/{id}/tags/{tag}` | Reads a tag | Working |
+| `PUT` | `/kubernetes/clusters/{id}/tags/{tag}` | Creates or updates a tag | Working |
+| `DELETE` | `/kubernetes/clusters/{id}/tags/{tag}` | Deletes a tag | Working |
 
 ### Examples
 
 List clusters:
 
 ```bash
-curl http://127.0.0.1:8080/kubernetes/clusters/
+curl http://127.0.0.1:8080/kubernetes/clusters
 ```
 
 Example response:
@@ -218,35 +225,49 @@ nested fields. Unknown or malformed fields will be ignored.
 Return full cluster objects:
 
 ```bash
-curl 'http://127.0.0.1:8080/kubernetes/clusters/?fields=*'
+curl 'http://127.0.0.1:8080/kubernetes/clusters?fields=*'
 ```
 
 Return only the cluster name and the ready replica count:
 
 ```bash
-curl 'http://127.0.0.1:8080/kubernetes/clusters/?fields=name,control_plane_status.ready_replicas'
+curl 'http://127.0.0.1:8080/kubernetes/clusters?fields=name,control_plane_status.ready_replicas'
 ```
 
 The nodes collection uses the same selection syntax.
 
+List available Kubernetes versions before creating a cluster:
+
+```bash
+curl http://127.0.0.1:8080/kubernetes/versions-available
+```
+
+The response is an ordered array of objects with `version` (the minor version)
+and `releases` (the full versions). Both groups and releases are ordered newest
+first. Choose a full version from `releases`, such as `1.36.9`, for the creation
+payload. The catalog is defined in `pkg/components/version_manager`; it is not
+fetched from Kubernetes or an external release service.
+
 Create a cluster:
 
 ```bash
-curl --request POST http://127.0.0.1:8080/kubernetes/clusters/ \
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters \
   --header 'Content-Type: application/json' \
   --data '{
     "name": "my-cluster",
     "control_plane_replicas": 3,
     "worker_replicas": 2,
+    "kubernetes_version": "1.36.9",
     "control_plane_ip": "10.30.138.14",
     "vm_name_prefix": "jls-capi-dev-",
     "description": "Development cluster for the backend team"
   }'
 ```
 
-The HTTP API supplies the cluster name, replica counts, control-plane IPv4
-address, VM name prefix, description and tags. The `cluster-defaults` ConfigMap in
-`--namespace` is read on each creation; changes affect new clusters only.
+The HTTP API supplies the cluster name, replica counts, Kubernetes version,
+control-plane IPv4 address, VM name prefix, description and tags.
+The `cluster-defaults` ConfigMap in `--namespace` is read on each creation;
+changes affect new clusters only.
 
 The optional `description` accepts up to 4,000 Unicode code points, including
 quotes, accents, emojis and line breaks (escaped as required by JSON). Longer
@@ -269,7 +290,6 @@ Required ConfigMap keys:
 
 | Key | Purpose |
 | --- | --- |
-| `kubernetesVersion` | Version for control plane and workers |
 | `workerName` | Worker deployment suffix, e.g. `md-0` |
 | `podCIDR`, `serviceCIDR`, `serviceDomain` | Cluster network |
 | `controlPlaneEndpointPort`, `controlPlaneEndpointSubnet` | Endpoint port and IPv4 prefix length |
@@ -292,14 +312,21 @@ Orchestra identifiers, not Kubernetes resource names. The provider also accepts
 The service decodes these configuration objects and leaves provider field
 validation to Kubernetes and the Vates provider. The sample kubeadm
 configuration follows the working AlmaLinux/RHEL cluster: it installs the exact
-`kubernetesVersion`, containerd and runc, disables swap, configures kernel modules
+requested `kubernetes_version`, containerd and runc, disables swap, configures kernel modules
 and sysctls, and enables the services. It requires a compatible dnf-based VM image
 and access to the package repositories. Adapt these commands for other images.
 Within `preKubeadmCommands`, the service replaces only `{{KUBERNETES_VERSION}}`
-and `{{CONTROL_PLANE_IP}}` with the configured version and requested endpoint.
+and `{{CONTROL_PLANE_IP}}` with the requested version and endpoint.
 Shell variables such as `$FULL`, `$IP` and `$(hostname)` remain intact.
 Credentials remain in provider-managed Secrets (the provider's global credentials
 are used by this configuration).
+
+The creation payload requires `kubernetes_version`, selected from `GET /kubernetes/versions-available`
+(a full `major.minor.patch` release, for example `1.36.9`, without the `v` prefix). Missing or unavailable
+versions return HTTP 422 before reading defaults or creating resources. The
+version is no longer read from the ConfigMap. An existing `kubernetesVersion`
+key is ignored and can be removed. The service adds the `v` prefix internally
+when building CAPI resources and rendering bootstrap commands.
 
 The service sets VM name prefixes, replicas, Kubernetes version and resource
 references from the request/defaults, and adds the endpoint IP to certificate
@@ -517,8 +544,9 @@ Run the available tests:
 make unit
 ```
 
-The unit suite currently covers the `ClusterManager`. Unit tests use the
-`unit` build tag, which is applied by the Make target.
+The suite covers the cluster and version managers, Kubernetes clients using
+fake clients, handlers, and HTTP routes using `httptest`. Tests also run with
+`go test ./...`; the Make target additionally supplies the `unit` build tag.
 
 Regenerate GoMock implementations after changing a Strategy interface:
 
@@ -541,6 +569,7 @@ HTTP client
     |
     v
 HTTP component (Fuego routes and handlers)
+    +-- ForManagingVersions --------> VersionManager (static catalog)
     |
     v  ForManagingClusters
 ClusterManager
@@ -548,11 +577,15 @@ ClusterManager
     +-- ForManagingClusterResources --> ClusterClient --> CAPI Cluster resources
     +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
     `-- ForManagingClusterMachines   --> MachineClient --> CAPI Machine resources
+    +-- ForGettingClusterCreationDefaults --> ConfigMapClient --> cluster-defaults
+    `-- ForManagingVersions         --> VersionManager (same instance)
 ```
 
 `cmd/http_server/main.go` is the Configurator: it creates the Kubernetes
 Strategies, injects them into `ClusterManager`, then injects `ClusterManager`
-into the HTTP component. This follows Alistair Cockburn's **Component +
+and the shared `VersionManager` into the HTTP component. `ClusterManager`
+validates the requested version through `ForManagingVersions` before reading
+creation defaults. This follows Alistair Cockburn's **Component +
 Strategy** pattern. No Adapter is needed here because the Kubernetes clients
 directly satisfy the required interfaces.
 
@@ -565,6 +598,7 @@ Main repository structure:
 cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
+pkg/components/version_manager/ available Kubernetes releases and validation
 pkg/components/kubernetes_clients/ Kubernetes Strategy implementations
 pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart
@@ -577,7 +611,7 @@ Dockerfile                       multi-stage image build
 - implement proper HTTP authentication and authorization;
 - enrich `/nodes` Machine data with information from Kubernetes Node resources;
 - add server-side defaults and policy for cluster creation;
-- map Kubernetes errors to explicit HTTP status codes;
+- extend the existing HTTP error mapping for additional Kubernetes failure cases;
 - extend unit coverage and add integration and end-to-end tests;
 - add observability, structured logging, and graceful shutdown;
 - define an image versioning and publishing strategy.

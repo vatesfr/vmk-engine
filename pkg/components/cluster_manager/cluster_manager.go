@@ -9,6 +9,7 @@ import (
 )
 
 type ClusterManager struct {
+	versions                strategies.ForManagingVersions
 	clusterResources        strategies.ForManagingClusterResources
 	clusterConfigs          strategies.ForGettingClusterConfig
 	clusterMachines         strategies.ForManagingClusterMachines
@@ -22,8 +23,10 @@ func NewClusterManager(
 	clusterConfigs strategies.ForGettingClusterConfig,
 	clusterMachines strategies.ForManagingClusterMachines,
 	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults,
+	versions strategies.ForManagingVersions,
 ) ClusterManager {
 	return ClusterManager{
+		versions:                versions,
 		clusterResources:        clusterResources,
 		clusterConfigs:          clusterConfigs,
 		clusterMachines:         clusterMachines,
@@ -51,12 +54,19 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 	if params.WorkerReplicas <= 0 {
 		return strategies.ClusterInfo{}, strategies.ErrWorkerReplicasRequired
 	}
+	if params.Version == "" {
+		return strategies.ClusterInfo{}, strategies.ErrClusterVersionRequired
+	}
+	if !c.versions.IsVersionAvailable(params.Version) {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %q", strategies.ErrClusterVersionUnavailable, params.Version)
+	}
 	defaults, err := c.clusterCreationDefaults.GetClusterCreationDefaults(ctx)
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterCreationDefaultsRetrievalFailed, err)
 	}
 
 	clusterInfo, err := c.clusterResources.Create(ctx, strategies.CreateClusterResourceParams{
+		Version:              "v" + params.Version,
 		Name:                 params.Name,
 		Description:          params.Description,
 		Defaults:             defaults,

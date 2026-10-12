@@ -382,7 +382,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	workerMachine := runtime.DeepCopyJSON(d.WorkerMachineSpec)
 	bootstrap := runtime.DeepCopyJSON(d.WorkerKubeadmConfig)
 	for _, config := range []map[string]any{cpSpec[kubeadmConfigSpecKey].(map[string]any), bootstrap} {
-		if err := renderBootstrapCommands(config, d.KubernetesVersion, p.ControlPlaneIP); err != nil {
+		if err := renderBootstrapCommands(config, p.Version, p.ControlPlaneIP); err != nil {
 			return strategies.ClusterInfo{}, err
 		}
 	}
@@ -392,7 +392,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	}
 	cpMachine[namePrefixKey] = prefix + "-cp"
 	workerMachine[namePrefixKey] = prefix + "-worker"
-	cpSpec["version"] = p.Defaults.KubernetesVersion
+	cpSpec["version"] = p.Version
 	cpSpec["replicas"] = int64(*p.ControlPlaneReplicas)
 	if err := unstructured.SetNestedMap(cpSpec, reference(xoGroup, xoMachineTemplateKind, cpName), "machineTemplate", specKey, "infrastructureRef"); err != nil {
 		return strategies.ClusterInfo{}, err
@@ -435,7 +435,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	deploymentLabels := map[string]any{"cluster.x-k8s.io/deployment-name": mdName}
 	workerSpec := map[string]any{
 		"clusterName":       p.Name,
-		"version":           p.Defaults.KubernetesVersion,
+		"version":           p.Version,
 		bootstrapKey:        map[string]any{"configRef": reference(bootstrapGroup, bootstrapTemplateKind, workerTemplateName)},
 		"infrastructureRef": reference(xoGroup, xoMachineTemplateKind, workerTemplateName),
 	}

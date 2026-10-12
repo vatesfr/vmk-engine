@@ -93,7 +93,6 @@ topologySpreadConstraints: []
 
 # Cluster creation defaults stored in the target namespace.
 clusterDefaults:
-  kubernetesVersion: "v1.36.1"
   workerName: "md-0"
   controlPlaneEndpointPort: "6443"
   controlPlaneEndpointSubnet: "16"

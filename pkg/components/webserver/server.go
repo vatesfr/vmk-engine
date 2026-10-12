@@ -29,17 +29,17 @@ func IsSwaggerUI(value string) bool {
 	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
 }
 
-func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters) error {
-	return httpServer.newServer(clusterService).Run()
+func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) error {
+	return httpServer.newServer(clusterService, versionService).Run()
 }
 
 // Handler builds the complete HTTP application without opening a network
 // listener. It is intended for httptest-based tests and embedding.
-func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters) http.Handler {
-	return httpServer.newServer(clusterService).Mux
+func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) http.Handler {
+	return httpServer.newServer(clusterService, versionService).Mux
 }
 
-func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters) *fuego.Server {
+func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) *fuego.Server {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,
@@ -76,6 +76,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		"/clusters",
 	)
 	clusterHandler := handlers.NewClusterHandler(clusterService)
+	versionsHandler := handlers.NewVersionsHandler(versionService)
 
 	fuego.Get(clusterRouter, "", clusterHandler.GetClusters,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
@@ -114,6 +115,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 
 	fuego.Get(apiRouter, "/nodes", clusterHandler.GetAllNodes)
 	fuego.Get(apiRouter, "/tags", clusterHandler.GetAllTags)
+	fuego.Get(apiRouter, "/versions-available", versionsHandler.GetAvailableVersion)
 
 	return server
 }

@@ -149,7 +149,6 @@ metadata:
   labels:
     app.kubernetes.io/name: go-capi-client
 data:
-  kubernetesVersion: "v1.36.1"
   workerName: "md-0"
   controlPlaneEndpointPort: "6443"
   controlPlaneEndpointSubnet: "16"

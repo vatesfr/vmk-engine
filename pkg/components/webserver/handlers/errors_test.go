@@ -42,6 +42,8 @@ func TestToHTTPErrorPreservesValidationDetails(t *testing.T) {
 
 func TestToHTTPErrorApplicationValidation(t *testing.T) {
 	for _, cause := range []error{
+		strategies.ErrClusterVersionRequired,
+		strategies.ErrClusterVersionUnavailable,
 		strategies.ErrClusterNameRequired,
 		strategies.ErrControlPlaneReplicasRequired,
 		strategies.ErrWorkerReplicasRequired,
@@ -89,7 +91,7 @@ func TestClusterDescriptionHTTPValidation(t *testing.T) {
 		{"too long", strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body := ClusterCreateParams{Name: "demo", Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: "192.0.2.10", VMNamePrefix: "demo"}
+			body := ClusterCreateParams{KubernetesVersion: "1.36.9", Name: "demo", Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: "192.0.2.10", VMNamePrefix: "demo"}
 			_, err := fuego.TransformAndValidate(t.Context(), body)
 			if !tc.isValid {
 				require.Error(t, err)

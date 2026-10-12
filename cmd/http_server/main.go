@@ -11,6 +11,7 @@ import (
 
 	"capv-proxy/pkg/components/cluster_manager"
 	"capv-proxy/pkg/components/kubernetes_clients"
+	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -106,8 +107,9 @@ func run(opts options) error {
 	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
 	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, opts.namespace)
 	k8sConfigMapClient := kubernetes_clients.NewConfigMapClient(k8sClient, opts.namespace)
+	versionManager := versionmanager.NewVersionManager()
 	clusterManager := cluster_manager.NewClusterManager(
-		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient,
+		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,
 	)
 
 	httpServer := webserver.HttpServer{
@@ -115,7 +117,7 @@ func run(opts options) error {
 		Port:      opts.port,
 		SwaggerUI: opts.swaggerUI,
 	}
-	if err := httpServer.Run(clusterManager); err != nil {
+	if err := httpServer.Run(clusterManager, versionManager); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)
 	}
 

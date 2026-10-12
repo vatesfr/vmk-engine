@@ -13,6 +13,8 @@ var (
 	ErrNodeNameRequired                       = errors.New("node name is required")
 	ErrNodeNotFound                           = errors.New("node not found")
 	ErrNodeDeletionFailed                     = errors.New("failed to delete node")
+	ErrClusterVersionRequired                 = errors.New("cluster version is required")
+	ErrClusterVersionUnavailable              = errors.New("cluster version is unavailable")
 	ErrClusterNameRequired                    = errors.New("cluster name is required")
 	ErrControlPlaneReplicasRequired           = errors.New("control plane replicas is required")
 	ErrWorkerReplicasRequired                 = errors.New("worker replicas is required")

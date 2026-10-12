@@ -11,6 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"capv-proxy/pkg/components/cluster_manager"
+	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
 )
@@ -23,6 +24,7 @@ type testCreateClusterParams struct {
 
 const (
 	deleteNodeName       = "node"
+	clusterVersion       = "1.36.9"
 	clusterName          = "test-cluster"
 	secondClusterName    = "test-cluster-2"
 	emptyClusterName     = ""
@@ -48,11 +50,10 @@ const (
 var (
 	errTest                 = errors.New("test error")
 	clusterCreationDefaults = strategies.ClusterCreationDefaults{
-		KubernetesVersion: "v1.2.3",
-		WorkerName:        "test-workers",
-		EndpointPort:      6443,
-		EndpointSubnet:    24,
-		LoadBalancer:      "test-lb",
+		WorkerName:     "test-workers",
+		EndpointPort:   6443,
+		EndpointSubnet: 24,
+		LoadBalancer:   "test-lb",
 	}
 )
 
@@ -60,6 +61,7 @@ func TestCreateCluster(t *testing.T) {
 	testCases := map[string]testCreateClusterParams{
 		"all params provided": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -71,6 +73,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"no vm name prefix": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -82,6 +85,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"missing cluster name": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 emptyClusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -93,6 +97,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"missing control plane replicas": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: invalidReplicaCount,
 				WorkerReplicas:       workerReplicas,
@@ -104,6 +109,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"missing worker replicas": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       invalidReplicaCount,
@@ -115,6 +121,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"missing control plane IP": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -126,6 +133,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"cluster resources create error": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -137,6 +145,7 @@ func TestCreateCluster(t *testing.T) {
 		},
 		"cluster already exists": {
 			params: strategies.CreateClusterParams{
+				Version:              clusterVersion,
 				Name:                 clusterName,
 				ControlPlaneReplicas: controlPlaneReplicas,
 				WorkerReplicas:       workerReplicas,
@@ -189,8 +198,9 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
 	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
-	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager())
 	params := strategies.CreateClusterParams{
+		Version:              clusterVersion,
 		Name:                 clusterName,
 		ControlPlaneReplicas: controlPlaneReplicas,
 		WorkerReplicas:       workerReplicas,
@@ -201,6 +211,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
 	clusterResources.EXPECT().Create(t.Context(), strategies.CreateClusterResourceParams{
+		Version:              "v1.36.9",
 		ControlPlaneIP:       params.ControlPlaneIP,
 		VMNamePrefix:         params.VMNamePrefix,
 		Name:                 clusterName,
@@ -228,9 +239,11 @@ func TestCreateClusterDefaultsError(t *testing.T) {
 		mocks.NewMockForGettingClusterConfig(ctrl),
 		mocks.NewMockForManagingClusterMachines(ctrl),
 		clusterDefaults,
+		versionmanager.NewVersionManager(),
 	)
 
 	_, err := clusterManager.CreateCluster(t.Context(), strategies.CreateClusterParams{
+		Version:              clusterVersion,
 		Name:                 clusterName,
 		ControlPlaneReplicas: controlPlaneReplicas,
 		WorkerReplicas:       workerReplicas,
@@ -422,7 +435,7 @@ func newTestClusterManager(t *testing.T) (
 	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(gomock.Any()).Return(clusterCreationDefaults, nil).AnyTimes()
-	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager())
 
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
 }
@@ -475,7 +488,7 @@ func TestCreateClusterDescription(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resources, _, _, manager := newTestClusterManager(t)
-			params := strategies.CreateClusterParams{Name: clusterName, Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: controlPlaneIP}
+			params := strategies.CreateClusterParams{Version: clusterVersion, Name: clusterName, Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: controlPlaneIP}
 			if tc.isValid {
 				resources.EXPECT().Create(t.Context(), gomock.Any()).DoAndReturn(func(
 					_ context.Context, resourceParams strategies.CreateClusterResourceParams,
@@ -518,7 +531,7 @@ func TestDeleteClusterNode(t *testing.T) {
 					nodes.EXPECT().DeleteMachine(t.Context(), tc.cluster, tc.node).After(get).Return(tc.deleteErr)
 				}
 			}
-			err := cluster_manager.NewClusterManager(resources, nil, nodes, nil).DeleteClusterNode(t.Context(), tc.cluster, tc.node)
+			err := cluster_manager.NewClusterManager(resources, nil, nodes, nil, nil).DeleteClusterNode(t.Context(), tc.cluster, tc.node)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {
@@ -529,4 +542,51 @@ func TestDeleteClusterNode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateClusterRejectsInvalidVersionBeforeReadingDefaults(t *testing.T) {
+	for _, version := range []string{"", "1.36.99", "1.36", "v1.36.9", " 1.36.9"} {
+		t.Run(version, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			// No calls to defaults or resources are expected for invalid versions.
+			manager := cluster_manager.NewClusterManager(
+				mocks.NewMockForManagingClusterResources(ctrl), nil, nil,
+				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versionmanager.NewVersionManager(),
+			)
+			result, err := manager.CreateCluster(t.Context(), strategies.CreateClusterParams{
+				Name: clusterName, Version: version, ControlPlaneIP: controlPlaneIP,
+				ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
+			})
+			assert.Empty(t, result)
+			if version == "" {
+				assert.ErrorIs(t, err, strategies.ErrClusterVersionRequired)
+			} else {
+				assert.ErrorIs(t, err, strategies.ErrClusterVersionUnavailable)
+			}
+		})
+	}
+}
+
+func TestCreateClusterUsesInjectedVersionStrategy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	versions := mocks.NewMockForManagingVersions(ctrl)
+	defaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
+	resources := mocks.NewMockForManagingClusterResources(ctrl)
+	manager := cluster_manager.NewClusterManager(resources, nil, nil, defaults, versions)
+	params := strategies.CreateClusterParams{
+		Name: clusterName, Version: "1.99.1", ControlPlaneIP: controlPlaneIP,
+		ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
+	}
+	gomock.InOrder(
+		versions.EXPECT().IsVersionAvailable(params.Version).Return(true),
+		defaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil),
+		resources.EXPECT().Create(t.Context(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, received strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
+				assert.Equal(t, "v1.99.1", received.Version)
+				return strategies.ClusterInfo{Name: clusterName}, nil
+			},
+		),
+	)
+	_, err := manager.CreateCluster(t.Context(), params)
+	require.NoError(t, err)
 }

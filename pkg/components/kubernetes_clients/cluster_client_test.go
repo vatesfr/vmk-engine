@@ -543,7 +543,6 @@ func deleteErrorFunc(t *testing.T, err error) func(context.Context, client.WithW
 func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResourceParams, []client.Object, *runtime.Scheme) {
 	t.Helper()
 	d := strategies.ClusterCreationDefaults{
-		KubernetesVersion:         fixtureVersion,
 		PodCIDR:                   fixturePodCIDR,
 		ServiceCIDR:               fixtureServiceCIDR,
 		ServiceDomain:             fixtureDomain,
@@ -557,6 +556,7 @@ func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResource
 		WorkerMachineSpec:         getValidXOMachineSpec(),
 	}
 	p := strategies.CreateClusterResourceParams{
+		Version:              fixtureVersion,
 		Name:                 fixtureCluster,
 		Defaults:             d,
 		ControlPlaneIP:       "192.0.2.10",
@@ -629,6 +629,10 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, p.ControlPlaneIP, host)
 	cp := get(cpGroup, controlPlaneKind, fixtureControlPlane)
 	require.Nil(t, metav1.GetControllerOf(cp))
+	version, found, err := unstructured.NestedString(cp.Object, specKey, "version")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, p.Version, version)
 	replicas, _, _ := unstructured.NestedInt64(cp.Object, specKey, "replicas")
 	require.Equal(t, int64(3), replicas)
 	sans, _, _ := unstructured.NestedStringSlice(cp.Object, specKey, kubeadmConfigSpecKey, clusterConfigurationKey, apiServerKey, certSANsKey)

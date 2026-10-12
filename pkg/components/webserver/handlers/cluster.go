@@ -13,6 +13,7 @@ type ClusterHandler struct {
 }
 
 type ClusterCreateParams struct {
+	KubernetesVersion    string `json:"kubernetes_version" validate:"required" description:"Available Kubernetes release in major.minor.patch format, without a v prefix" example:"1.36.9"`
 	Name                 string `json:"name" validate:"required"`
 	Description          string `json:"description,omitempty" validate:"max=4000"`
 	ControlPlaneReplicas int32  `json:"control_plane_replicas" validate:"required,min=1"`
@@ -155,6 +156,7 @@ func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParam
 
 func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterParams {
 	return strategies.CreateClusterParams{
+		Version:              value.KubernetesVersion,
 		Name:                 value.Name,
 		Description:          value.Description,
 		ControlPlaneReplicas: value.ControlPlaneReplicas,

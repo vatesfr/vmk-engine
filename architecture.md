@@ -57,6 +57,8 @@ flowchart LR
     subgraph http[HTTP component — pkg/components/webserver]
         fuego --> handlers[ClusterHandler]
         handlers -->|calls Strategy| port[ForManagingClusters]
+        fuego --> versionhandler[VersionsHandler]
+        versionhandler --> versionport[ForManagingVersions]
     end
 
     subgraph clustercomponent[Cluster management component — pkg/components/cluster_manager]
@@ -69,8 +71,10 @@ flowchart LR
         manager -->|calls required interface| clusterport
         manager -->|calls required interface| configport
         manager -->|calls required interface| defaultsport
+        manager -->|validates requested release| versionport
     end
 
+    versionport -->|implemented by| versions[VersionManager — static catalog]
     port -->|implemented by| manager
     clusterport -->|implemented by| clusters[ClusterClient]
     configport -->|implemented by| secrets[SecretClient]
@@ -85,6 +89,7 @@ flowchart LR
     configurator -. creates and wires .-> manager
     configurator -. creates and wires .-> clusters
     configurator -. creates .-> secrets
+    configurator -. creates and wires .-> versions
 ```
 
 The roles from Component + Strategy map to the code as follows:
@@ -92,11 +97,13 @@ The roles from Component + Strategy map to the code as follows:
 | Pattern role | Implementation | Responsibility |
 | --- | --- | --- |
 | Driver | HTTP client through Fuego | Sends HTTP requests to the component |
-| Provided interface | Routes registered by `HttpServer.Run` | Exposes health and cluster operations over HTTP |
+| Provided interface | Routes registered by `HttpServer.Run` | Exposes health, cluster operations, and available versions over HTTP |
 | Component | `pkg/components/webserver` | Owns transport concerns: routing, DTO validation, encoding, middleware, and OpenAPI |
 | Strategy | `strategies.ForManagingClusters` | Shared contract used by the HTTP component and implemented by `ClusterManager` |
 | Provided operations | `cluster_manager.ClusterManager` methods | Expose cluster-management use cases without declaring a producer-owned Go interface |
 | Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
+| Strategy | `strategies.ForManagingVersions` | Used by the HTTP and cluster components; implemented by `VersionManager` |
+| Component | `versionmanager.VersionManager` | Owns the static release catalog and exact version availability checks |
 | Strategies | `ForManagingClusterResources`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
 | Strategies | `ClusterClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
 | Configurator | `run` and `newK8sClient` in `cmd/http_server/main.go` | Select Kubernetes configuration, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
@@ -118,10 +125,27 @@ For a typical request such as `GET /kubernetes/clusters/{id}`:
 5. `ClusterClient`, injected as that Strategy, queries Kubernetes and returns a Strategy model.
 6. The handler converts it into an HTTP response DTO and Fuego serializes it.
 
+`ClusterManager` also requires `ForManagingVersions`, implemented by `VersionManager`,
+to reject unavailable versions before fetching defaults or creating resources.
+The configurator injects the same version manager into the HTTP and cluster components.
+`GET /kubernetes/versions-available` calls `GetAllVersions`; the handler maps
+Strategy `VersionGroup` values to JSON DTOs using `lo.Map`, preserving their
+newest-first order. The catalog is defined in code, not queried from Kubernetes.
+
+The creation payload requires `kubernetes_version`, a full `major.minor.patch`
+release such as `1.36.9`, without a `v` prefix. The handler maps it to
+`CreateClusterParams.Version`.
+`IsVersionAvailable` checks exact membership in this catalog. Missing or
+unavailable versions produce HTTP 422 before defaults are read or resources
+are created. `CreateClusterResourceParams.Version` carries the selected release
+with the `v` prefix required by CAPI. It is used for the control plane, worker
+MachineDeployment, and bootstrap command rendering. The ConfigMap no longer
+provides a Kubernetes version; any legacy `kubernetesVersion` key is ignored.
+
 For creation, `CreateClusterParams` carries the cluster name, control-plane and
-worker replica counts, control-plane IP, and VM name prefix through
+worker replica counts, requested Kubernetes version, control-plane IP, and VM name prefix through
 `ForManagingClusters`. `ClusterManager` enriches this intent through `ForGettingClusterCreationDefaults` with its
-VM and bootstrap configuration, Kubernetes version, MachineDeployment identity, endpoint network
+VM and bootstrap configuration, MachineDeployment identity, endpoint network
 settings, and load-balancer choice. It then sends the resulting
 `CreateClusterResourceParams` through `ForManagingClusterResources`.
 
@@ -135,6 +159,7 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `cmd/http_server/` | Executable, CLI options, runtime configuration, and object wiring |
 | `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
+| `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
 | `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
@@ -174,24 +199,25 @@ its own storage technology.
 
 ## Current limitations and architectural gaps
 
-- Component and conversion unit tests exist, but the HTTP boundary and the
-  Kubernetes Strategies still need integration tests.
+- Managers, handlers, HTTP routes (`httptest`), and Kubernetes Strategies
+  (fake clients) are tested. Integration tests against a live Kubernetes API
+  and provider are still needed.
 - `GetClusterNodesInfo` currently derives its flat node information from CAPI
   Machines. Workload-cluster Node enrichment is not wired yet, although the
   machine list already exposes the Xen Orchestra VM UUID as `node_id` when a
   valid machine `providerID` is available.
 - Authentication middleware currently lets every request through.
-- Kubernetes errors pass through without an explicit mapping to HTTP status
-  codes.
+- Application errors are mapped to HTTP status codes, including validation
+  (422), missing clusters or tags (404), and existing clusters (409). Other
+  failures currently return 500.
 - The Kubernetes resource clients are Strategies selected by the Configurator.
   The component itself can be isolated through its declared required interfaces.
 - The process has one HTTP driver and one Kubernetes-backed strategy. The
   design permits alternatives, but the configurator does not currently select
   among multiple `ForManagingClusters` implementations.
 
-These limitations do not change the dependency direction, but they mean the
-component's replaceability and isolation are design properties that still need
-to be demonstrated by tests.
+The tests demonstrate component isolation through injected Strategies. Live
+cluster integration coverage remains necessary to verify provider behavior.
 
 ### Cluster creation
 

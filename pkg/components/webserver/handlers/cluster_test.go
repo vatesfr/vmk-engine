@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	clusterVersion             = "1.36.9"
 	testCaseSuccess            = "success"
 	testCaseServiceError       = "service error"
 	clusterName                = "cluster-1"
@@ -195,12 +196,14 @@ func TestGetClusterConfig(t *testing.T) {
 
 func TestCreateCluster(t *testing.T) {
 	validBody := handlers.ClusterCreateParams{
-		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
+		KubernetesVersion: clusterVersion,
+		Name:              clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
 		Description: "Cluster \"Backend\" 🚀\nTest",
 	}
 	expectedParams := strategies.CreateClusterParams{
-		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
+		Version: clusterVersion,
+		Name:    clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
 		Description: "Cluster \"Backend\" 🚀\nTest",
 	}
@@ -242,6 +245,8 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 		status int
 	}{
 		"description too long":            {strategies.ErrClusterDescriptionTooLong, http.StatusUnprocessableEntity},
+		"cluster version required":        {strategies.ErrClusterVersionRequired, http.StatusUnprocessableEntity},
+		"cluster version unavailable":     {strategies.ErrClusterVersionUnavailable, http.StatusUnprocessableEntity},
 		"cluster name required":           {strategies.ErrClusterNameRequired, http.StatusUnprocessableEntity},
 		"control plane replicas required": {strategies.ErrControlPlaneReplicasRequired, http.StatusUnprocessableEntity},
 		"worker replicas required":        {strategies.ErrWorkerReplicasRequired, http.StatusUnprocessableEntity},
@@ -249,7 +254,8 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 		"cluster already exists":          {strategies.ErrClusterAlreadyExists, http.StatusConflict},
 	}
 	body := handlers.ClusterCreateParams{
-		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
+		KubernetesVersion: clusterVersion,
+		Name:              clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
 	}
 

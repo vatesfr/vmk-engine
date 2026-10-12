@@ -44,7 +44,6 @@ func missingConfigMapKeyError(key string) error {
 }
 
 const (
-	versionKey                   = "kubernetesVersion"
 	workerNameKey                = "workerName"
 	podCIDRKey                   = "podCIDR"
 	serviceCIDRKey               = "serviceCIDR"
@@ -66,7 +65,6 @@ func parseClusterDefaults(data map[string]string) (strategies.ClusterCreationDef
 		key    string
 		target *string
 	}{
-		{versionKey, &result.KubernetesVersion},
 		{workerNameKey, &result.WorkerName},
 		{podCIDRKey, &d.PodCIDR},
 		{serviceCIDRKey, &d.ServiceCIDR},

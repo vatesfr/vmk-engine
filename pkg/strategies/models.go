@@ -5,6 +5,7 @@ const MaxClusterDescriptionLength = 4000
 
 // CreateClusterParams describes the minimal cluster creation intent.
 type CreateClusterParams struct {
+	Version              string
 	Name                 string
 	Description          string
 	ControlPlaneReplicas int32
@@ -17,7 +18,6 @@ type CreateClusterParams struct {
 // ClusterCreationDefaults contains VM and bootstrap configuration read from the ConfigMap.
 // Credentials remain in provider-managed Secrets.
 type ClusterCreationDefaults struct {
-	KubernetesVersion         string
 	WorkerName                string
 	PodCIDR                   string
 	ServiceCIDR               string
@@ -35,6 +35,7 @@ type ClusterCreationDefaults struct {
 // CreateClusterResourceParams describes the resources required by the
 // cluster resource Strategy.
 type CreateClusterResourceParams struct {
+	Version              string
 	Defaults             ClusterCreationDefaults
 	ControlPlaneIP       string
 	VMNamePrefix         string

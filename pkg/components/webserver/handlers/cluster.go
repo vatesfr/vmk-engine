@@ -58,7 +58,7 @@ type NodeStatus struct {
 	Replicas          *int `json:"replicas,omitempty"`
 }
 
-func NewFromStrategyStatus(status strategies.NodeTypeStatus) *NodeStatus {
+func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 	n := NodeStatus{}
 	n.AvailableReplicas = &status.AvailableReplicas
 	n.DesiredReplicas = &status.DesiredReplicas
@@ -153,8 +153,8 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		Phase:                value.Phase,
 		CreatedAt:            value.CreatedAt,
 		ControlPlaneEndpoint: value.ControlPlaneEndpoint,
-		ControlPlaneStatus:   NewFromStrategyStatus(value.ControlPlanesStatus),
-		WorkerStatus:         NewFromStrategyStatus(value.WorkersStatus),
+		ControlPlaneStatus:   NewFromNodeStatus(value.ControlPlanesStatus),
+		WorkerStatus:         NewFromNodeStatus(value.WorkersStatus),
 		Tags:                 value.Tags,
 	}
 }

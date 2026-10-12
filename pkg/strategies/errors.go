@@ -9,6 +9,10 @@ import (
 // implementation such as cluster_manager.
 var (
 	ErrClusterDescriptionTooLong              = errors.New("cluster description must not exceed 4000 characters")
+	ErrNodeDeletionConflict                   = errors.New("node changed during deletion; retry the request")
+	ErrNodeNameRequired                       = errors.New("node name is required")
+	ErrNodeNotFound                           = errors.New("node not found")
+	ErrNodeDeletionFailed                     = errors.New("failed to delete node")
 	ErrClusterNameRequired                    = errors.New("cluster name is required")
 	ErrControlPlaneReplicasRequired           = errors.New("control plane replicas is required")
 	ErrWorkerReplicasRequired                 = errors.New("worker replicas is required")

@@ -14,6 +14,7 @@ type ForManagingClusters interface {
 	GetClusterNodesInfo(ctx context.Context, name string) ([]ClusterNodeInfo, error)
 	GetClusterConfig(ctx context.Context, name string) (string, error)
 	DeleteCluster(ctx context.Context, name string) error
+	DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error
 	GetAllTags(ctx context.Context) (map[string]map[string]string, error)
 	GetClusterTags(ctx context.Context, clusterID string) (map[string]string, error)
 	GetClusterTag(ctx context.Context, clusterID, tag string) (string, error)
@@ -24,6 +25,7 @@ type ForManagingClusters interface {
 
 type ClusterNodeInfo struct {
 	Name      string
+	NodeName  string
 	Role      string
 	Status    string
 	Endpoint  string

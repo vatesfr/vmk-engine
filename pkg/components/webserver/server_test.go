@@ -1,4 +1,4 @@
-package webserver_test
+package webserver
 
 import (
 	"context"
@@ -10,17 +10,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"capv-proxy/pkg/components/webserver"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
 )
 
 const (
 	k8sVersion                     = "v1.36.0"
+	clusterNotFoundTitle           = "Cluster not found"
 	productionValue                = "production"
 	environmentTag                 = "environment"
 	clusterName                    = "cluster-1"
@@ -197,7 +198,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedTitle:  "Cluster not found",
+			expectedTitle:  clusterNotFoundTitle,
 			expectedDetail: strategies.ErrClusterNotFound.Error(),
 		},
 		"get cluster with version status": {
@@ -355,7 +356,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().DeleteCluster(ctx, clusterName).Return(strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedTitle:  "Cluster not found",
+			expectedTitle:  clusterNotFoundTitle,
 			expectedDetail: strategies.ErrClusterNotFound.Error(),
 		},
 		"get all tags": {
@@ -628,8 +629,8 @@ func validCreateClusterParams() strategies.CreateClusterParams {
 func newTestHandler(
 	clusterService strategies.ForManagingClusters,
 ) http.Handler {
-	return webserver.HttpServer{
-		SwaggerUI: webserver.SwaggerUIDisabled,
+	return HttpServer{
+		SwaggerUI: SwaggerUIDisabled,
 	}.Handler(clusterService)
 }
 
@@ -692,5 +693,81 @@ func TestGetAllNodesHTTP(t *testing.T) {
 			}
 			executeHTTPTestCase(t, tc)
 		})
+	}
+}
+
+func TestDeleteClusterNodeHTTP(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err    error
+		status int
+		title  string
+	}{
+		"success":            {status: http.StatusNoContent},
+		"missing cluster":    {err: strategies.ErrClusterNotFound, status: http.StatusNotFound, title: clusterNotFoundTitle},
+		"missing node":       {err: strategies.ErrNodeNotFound, status: http.StatusNotFound, title: "Node not found"},
+		"concurrent update":  {err: strategies.ErrNodeDeletionConflict, status: http.StatusConflict, title: "Node deletion conflict"},
+		"invalid node":       {err: strategies.ErrNodeNameRequired, status: http.StatusUnprocessableEntity, title: "Invalid cluster parameters"},
+		"Kubernetes failure": {err: errTest, status: http.StatusInternalServerError, title: "Internal Server Error"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{
+				method: http.MethodDelete, path: getClusterPath + "/nodes/node-1",
+				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+					var err error
+					if tc.err != nil {
+						err = fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, tc.err)
+					}
+					service.EXPECT().DeleteClusterNode(ctx, clusterName, "node-1").Return(err)
+				},
+				expectedStatus: tc.status, expectedTitle: tc.title,
+				expectedDetail: func() string {
+					if tc.err == strategies.ErrNodeNotFound || tc.err == strategies.ErrClusterNotFound || tc.err == strategies.ErrNodeDeletionConflict {
+						return tc.err.Error()
+					}
+					if tc.err == strategies.ErrNodeNameRequired {
+						return "failed to delete node: node name is required"
+					}
+					return ""
+				}(),
+			})
+		})
+	}
+}
+
+func TestNodeHTTPAbstraction(t *testing.T) {
+	nodeID := uuid.Must(uuid.FromString("01234567-89ab-cdef-0123-456789abcdef"))
+	for _, path := range []string{clusterNodesPath, allNodesPath} {
+		t.Run(path, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{
+				method: http.MethodGet, path: path,
+				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+					nodes := []strategies.ClusterNodeInfo{{Name: "node-1", NodeName: "worker-01", MachineID: &nodeID}}
+					if path == clusterNodesPath {
+						service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return(nodes, nil)
+					} else {
+						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
+					}
+				},
+				expectedStatus: http.StatusOK, expectedJSON: `[{"name":"node-1","nodeName":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
+			})
+		})
+	}
+}
+
+func TestNodeDeletionOpenAPI(t *testing.T) {
+	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service).OpenAPI.Description()
+	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeName}")
+	require.NotNil(t, route)
+	require.NotNil(t, route.Delete)
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity} {
+		require.NotNil(t, route.Delete.Responses.Status(status))
+	}
+	assert.Empty(t, route.Delete.Responses.Status(http.StatusNoContent).Value.Content)
+	assert.Nil(t, route.Delete.RequestBody)
+	for _, parameter := range []string{"id", "nodeName"} {
+		ref := route.Delete.Parameters.GetByInAndName("path", parameter)
+		require.NotNil(t, ref)
+		assert.True(t, ref.Required)
 	}
 }

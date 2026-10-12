@@ -188,6 +188,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
 | `POST` | `/kubernetes/clusters/` | Creates a CAPI cluster and its associated resources | Requires configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
+| `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 
@@ -350,12 +351,38 @@ curl http://127.0.0.1:8080/kubernetes/clusters/demo
 curl http://127.0.0.1:8080/kubernetes/clusters/demo/nodes
 ```
 
-Each node entry includes a `machine_id` field when the CAPI `Machine` exposes a
+The `name` field always contains the CAPI resource name, the stable identifier
+used by the delete endpoint. The optional `nodeName` field contains
+`status.nodeRef.name`, the registered Kubernetes Node name; it is omitted until
+the Node reference is available. `name` remains the resource identifier before
+and after registration; `nodeName` is descriptive and is not used for deletion.
+
+Delete a node using its `name` from the nodes response:
+
+```bash
+curl --request DELETE \
+  http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abcde
+```
+
+A successful request returns `204 No Content` after Kubernetes accepts deletion.
+CAPI controllers perform cleanup asynchronously, including their usual drain
+and infrastructure cleanup; the endpoint does not bypass finalizers. The
+configured namespace and the Machine's `spec.clusterName` restrict the target.
+A missing cluster, missing node, or node belonging to another cluster
+returns `404`; an empty cluster or node name at the service boundary returns
+`422`; a concurrent change detected by deletion preconditions returns `409`
+(the client can retry); unexpected Kubernetes errors return `500`.
+
+This operation deletes an individual node without changing the desired
+replica count. Its owning controller can create a replacement. To permanently
+reduce cluster capacity, the owner must be scaled separately.
+
+Each node entry includes a `node_id` field when the CAPI `Machine` exposes a
 Xen Orchestra `providerID` (for example `xenorchestra://<pool>/<vm-uuid>`). The
-server extracts the VM UUID and exposes it as the machine identifier; if the
+server extracts the VM UUID and exposes it as `node_id`; if the
 provider ID is missing or not from Xen Orchestra, the field is omitted.
 
-This lets callers correlate a Kubernetes `Machine` with the corresponding Xen
+This lets callers correlate a node with the corresponding Xen
 Orchestra VM without exposing provider strings in the API response.
 
 Retrieve its kubeconfig:
@@ -466,7 +493,7 @@ The service uses the following minimum permissions in the target namespace:
 | API group | Resources | Verbs |
 | --- | --- | --- |
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
-| `cluster.x-k8s.io` | `machines` | `list` |
+| `cluster.x-k8s.io` | `machines` | `get`, `list`, `delete` |
 | core group | `secrets`, `configmaps` | `get` |
 | `cluster.x-k8s.io` | `machinedeployments` | `create` |
 | `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |
@@ -520,7 +547,7 @@ ClusterManager
     |
     +-- ForManagingClusterResources --> ClusterClient --> CAPI Cluster resources
     +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
-    `-- ForGettingClusterMachines   --> MachineClient --> CAPI Machine resources
+    `-- ForManagingClusterMachines   --> MachineClient --> CAPI Machine resources
 ```
 
 `cmd/http_server/main.go` is the Configurator: it creates the Kubernetes

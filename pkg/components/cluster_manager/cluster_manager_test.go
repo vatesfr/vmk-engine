@@ -22,6 +22,7 @@ type testCreateClusterParams struct {
 }
 
 const (
+	deleteNodeName       = "node"
 	clusterName          = "test-cluster"
 	secondClusterName    = "test-cluster-2"
 	emptyClusterName     = ""
@@ -186,7 +187,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	clusterResources := mocks.NewMockForManagingClusterResources(ctrl)
 	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
-	clusterMachines := mocks.NewMockForGettingClusterMachines(ctrl)
+	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
 	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
 	params := strategies.CreateClusterParams{
@@ -225,7 +226,7 @@ func TestCreateClusterDefaultsError(t *testing.T) {
 	clusterManager := cluster_manager.NewClusterManager(
 		mocks.NewMockForManagingClusterResources(ctrl),
 		mocks.NewMockForGettingClusterConfig(ctrl),
-		mocks.NewMockForGettingClusterMachines(ctrl),
+		mocks.NewMockForManagingClusterMachines(ctrl),
 		clusterDefaults,
 	)
 
@@ -410,7 +411,7 @@ func TestClusterNameRequired(t *testing.T) {
 func newTestClusterManager(t *testing.T) (
 	*mocks.MockForManagingClusterResources,
 	*mocks.MockForGettingClusterConfig,
-	*mocks.MockForGettingClusterMachines,
+	*mocks.MockForManagingClusterMachines,
 	cluster_manager.ClusterManager,
 ) {
 	t.Helper()
@@ -418,7 +419,7 @@ func newTestClusterManager(t *testing.T) (
 	ctrl := gomock.NewController(t)
 	clusterResources := mocks.NewMockForManagingClusterResources(ctrl)
 	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
-	clusterMachines := mocks.NewMockForGettingClusterMachines(ctrl)
+	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(gomock.Any()).Return(clusterCreationDefaults, nil).AnyTimes()
 	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults)
@@ -489,6 +490,42 @@ func TestCreateClusterDescription(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.description, info.Description)
+			}
+		})
+	}
+}
+
+func TestDeleteClusterNode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cluster, node              string
+		getErr, deleteErr, wantErr error
+	}{
+		"success":                   {cluster: clusterName, node: deleteNodeName},
+		"cluster required":          {node: deleteNodeName, wantErr: strategies.ErrClusterNameRequired},
+		"node required":             {cluster: clusterName, wantErr: strategies.ErrNodeNameRequired},
+		"missing cluster":           {cluster: clusterName, node: deleteNodeName, getErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
+		"cluster retrieval failure": {cluster: clusterName, node: deleteNodeName, getErr: errTest, wantErr: errTest},
+		"missing node":              {cluster: clusterName, node: deleteNodeName, deleteErr: strategies.ErrNodeNotFound, wantErr: strategies.ErrNodeNotFound},
+		"deletion failure":          {cluster: clusterName, node: deleteNodeName, deleteErr: errTest, wantErr: errTest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			resources := mocks.NewMockForManagingClusterResources(ctrl)
+			nodes := mocks.NewMockForManagingClusterMachines(ctrl)
+			if tc.cluster != "" && tc.node != "" {
+				get := resources.EXPECT().Get(t.Context(), tc.cluster).Return(strategies.ClusterInfo{}, tc.getErr)
+				if tc.getErr == nil {
+					nodes.EXPECT().DeleteMachine(t.Context(), tc.cluster, tc.node).After(get).Return(tc.deleteErr)
+				}
+			}
+			err := cluster_manager.NewClusterManager(resources, nil, nodes, nil).DeleteClusterNode(t.Context(), tc.cluster, tc.node)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+			if tc.getErr != nil || tc.deleteErr != nil {
+				require.ErrorIs(t, err, strategies.ErrNodeDeletionFailed)
 			}
 		})
 	}

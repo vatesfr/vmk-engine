@@ -95,6 +95,12 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		noContentResponse(), notFoundResponse("Cluster not found"), validationResponse(),
 	)
 
+	fuego.Delete(clusterRouter, "/{id}/nodes/{nodeName}", clusterHandler.DeleteClusterNode,
+		fuego.OptionAddResponse(http.StatusConflict, "Node changed during deletion", fuego.Response{Type: fuego.HTTPError{}}),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster or node not found"), validationResponse(),
+	)
+
 	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags, notFoundResponse("Cluster not found"))
 	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
 	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag,

@@ -37,6 +37,7 @@ func toHTTPError(err error) error {
 	switch {
 	case errors.Is(err, strategies.ErrClusterDescriptionTooLong),
 		errors.Is(err, strategies.ErrClusterNameRequired),
+		errors.Is(err, strategies.ErrNodeNameRequired),
 		errors.Is(err, strategies.ErrControlPlaneReplicasRequired),
 		errors.Is(err, strategies.ErrWorkerReplicasRequired),
 		errors.Is(err, strategies.ErrControlPlaneIPRequired),
@@ -49,6 +50,10 @@ func toHTTPError(err error) error {
 			Title:  "Invalid cluster parameters",
 			Detail: err.Error(),
 		}
+	case errors.Is(err, strategies.ErrNodeDeletionConflict):
+		return fuego.ConflictError{Err: err, Title: "Node deletion conflict", Detail: strategies.ErrNodeDeletionConflict.Error()}
+	case errors.Is(err, strategies.ErrNodeNotFound):
+		return fuego.NotFoundError{Err: err, Title: "Node not found", Detail: strategies.ErrNodeNotFound.Error()}
 	case errors.Is(err, strategies.ErrClusterTagNotFound):
 		return fuego.NotFoundError{
 			Err:    err,

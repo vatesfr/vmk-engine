@@ -48,7 +48,7 @@ var errTest = errors.New("test error")
 func TestClusterClientList(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		objects := []client.Object{
-			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "other-namespace"}},
+			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: otherNamespace}},
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioned", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisionedPhase}},
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioning", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisioningPhase}},
 		}
@@ -334,7 +334,7 @@ func TestClusterClientGetAllTags(t *testing.T) {
 				}}},
 				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "empty-value", Namespace: testNamespace, Labels: map[string]string{testTagLabelPrefix + ownerTag: ""}}},
 				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "no-tags", Namespace: testNamespace}},
-				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "other-namespace", Labels: map[string]string{testTagLabelPrefix + ownerTag: "different-owner"}}},
+				&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: otherNamespace, Labels: map[string]string{testTagLabelPrefix + ownerTag: "different-owner"}}},
 			},
 			tags: map[string]map[string]string{
 				clusterName:   {ownerTag: platformValue, "env": productionValue},

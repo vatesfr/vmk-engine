@@ -70,6 +70,20 @@ func (mr *MockForManagingClustersMockRecorder) DeleteCluster(ctx, name any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCluster", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteCluster), ctx, name)
 }
 
+// DeleteClusterNode mocks base method.
+func (m *MockForManagingClusters) DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteClusterNode", ctx, clusterName, nodeName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteClusterNode indicates an expected call of DeleteClusterNode.
+func (mr *MockForManagingClustersMockRecorder) DeleteClusterNode(ctx, clusterName, nodeName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterNode", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterNode), ctx, clusterName, nodeName)
+}
+
 // DeleteClusterTag mocks base method.
 func (m *MockForManagingClusters) DeleteClusterTag(ctx context.Context, clusterID, tag string) error {
 	m.ctrl.T.Helper()

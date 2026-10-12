@@ -11,7 +11,7 @@ import (
 type ClusterManager struct {
 	clusterResources        strategies.ForManagingClusterResources
 	clusterConfigs          strategies.ForGettingClusterConfig
-	clusterMachines         strategies.ForGettingClusterMachines
+	clusterMachines         strategies.ForManagingClusterMachines
 	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults
 }
 
@@ -20,7 +20,7 @@ var _ strategies.ForManagingClusters = ClusterManager{}
 func NewClusterManager(
 	clusterResources strategies.ForManagingClusterResources,
 	clusterConfigs strategies.ForGettingClusterConfig,
-	clusterMachines strategies.ForGettingClusterMachines,
+	clusterMachines strategies.ForManagingClusterMachines,
 	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults,
 ) ClusterManager {
 	return ClusterManager{
@@ -173,6 +173,22 @@ func (m ClusterManager) DeleteClusterTag(ctx context.Context, clusterName, tag s
 func validateClusterName(name string) error {
 	if name == "" {
 		return strategies.ErrClusterNameRequired
+	}
+	return nil
+}
+
+func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error {
+	if err := validateClusterName(clusterName); err != nil {
+		return err
+	}
+	if nodeName == "" {
+		return strategies.ErrNodeNameRequired
+	}
+	if _, err := c.clusterResources.Get(ctx, clusterName); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
+	}
+	if err := c.clusterMachines.DeleteMachine(ctx, clusterName, nodeName); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
 	}
 	return nil
 }

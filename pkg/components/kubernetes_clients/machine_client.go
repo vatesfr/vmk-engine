@@ -15,6 +15,7 @@ import (
 
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -29,7 +30,7 @@ type MachineClient struct {
 	namespace        string
 }
 
-var _ strategies.ForGettingClusterMachines = MachineClient{}
+var _ strategies.ForManagingClusterMachines = MachineClient{}
 
 func NewMachineClient(kubernetesClient client.Client, namespace string) MachineClient {
 	return MachineClient{kubernetesClient, namespace}
@@ -82,9 +83,9 @@ func (m MachineClient) GetAllMachines(ctx context.Context) ([]strategies.Cluster
 }
 
 func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
-	name := machine.Name
+	nodeName := ""
 	if machine.Status.NodeRef.IsDefined() {
-		name = machine.Status.NodeRef.Name
+		nodeName = machine.Status.NodeRef.Name
 	}
 
 	role := workerRole
@@ -117,7 +118,8 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 	}
 
 	return strategies.ClusterNodeInfo{
-		Name:      name,
+		Name:      machine.Name,
+		NodeName:  nodeName,
 		Role:      role,
 		Status:    status,
 		Endpoint:  machineEndpoint(machine.Status.Addresses),
@@ -138,4 +140,44 @@ func machineEndpoint(addresses capiv1.MachineAddresses) string {
 		}
 	}
 	return ""
+}
+
+// DeleteMachine requests deletion by the CAPI resource name.
+// Membership is checked using spec.clusterName rather than mutable labels.
+func (m MachineClient) DeleteMachine(ctx context.Context, clusterName, machineName string) error {
+	if clusterName == "" {
+		return strategies.ErrClusterNameRequired
+	}
+	if machineName == "" {
+		return strategies.ErrNodeNameRequired
+	}
+	if m.namespace == "" {
+		return strategies.ErrClusterNamespaceRequired
+	}
+
+	machine := &capiv1.Machine{}
+	key := client.ObjectKey{Namespace: m.namespace, Name: machineName}
+	if err := m.kubernetesClient.Get(ctx, key, machine); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
+		}
+		return fmt.Errorf("get Machine %s: %w", key, err)
+	}
+	if machine.Spec.ClusterName != clusterName {
+		return strategies.ErrNodeNotFound
+	}
+
+	// Protect against replacement or reassignment between the read and delete.
+	if err := m.kubernetesClient.Delete(ctx, machine, client.Preconditions{
+		UID: &machine.UID, ResourceVersion: &machine.ResourceVersion,
+	}); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
+		}
+		if apierrors.IsConflict(err) {
+			return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionConflict, err)
+		}
+		return fmt.Errorf("delete Machine %s: %w", key, err)
+	}
+	return nil
 }

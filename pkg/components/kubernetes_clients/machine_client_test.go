@@ -1,6 +1,7 @@
 package kubernetes_clients
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gofrs/uuid"
@@ -15,17 +16,22 @@ import (
 	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
-	controlPlaneRole = "control-plane"
-	readyStatus      = "Ready"
-	notReadyStatus   = "NotReady"
-	controlPlaneIP   = "10.0.0.1"
-	workerIP         = "10.0.0.2"
-	externalIP       = "1.1.1.1"
-	hostname         = "host.example"
+	resolvedNodeName  = "node-name"
+	deleteMachineName = "machine"
+	otherNamespace    = "other-namespace"
+	controlPlaneRole  = "control-plane"
+	readyStatus       = "Ready"
+	notReadyStatus    = "NotReady"
+	controlPlaneIP    = "10.0.0.1"
+	workerIP          = "10.0.0.2"
+	externalIP        = "1.1.1.1"
+	hostname          = "host.example"
 )
 
 func machineWithStatus(name, namespace, cluster string, controlPlane bool, conditionStatus metav1.ConditionStatus, addresses ...capiv1.MachineAddress) *capiv1.Machine {
@@ -150,7 +156,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 	t.Run("node name and phase", func(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
-		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
+		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: resolvedNodeName}
 		machine.Status.Phase = "Provisioning"
 		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
 
@@ -158,7 +164,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
-		assert.Equal(t, "node-name", nodes[0].Name)
+		assert.Equal(t, "machine-name", nodes[0].Name)
+		assert.Equal(t, resolvedNodeName, nodes[0].NodeName)
 		assert.Equal(t, "Provisioning", nodes[0].Status)
 	})
 
@@ -267,18 +274,18 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 		"maps machines across clusters in the configured namespace sorted by node name": {
 			objects: []client.Object{
 				second, first, unlabelled,
-				machineWithStatus("excluded", "other-namespace", clusterName, false, metav1.ConditionTrue),
+				machineWithStatus("excluded", otherNamespace, clusterName, false, metav1.ConditionTrue),
 			},
 			namespace: testNamespace,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP)},
+				{Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP)},
 				{Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
-				{Name: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP)},
+				{Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP)},
 			},
 		},
 		"empty namespace returns an empty slice": {
 			objects: []client.Object{
-				machineWithStatus("excluded", "other-namespace", clusterName, false, ""),
+				machineWithStatus("excluded", otherNamespace, clusterName, false, ""),
 			},
 			namespace: testNamespace,
 			want:      []strategies.ClusterNodeInfo{},
@@ -327,3 +334,134 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 }
 
 func nodeEndpoint(ip string) string { return "https://" + ip + ":10250" }
+
+func TestMachineClientDeleteMachine(t *testing.T) {
+	for name, tc := range map[string]struct {
+		namespace, cluster, machine, owner string
+		wantErr                            error
+	}{
+		"deletes matching machine":        {testNamespace, clusterName, deleteMachineName, clusterName, nil},
+		"other cluster is protected":      {testNamespace, clusterName, deleteMachineName, "other-cluster", strategies.ErrNodeNotFound},
+		"unassigned machine is protected": {testNamespace, clusterName, deleteMachineName, "", strategies.ErrNodeNotFound},
+		"missing machine":                 {testNamespace, clusterName, "missing", clusterName, strategies.ErrNodeNotFound},
+		"other namespace is protected":    {otherNamespace, clusterName, deleteMachineName, clusterName, strategies.ErrNodeNotFound},
+		"cluster required":                {testNamespace, "", deleteMachineName, clusterName, strategies.ErrClusterNameRequired},
+		"machine required":                {testNamespace, clusterName, "", clusterName, strategies.ErrNodeNameRequired},
+		"namespace required":              {"", clusterName, deleteMachineName, clusterName, strategies.ErrClusterNamespaceRequired},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// The label deliberately matches the requested cluster, even when the
+			// spec assigns the machine elsewhere. Labels must not authorize deletion.
+			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+			machine.Spec.ClusterName = tc.owner
+			kube := newFakeClient(t, machine)
+			err := NewMachineClient(kube, tc.namespace).DeleteMachine(t.Context(), tc.cluster, tc.machine)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{}))
+			} else {
+				require.NoError(t, err)
+				assert.True(t, apierrors.IsNotFound(kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{})))
+			}
+		})
+	}
+}
+
+func TestMachineClientDeleteErrorsAndPreconditions(t *testing.T) {
+	missing := apierrors.NewNotFound(schema.GroupResource{Group: capiv1.GroupVersion.Group, Resource: "machines"}, deleteMachineName)
+	for name, tc := range map[string]struct {
+		getErr, deleteErr, wantErr error
+	}{
+		"get failure":   {getErr: errTest, wantErr: errTest},
+		"get not found": {getErr: missing, wantErr: strategies.ErrNodeNotFound},
+
+		"delete failure":         {deleteErr: errTest, wantErr: errTest},
+		"disappeared after read": {deleteErr: missing, wantErr: strategies.ErrNodeNotFound},
+		"concurrent update":      {deleteErr: apierrors.NewConflict(schema.GroupResource{Resource: "machines"}, deleteMachineName, errTest), wantErr: strategies.ErrNodeDeletionConflict},
+		"accepted deletion":      {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			deleted := false
+			kube := newErrorClient(t, interceptor.Funcs{
+				Get: func(_ context.Context, _ client.WithWatch, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+					assert.Equal(t, client.ObjectKey{Namespace: testNamespace, Name: deleteMachineName}, key)
+					if tc.getErr != nil {
+						return tc.getErr
+					}
+					machine := obj.(*capiv1.Machine)
+					machine.ObjectMeta = metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace, UID: "original-uid", ResourceVersion: "123"}
+					machine.Spec.ClusterName = clusterName
+					return nil
+				},
+				Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, opts ...client.DeleteOption) error {
+					deleted = true
+					options := &client.DeleteOptions{}
+					for _, opt := range opts {
+						opt.ApplyToDelete(options)
+					}
+					require.NotNil(t, options.Preconditions)
+					assert.EqualValues(t, "original-uid", *options.Preconditions.UID)
+					assert.Equal(t, "123", *options.Preconditions.ResourceVersion)
+					return tc.deleteErr
+				},
+			})
+			err := NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, deleteMachineName)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+			assert.Equal(t, tc.getErr == nil, deleted)
+		})
+	}
+}
+
+func TestMachineClientDeleteRetainsFinalizers(t *testing.T) {
+	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+	machine.Spec.ClusterName = clusterName
+	machine.Finalizers = []string{"cluster.x-k8s.io/machine"}
+	kube := newFakeClient(t, machine)
+	require.NoError(t, NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, machine.Name))
+	remaining := &capiv1.Machine{}
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), remaining))
+	assert.False(t, remaining.DeletionTimestamp.IsZero())
+	assert.Equal(t, machine.Finalizers, remaining.Finalizers)
+}
+
+func TestDeleteMachineUsesResourceName(t *testing.T) {
+	for name, tc := range map[string]struct {
+		requested string
+		duplicate bool
+		wantErr   error
+	}{
+		"resource name deletes machine":             {requested: deleteMachineName},
+		"node name is not a resource alias":         {requested: resolvedNodeName, wantErr: strategies.ErrNodeNotFound},
+		"shared node name does not change identity": {requested: deleteMachineName, duplicate: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+			machine.Spec.ClusterName = clusterName
+			machine.Status.NodeRef = capiv1.MachineNodeReference{Name: resolvedNodeName}
+			objects := []client.Object{machine}
+			other := machine.DeepCopy()
+			other.Name = "other-machine"
+			other.Spec.ClusterName = "other-cluster"
+			objects = append(objects, other)
+			if tc.duplicate {
+				duplicate := machine.DeepCopy()
+				duplicate.Name = "duplicate-machine"
+				objects = append(objects, duplicate)
+			}
+			kube := newFakeClient(t, objects...)
+			err := NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, tc.requested)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				assert.True(t, apierrors.IsNotFound(kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{})))
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+				require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{}))
+			}
+			require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(other), &capiv1.Machine{}))
+		})
+	}
+}

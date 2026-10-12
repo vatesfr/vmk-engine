@@ -63,6 +63,8 @@ flowchart LR
         manager[ClusterManager]
         clusterport[ForManagingClusterResources]
         configport[ForGettingClusterConfig]
+        machinesport[ForManagingClusterMachines]
+        manager -->|calls required interface| machinesport
         defaultsport[ForGettingClusterCreationDefaults]
         manager -->|calls required interface| clusterport
         manager -->|calls required interface| configport
@@ -73,6 +75,8 @@ flowchart LR
     clusterport -->|implemented by| clusters[ClusterClient]
     configport -->|implemented by| secrets[SecretClient]
     defaultsport -->|implemented by| defaults[ConfigMapClient]
+    machinesport -->|implemented by| machines[MachineClient]
+    machines --> api
     defaults --> api
     clusters --> api[Kubernetes API]
     secrets --> api
@@ -174,7 +178,7 @@ its own storage technology.
   Kubernetes Strategies still need integration tests.
 - `GetClusterNodesInfo` currently derives its flat node information from CAPI
   Machines. Workload-cluster Node enrichment is not wired yet, although the
-  machine list already exposes the Xen Orchestra VM UUID as `machine_id` when a
+  machine list already exposes the Xen Orchestra VM UUID as `node_id` when a
   valid machine `providerID` is available.
 - Authentication middleware currently lets every request through.
 - Kubernetes errors pass through without an explicit mapping to HTTP status
@@ -199,3 +203,18 @@ before creation, then copied into per-cluster resources owned by the Cluster.
 The Cluster stays paused during assembly and is activated after successful
 creation. Partial failures can be cleaned up through the delete endpoint.
 See README for configuration keys and image prerequisites.
+
+### Node deletion
+
+`DELETE /kubernetes/clusters/{id}/nodes/{nodeName}` invokes
+`ForManagingClusters.DeleteClusterNode`. `ClusterManager` validates the names
+and checks that the Cluster exists, then delegates to
+`ForManagingClusterMachines.DeleteMachine`. `MachineClient` gets the Machine by
+resource name in the configured namespace, checks `spec.clusterName`, and requests deletion with
+UID and resource-version preconditions to protect against concurrent replacement
+or reassignment. The HTTP boundary returns 204 without waiting for finalizers.
+Replica counts are unchanged. HTTP routes, parameters, responses, and application
+errors use node terminology. Node responses expose `name` (the stable resource
+name), optional `nodeName` (the registered Node name from `status.nodeRef.name`),
+and `node_id` (the provider VM UUID). The Node name is descriptive and is not
+used to address deletion requests.

@@ -84,11 +84,12 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 }
 
 type ClusterNodeInfo struct {
-	Name      string     `json:"name,omitempty"`
-	Role      string     `json:"role,omitempty"`
-	Status    string     `json:"status,omitempty"`
-	Endpoint  string     `json:"endpoint,omitempty"`
-	MachineID *uuid.UUID `json:"machine_id,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	NodeName string     `json:"nodeName,omitempty"`
+	Role     string     `json:"role,omitempty"`
+	Status   string     `json:"status,omitempty"`
+	Endpoint string     `json:"endpoint,omitempty"`
+	NodeID   *uuid.UUID `json:"node_id,omitempty"`
 }
 
 func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHandler {
@@ -180,11 +181,12 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
 	return lo.Map(value, func(node strategies.ClusterNodeInfo, _ int) ClusterNodeInfo {
 		return ClusterNodeInfo{
-			Name:      node.Name,
-			Role:      node.Role,
-			Status:    node.Status,
-			Endpoint:  node.Endpoint,
-			MachineID: node.MachineID,
+			Name:     node.Name,
+			NodeName: node.NodeName,
+			Role:     node.Role,
+			Status:   node.Status,
+			Endpoint: node.Endpoint,
+			NodeID:   node.MachineID,
 		}
 	})
 }
@@ -249,4 +251,11 @@ func (k ClusterHandler) GetAllNodes(c fuego.ContextNoBody) ([]ClusterNodeInfo, e
 	}
 
 	return toNodesInfo(nodes), nil
+}
+
+func (k ClusterHandler) DeleteClusterNode(c fuego.ContextNoBody) (any, error) {
+	if err := k.clusterService.DeleteClusterNode(c.Context(), c.PathParam("id"), c.PathParam("nodeName")); err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, nil
 }

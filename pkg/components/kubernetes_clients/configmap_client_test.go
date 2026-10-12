@@ -24,10 +24,10 @@ import (
 
 func validConfigMapData(overrides map[string]string) map[string]string {
 	data := map[string]string{
-		workerNameKey: fixtureWorkerName,
-		podCIDRKey:    fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
-		controlPlaneKubeadmConfigKey: fixtureBootstrapYAML, controlPlaneMachineSpecKey: fixtureMachineYAML,
-		workerMachineSpecKey: fixtureMachineYAML, workerKubeadmConfigKey: fixtureBootstrapYAML,
+		workerNameKey: testWorkerName,
+		podCIDRKey:    testPodCIDR, serviceCIDRKey: testServiceCIDR, serviceDomainKey: testDomain,
+		controlPlaneKubeadmConfigKey: testBootstrapYAML, controlPlaneMachineSpecKey: testMachineYAML,
+		workerMachineSpecKey: testMachineYAML, workerKubeadmConfigKey: testBootstrapYAML,
 		endpointPortKey: "6443", endpointSubnetKey: "16", loadBalancerKey: kubeVIP, cniKey: ciliumCNI,
 	}
 	maps.Copy(data, overrides)
@@ -36,8 +36,8 @@ func validConfigMapData(overrides map[string]string) map[string]string {
 
 func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 	want := strategies.ClusterCreationDefaults{
-		WorkerName: fixtureWorkerName,
-		PodCIDR:    fixturePodCIDR, ServiceCIDR: fixtureServiceCIDR, ServiceDomain: fixtureDomain,
+		WorkerName: testWorkerName,
+		PodCIDR:    testPodCIDR, ServiceCIDR: testServiceCIDR, ServiceDomain: testDomain,
 		EndpointPort: 6443, EndpointSubnet: 16, LoadBalancer: kubeVIP, CNI: ciliumCNI,
 		ControlPlaneMachineSpec: map[string]any{
 			"templateID": "image", "poolID": "pool",
@@ -103,7 +103,7 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 			t.Parallel()
 			scheme := runtime.NewScheme()
 			require.NoError(t, corev1.AddToScheme(scheme))
-			cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: ClusterDefaultsConfigMapName, Namespace: fixtureNamespace}, Data: tc.data}
+			cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: ClusterDefaultsConfigMapName, Namespace: testCreationNamespace}, Data: tc.data}
 			builder := fake.NewClientBuilder().WithScheme(scheme)
 			if !tc.missing {
 				builder = builder.WithObjects(cm)
@@ -114,7 +114,7 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 				}})
 			}
 			kube := builder.Build()
-			config := NewConfigMapClient(kube, fixtureNamespace)
+			config := NewConfigMapClient(kube, testCreationNamespace)
 			got, err := config.GetClusterCreationDefaults(t.Context())
 			if tc.wantErr != nil || tc.wantErrContains != "" {
 				require.Error(t, err)
@@ -158,9 +158,9 @@ func TestProviderConfiguration(t *testing.T) {
 			p, _, scheme := newClusterCreationTestSetup(t)
 			p.Defaults = defaults
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
-			_, err = NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+			_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 			require.NoError(t, err)
-			machine := resource(xoGroup, xoMachineTemplateKind, fixtureControlPlane, fixtureNamespace, nil)
+			machine := resource(xoGroup, xoMachineTemplateKind, testControlPlane, testCreationNamespace, nil)
 			require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 			stored, _, err := unstructured.NestedMap(machine.Object, specKey, templateKey, specKey)
 			require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestProviderConfiguration(t *testing.T) {
 	}
 }
 
-const fixtureMachineYAML = `templateID: image
+const testMachineYAML = `templateID: image
 poolID: pool
 resourceSet:
   cpus: 4
@@ -180,7 +180,7 @@ networkConfig:
     - networkID: network
 `
 
-const fixtureBootstrapYAML = `joinConfiguration:
+const testBootstrapYAML = `joinConfiguration:
   nodeRegistration:
     kubeletExtraArgs:
       - name: cloud-provider
@@ -191,10 +191,10 @@ func TestInvalidResourceBlocks(t *testing.T) {
 	for _, raw := range []string{"[broken", "[]", "null", "{}", "templateID: one\ntemplateID: two", "apiVersion: example/v1"} {
 		t.Run(raw, func(t *testing.T) {
 			data := map[string]string{
-				workerNameKey: fixtureWorkerName, podCIDRKey: fixturePodCIDR, serviceCIDRKey: fixtureServiceCIDR, serviceDomainKey: fixtureDomain,
+				workerNameKey: testWorkerName, podCIDRKey: testPodCIDR, serviceCIDRKey: testServiceCIDR, serviceDomainKey: testDomain,
 				endpointPortKey: "6443", endpointSubnetKey: "16", loadBalancerKey: kubeVIP, cniKey: ciliumCNI,
-				controlPlaneMachineSpecKey: raw, workerMachineSpecKey: fixtureMachineYAML,
-				controlPlaneKubeadmConfigKey: fixtureBootstrapYAML, workerKubeadmConfigKey: fixtureBootstrapYAML,
+				controlPlaneMachineSpecKey: raw, workerMachineSpecKey: testMachineYAML,
+				controlPlaneKubeadmConfigKey: testBootstrapYAML, workerKubeadmConfigKey: testBootstrapYAML,
 			}
 			_, err := parseClusterDefaults(data)
 			require.ErrorContains(t, err, controlPlaneMachineSpecKey)
@@ -237,17 +237,17 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			p.Defaults = defaults
 			p.Version = "v1.36.2"
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
-			_, err = NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+			_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 			require.NoError(t, err)
 			for _, target := range []struct {
 				group, kind, name string
 				path              []string
 				count             int
 			}{
-				{cpGroup, controlPlaneKind, fixtureControlPlane, []string{specKey, kubeadmConfigSpecKey, commandsKey}, 13},
+				{cpGroup, controlPlaneKind, testControlPlane, []string{specKey, kubeadmConfigSpecKey, commandsKey}, 13},
 				{bootstrapGroup, bootstrapTemplateKind, "demo-worker", []string{specKey, templateKey, specKey, commandsKey}, 14},
 			} {
-				object := resource(target.group, target.kind, target.name, fixtureNamespace, nil)
+				object := resource(target.group, target.kind, target.name, testCreationNamespace, nil)
 				require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(object), object))
 				commands, _, err := unstructured.NestedStringSlice(object.Object, target.path...)
 				require.NoError(t, err)

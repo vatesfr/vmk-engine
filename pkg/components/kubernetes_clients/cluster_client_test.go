@@ -25,22 +25,31 @@ import (
 )
 
 const (
-	otherK8sVersion     = "v1.35.0"
-	k8sVersion          = "v1.32.0"
-	clusterName         = "test-cluster"
-	testNamespace       = "capv"
-	provisionedPhase    = "Provisioned"
-	provisioningPhase   = "Provisioning"
-	caseEmptyName       = "empty name"
-	caseEmptyNamespace  = "empty namespace"
-	errClusterName      = "cluster name is required"
-	errClusterNamespace = "cluster namespace is required"
-	errNotFound         = "not found"
-	caseEmptyTagValue   = "empty value"
-	testTagLabelPrefix  = "tags.vmk.vates.tech/"
-	ownerTag            = "owner"
-	platformValue       = "platform"
-	productionValue     = "production"
+	otherK8sVersion       = "v1.35.0"
+	k8sVersion            = "v1.32.0"
+	clusterName           = "test-cluster"
+	testNamespace         = "capv"
+	provisionedPhase      = "Provisioned"
+	provisioningPhase     = "Provisioning"
+	caseEmptyName         = "empty name"
+	caseEmptyNamespace    = "empty namespace"
+	errClusterName        = "cluster name is required"
+	errClusterNamespace   = "cluster namespace is required"
+	errNotFound           = "not found"
+	caseEmptyTagValue     = "empty value"
+	testTagLabelPrefix    = "tags.vmk.vates.tech/"
+	ownerTag              = "owner"
+	platformValue         = "platform"
+	productionValue       = "production"
+	testCluster           = "demo"
+	testCreationNamespace = "default"
+	testVersion           = "v1.36.1"
+	testPodCIDR           = "172.31.0.0/16"
+	testControlPlane      = "demo-cp"
+	testOriginalPrefix    = "original"
+	testServiceCIDR       = "192.168.0.0/16"
+	testDomain            = "cluster.local"
+	testWorkerName        = "md-0"
 )
 
 var errTest = errors.New("test error")
@@ -543,9 +552,9 @@ func deleteErrorFunc(t *testing.T, err error) func(context.Context, client.WithW
 func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResourceParams, []client.Object, *runtime.Scheme) {
 	t.Helper()
 	d := strategies.ClusterCreationDefaults{
-		PodCIDR:                   fixturePodCIDR,
-		ServiceCIDR:               fixtureServiceCIDR,
-		ServiceDomain:             fixtureDomain,
+		PodCIDR:                   testPodCIDR,
+		ServiceCIDR:               testServiceCIDR,
+		ServiceDomain:             testDomain,
 		EndpointPort:              6443,
 		EndpointSubnet:            16,
 		LoadBalancer:              kubeVIP,
@@ -556,14 +565,14 @@ func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResource
 		WorkerMachineSpec:         getValidXOMachineSpec(),
 	}
 	p := strategies.CreateClusterResourceParams{
-		Version:              fixtureVersion,
-		Name:                 fixtureCluster,
+		Version:              testVersion,
+		Name:                 testCluster,
 		Defaults:             d,
 		ControlPlaneIP:       "192.0.2.10",
 		VMNamePrefix:         "custom",
 		ControlPlaneReplicas: ptr.To(int32(3)),
 		MachineDeployments: []strategies.MachineDeployment{{
-			Name:     fixtureWorkerName,
+			Name:     testWorkerName,
 			Replicas: ptr.To(int32(2)),
 		}},
 		Tags: map[string]string{"env": "test"},
@@ -587,18 +596,18 @@ func TestClusterResourceCreation(t *testing.T) {
 			return c.Get(ctx, key, obj, opts...)
 		},
 	}).Build()
-	info, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	info, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 	creating = false
 	require.NoError(t, err)
-	require.Equal(t, fixtureCluster, info.Name)
+	require.Equal(t, testCluster, info.Name)
 	require.Equal(t, p.Tags, info.Tags)
 	require.Equal(t, p.Description, info.Description)
 	cluster := &capiv1.Cluster{}
-	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: fixtureCluster, Namespace: fixtureNamespace}, cluster))
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: testCluster, Namespace: testCreationNamespace}, cluster))
 	require.Equal(t, p.Description, cluster.Annotations["vmk.vates.tech/description"])
 	// A fresh client reads the persisted description for both detail and list.
-	freshClient := NewClusterClient(kube, fixtureNamespace)
-	detail, err := freshClient.Get(t.Context(), fixtureCluster)
+	freshClient := NewClusterClient(kube, testCreationNamespace)
+	detail, err := freshClient.Get(t.Context(), testCluster)
 	require.NoError(t, err)
 	require.Equal(t, p.Description, detail.Description)
 	listed, err := freshClient.List(t.Context())
@@ -607,17 +616,17 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, p.Description, listed[0].Description)
 	require.Nil(t, cluster.Spec.Paused)
 	require.Empty(t, cluster.Spec.Topology.ClassRef.Name)
-	require.Equal(t, []string{fixturePodCIDR}, cluster.Spec.ClusterNetwork.Pods.CIDRBlocks)
-	require.Equal(t, fixtureControlPlane, cluster.Spec.ControlPlaneRef.Name)
-	require.Equal(t, fixtureCluster, cluster.Labels[capiv1.ClusterNameLabel])
+	require.Equal(t, []string{testPodCIDR}, cluster.Spec.ClusterNetwork.Pods.CIDRBlocks)
+	require.Equal(t, testControlPlane, cluster.Spec.ControlPlaneRef.Name)
+	require.Equal(t, testCluster, cluster.Labels[capiv1.ClusterNameLabel])
 	require.Equal(t, "test", cluster.Labels[clusterTagLabelPrefix+"env"])
 	get := func(group, kind, name string) *unstructured.Unstructured {
 		t.Helper()
-		obj := resource(group, kind, name, fixtureNamespace, nil)
+		obj := resource(group, kind, name, testCreationNamespace, nil)
 		require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(obj), obj))
 		return obj
 	}
-	xo := get(xoGroup, xoClusterKind, fixtureCluster)
+	xo := get(xoGroup, xoClusterKind, testCluster)
 	owner := metav1.GetControllerOf(xo)
 	require.NotNil(t, owner)
 	require.Equal(t, cluster.Name, owner.Name)
@@ -627,7 +636,7 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, map[string]any{cniKey: ciliumCNI, "ccm": true, "csi": true}, addons)
 	host, _, _ := unstructured.NestedString(xo.Object, specKey, endpointKey, "host")
 	require.Equal(t, p.ControlPlaneIP, host)
-	cp := get(cpGroup, controlPlaneKind, fixtureControlPlane)
+	cp := get(cpGroup, controlPlaneKind, testControlPlane)
 	require.Nil(t, metav1.GetControllerOf(cp))
 	version, found, err := unstructured.NestedString(cp.Object, specKey, "version")
 	require.NoError(t, err)
@@ -639,17 +648,17 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Contains(t, sans, p.ControlPlaneIP)
 	commands, _, _ := unstructured.NestedStringSlice(cp.Object, specKey, kubeadmConfigSpecKey, commandsKey)
 	require.Equal(t, []string{"echo preserved"}, commands)
-	vm := get(xoGroup, xoMachineTemplateKind, fixtureControlPlane)
+	vm := get(xoGroup, xoMachineTemplateKind, testControlPlane)
 	prefix, _, _ := unstructured.NestedString(vm.Object, specKey, templateKey, specKey, namePrefixKey)
 	require.Equal(t, "custom-cp", prefix)
-	require.Equal(t, fixtureCluster, vm.GetOwnerReferences()[0].Name)
-	require.Equal(t, fixtureOriginalPrefix, p.Defaults.ControlPlaneMachineSpec[namePrefixKey])
+	require.Equal(t, testCluster, vm.GetOwnerReferences()[0].Name)
+	require.Equal(t, testOriginalPrefix, p.Defaults.ControlPlaneMachineSpec[namePrefixKey])
 	md := &capiv1.MachineDeployment{}
-	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: "demo-md-0", Namespace: fixtureNamespace}, md))
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: "demo-md-0", Namespace: testCreationNamespace}, md))
 	require.Equal(t, int32(2), *md.Spec.Replicas)
-	require.Equal(t, fixtureVersion, md.Spec.Template.Spec.Version)
+	require.Equal(t, testVersion, md.Spec.Template.Spec.Version)
 	get(bootstrapGroup, bootstrapTemplateKind, "demo-worker")
-	_, err = NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 	require.ErrorIs(t, err, strategies.ErrClusterAlreadyExists)
 }
 
@@ -671,7 +680,7 @@ func TestClusterResourcePreflightAndPartialFailure(t *testing.T) {
 				}
 				return c.Create(ctx, obj, opts...)
 			}}).Build()
-			_, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+			_, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 			require.Error(t, err)
 			clusters := &capiv1.ClusterList{}
 			require.NoError(t, kube.List(t.Context(), clusters))
@@ -688,43 +697,28 @@ func TestClusterResourcePreflightAndPartialFailure(t *testing.T) {
 
 func TestClusterResourceVersionFromStatus(t *testing.T) {
 	cluster := &capiv1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{Name: fixtureCluster},
-		Status:     capiv1.ClusterStatus{ControlPlane: &capiv1.ClusterControlPlaneStatus{Versions: []capiv1.StatusVersion{{Version: fixtureVersion}}}},
+		ObjectMeta: metav1.ObjectMeta{Name: testCluster},
+		Status:     capiv1.ClusterStatus{ControlPlane: &capiv1.ClusterControlPlaneStatus{Versions: []capiv1.StatusVersion{{Version: testVersion}}}},
 	}
-	require.Equal(t, fixtureVersion, toInfo(cluster).Version)
+	require.Equal(t, testVersion, toInfo(cluster).Version)
 }
 
 func TestDeletePausedCluster(t *testing.T) {
 	_, _, scheme := newClusterCreationTestSetup(t)
 	cluster := &capiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       fixtureCluster,
-			Namespace:  fixtureNamespace,
+			Name:       testCluster,
+			Namespace:  testCreationNamespace,
 			Finalizers: []string{"cluster.cluster.x-k8s.io"},
 		},
 		Spec: capiv1.ClusterSpec{Paused: ptr.To(true)},
 	}
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	require.NoError(t, NewClusterClient(kube, fixtureNamespace).Delete(t.Context(), fixtureCluster))
+	require.NoError(t, NewClusterClient(kube, testCreationNamespace).Delete(t.Context(), testCluster))
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(cluster), cluster))
 	require.False(t, cluster.DeletionTimestamp.IsZero())
 	require.Nil(t, cluster.Spec.Paused)
 }
-
-const (
-	fixtureCluster        = "demo"
-	fixtureNamespace      = "default"
-	fixtureVersion        = "v1.36.1"
-	fixturePodCIDR        = "172.31.0.0/16"
-	fixtureControlPlane   = "demo-cp"
-	fixtureOriginalPrefix = "original"
-)
-
-const (
-	fixtureServiceCIDR = "192.168.0.0/16"
-	fixtureDomain      = "cluster.local"
-	fixtureWorkerName  = "md-0"
-)
 
 func TestClusterCreationValidation(t *testing.T) {
 	for _, tc := range []struct {
@@ -740,7 +734,7 @@ func TestClusterCreationValidation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, objects, scheme := newClusterCreationTestSetup(t)
-			ns := fixtureNamespace
+			ns := testCreationNamespace
 			tc.modify(&p, &ns)
 			kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 			_, err := NewClusterClient(kube, ns).Create(t.Context(), p)
@@ -758,13 +752,13 @@ func TestClusterCreateAPIError(t *testing.T) {
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error { return injected },
 	}).Build()
-	_, err := NewClusterClient(kube, fixtureNamespace).Create(t.Context(), p)
+	_, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
 	require.ErrorIs(t, err, injected)
 }
 
 func getValidXOMachineSpec() map[string]any {
 	return map[string]any{
-		"templateID": "image", "poolID": "pool", namePrefixKey: fixtureOriginalPrefix,
+		"templateID": "image", "poolID": "pool", namePrefixKey: testOriginalPrefix,
 		"networkConfig": map[string]any{"networks": []any{map[string]any{"networkID": "network"}}},
 	}
 }

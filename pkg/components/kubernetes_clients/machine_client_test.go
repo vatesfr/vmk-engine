@@ -25,6 +25,7 @@ const (
 	resolvedNodeName  = "node-name"
 	deleteMachineName = "machine"
 	otherNamespace    = "other-namespace"
+	otherClusterName  = "other-cluster"
 	controlPlaneRole  = "control-plane"
 	readyStatus       = "Ready"
 	notReadyStatus    = "NotReady"
@@ -45,6 +46,7 @@ func machineWithStatus(name, namespace, cluster string, controlPlane bool, condi
 	}
 	return &capiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels},
+		Spec:       capiv1.MachineSpec{ClusterName: cluster},
 		Status: capiv1.MachineStatus{
 			Addresses:  addresses,
 			Conditions: conditions,
@@ -64,7 +66,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	testCases := map[string]testMachineParams{
 		"maps machines of the cluster only, sorted by name": {
 			objects: []client.Object{
-				machineWithStatus("other-machine", testNamespace, "other-cluster", false, ""),
+				machineWithStatus("other-machine", testNamespace, otherClusterName, false, ""),
 				machineWithStatus("worker-b", testNamespace, clusterName, false, metav1.ConditionTrue,
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP}),
 				machineWithStatus("control-plane-a", testNamespace, clusterName, true, metav1.ConditionTrue,
@@ -73,8 +75,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP)},
-				{Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP)},
+				{Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
+				{Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
 		},
 		"empty cluster returns no machine": {
@@ -103,7 +105,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP)},
+				{Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
@@ -113,7 +115,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: workerRole, Role: workerRole, Status: unknownStatus},
+				{Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterName},
 			},
 		},
 	}
@@ -263,9 +265,10 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 	first := machineWithStatus("z-machine", testNamespace, clusterName, true, metav1.ConditionTrue,
 		capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: controlPlaneIP})
 	first.Status.NodeRef = capiv1.MachineNodeReference{Name: "a-node"}
-	second := machineWithStatus("a-machine", testNamespace, "other-cluster", false, metav1.ConditionFalse,
+	second := machineWithStatus("a-machine", testNamespace, otherClusterName, false, metav1.ConditionFalse,
 		capiv1.MachineAddress{Type: capiv1.MachineExternalIP, Address: externalIP})
 	second.Status.NodeRef = capiv1.MachineNodeReference{Name: "z-node"}
+	second.Labels[capiv1.ClusterNameLabel] = "stale-cluster-label"
 	unlabelled := machineWithStatus("unlabelled", testNamespace, "", false, "")
 	unlabelled.Labels = nil
 	unlabelled.Status.Phase = provisioningPhase
@@ -278,9 +281,9 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			},
 			namespace: testNamespace,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP)},
+				{Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP), ParentCluster: otherClusterName},
 				{Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
-				{Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP)},
+				{Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
 			},
 		},
 		"empty namespace returns an empty slice": {

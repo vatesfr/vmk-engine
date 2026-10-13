@@ -258,15 +258,16 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterNodesPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
-					Name:     controlPlaneNodeName,
-					Role:     controlPlaneNodeRole,
-					Status:   controlPlaneNodeStatus,
-					Endpoint: controlPlaneNodeEndpoint,
+					Name:          controlPlaneNodeName,
+					ParentCluster: clusterName,
+					Role:          controlPlaneNodeRole,
+					Status:        controlPlaneNodeStatus,
+					Endpoint:      controlPlaneNodeEndpoint,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{"name":"control-plane-0","role":"control-plane",` +
-				`"status":"Ready","endpoint":"10.0.0.11"}]`,
+				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"}]`,
 		},
 		"get cluster nodes with all fields": {
 			method: http.MethodGet,
@@ -662,14 +663,14 @@ func TestGetAllNodesHTTP(t *testing.T) {
 		"list all nodes": {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{
-					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint},
-					{Name: "worker-0", Role: "worker", Status: "NotReady"},
+					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, ParentCluster: clusterName},
+					{Name: "worker-0", Role: "worker", Status: "NotReady", ParentCluster: "other-cluster"},
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"},
-				{"name":"worker-0","role":"worker","status":"NotReady"}
+				{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"},
+				{"name":"worker-0","role":"worker","status":"NotReady","$cluster":"other-cluster"}
 			]`,
 		},
 		"empty list": {

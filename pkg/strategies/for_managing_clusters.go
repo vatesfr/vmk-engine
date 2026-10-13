@@ -24,10 +24,11 @@ type ForManagingClusters interface {
 }
 
 type ClusterNodeInfo struct {
-	Name      string
-	NodeName  string
-	Role      string
-	Status    string
-	Endpoint  string
-	MachineID *uuid.UUID
+	Name          string
+	NodeName      string
+	Role          string
+	Status        string
+	Endpoint      string
+	MachineID     *uuid.UUID
+	ParentCluster string
 }

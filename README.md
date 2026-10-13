@@ -32,7 +32,7 @@ Clients that handle validation failures by status must accept 422.
 | Status | Meaning |
 |---|---|
 | 400 | Request body cannot be decoded: malformed JSON, incompatible field type, or unknown field |
-| 422 | Missing required field, invalid IP, replica count below 1, or invalid tag name/value |
+| 422 | Missing required field, invalid cluster name, invalid IP, replica count below 1, or invalid tag name/value |
 | 404 | Cluster or tag not found |
 | 409 | Cluster already exists |
 | 500 | Internal failure or missing server configuration |
@@ -266,6 +266,10 @@ curl --request POST http://127.0.0.1:8080/kubernetes/clusters \
 
 The HTTP API supplies the cluster name, replica counts, Kubernetes version,
 control-plane IPv4 address, VM name prefix, description and tags.
+The cluster name must be a lowercase RFC 1123 label: lowercase letters, digits
+or hyphens, starting and ending with a letter or digit. Invalid names return
+HTTP 422 with validation details. Generated resource names (including the
+`-cp`, `-worker` and worker deployment suffixes) must fit within 63 characters.
 The `cluster-defaults` ConfigMap in `--namespace` is read on each creation;
 changes affect new clusters only.
 

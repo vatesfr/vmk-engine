@@ -544,24 +544,41 @@ func TestDeleteClusterNode(t *testing.T) {
 	}
 }
 
-func TestCreateClusterRejectsInvalidVersionBeforeReadingDefaults(t *testing.T) {
-	for _, version := range []string{"", "1.36.99", "1.36", "v1.36.9", " 1.36.9"} {
-		t.Run(version, func(t *testing.T) {
+func TestCreateClusterRejectsInvalidParametersBeforeReadingDefaults(t *testing.T) {
+	testCases := []struct {
+		name    string
+		version string
+		want    error
+	}{
+		{clusterName, "", strategies.ErrClusterVersionRequired},
+		{clusterName, "1.36.99", strategies.ErrClusterVersionUnavailable},
+		{clusterName, "1.36", strategies.ErrClusterVersionUnavailable},
+		{clusterName, "v1.36.9", strategies.ErrClusterVersionUnavailable},
+		{clusterName, " 1.36.9", strategies.ErrClusterVersionUnavailable},
+		{"NHT-Kub-Prod", clusterVersion, strategies.ErrInvalidClusterName},
+		{"cluster_name", clusterVersion, strategies.ErrInvalidClusterName},
+		{"cluster.name", clusterVersion, strategies.ErrInvalidClusterName},
+		{"-cluster", clusterVersion, strategies.ErrInvalidClusterName},
+		{"cluster-", clusterVersion, strategies.ErrInvalidClusterName},
+		{" cluster", clusterVersion, strategies.ErrInvalidClusterName},
+		{strings.Repeat("a", 64), clusterVersion, strategies.ErrInvalidClusterName},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name+"/"+tc.version, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			// No calls to defaults or resources are expected for invalid versions.
+			// No calls to defaults or resources are expected for invalid parameters.
 			manager := cluster_manager.NewClusterManager(
 				mocks.NewMockForManagingClusterResources(ctrl), nil, nil,
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versionmanager.NewVersionManager(),
 			)
 			result, err := manager.CreateCluster(t.Context(), strategies.CreateClusterParams{
-				Name: clusterName, Version: version, ControlPlaneIP: controlPlaneIP,
+				Name: tc.name, Version: tc.version, ControlPlaneIP: controlPlaneIP,
 				ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 			})
 			assert.Empty(t, result)
-			if version == "" {
-				assert.ErrorIs(t, err, strategies.ErrClusterVersionRequired)
-			} else {
-				assert.ErrorIs(t, err, strategies.ErrClusterVersionUnavailable)
+			require.ErrorIs(t, err, tc.want)
+			if tc.want == strategies.ErrInvalidClusterName {
+				assert.Contains(t, err.Error(), tc.name)
 			}
 		})
 	}

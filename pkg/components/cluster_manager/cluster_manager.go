@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 
 	"capv-proxy/pkg/strategies"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 type ClusterManager struct {
@@ -37,6 +39,9 @@ func NewClusterManager(
 func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
 	if err := validateClusterName(params.Name); err != nil {
 		return strategies.ClusterInfo{}, err
+	}
+	if errs := validation.IsDNS1123Label(params.Name); len(errs) > 0 {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w %q: %v", strategies.ErrInvalidClusterName, params.Name, errs)
 	}
 
 	if utf8.RuneCountInString(params.Description) > strategies.MaxClusterDescriptionLength {

@@ -45,6 +45,7 @@ func TestToHTTPErrorApplicationValidation(t *testing.T) {
 		strategies.ErrClusterVersionRequired,
 		strategies.ErrClusterVersionUnavailable,
 		strategies.ErrClusterNameRequired,
+		strategies.ErrInvalidClusterName,
 		strategies.ErrControlPlaneReplicasRequired,
 		strategies.ErrWorkerReplicasRequired,
 		strategies.ErrControlPlaneIPRequired,

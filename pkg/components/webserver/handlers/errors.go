@@ -36,7 +36,7 @@ func toHTTPError(err error) error {
 
 	switch {
 	case errors.Is(err, strategies.ErrClusterDescriptionTooLong),
-		errors.Is(err, strategies.ErrClusterNameRequired),
+		errors.Is(err, strategies.ErrInvalidClusterName),
 		errors.Is(err, strategies.ErrNodeNameRequired),
 		errors.Is(err, strategies.ErrClusterVersionRequired),
 		errors.Is(err, strategies.ErrClusterVersionUnavailable),

@@ -784,9 +784,20 @@ func TestNodeDeletionOpenAPI(t *testing.T) {
 	}
 }
 
-func TestCreateClusterHTTPRejectsUnavailableVersion(t *testing.T) {
-	for _, version := range []string{"1.36.99", "1.36", "v1.36.9"} {
-		t.Run(version, func(t *testing.T) {
+func TestCreateClusterHTTPRejectsInvalidParameters(t *testing.T) {
+	const versionField = "kubernetes_version"
+	testCases := []struct {
+		field  string
+		value  string
+		detail string
+	}{
+		{versionField, "1.36.99", strategies.ErrClusterVersionUnavailable.Error()},
+		{versionField, "1.36", strategies.ErrClusterVersionUnavailable.Error()},
+		{versionField, "v1.36.9", strategies.ErrClusterVersionUnavailable.Error()},
+		{"name", "NHT-Kub-Prod", "lowercase RFC 1123 label"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.field+"/"+tc.value, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			versions := versionmanager.NewVersionManager()
 			manager := cluster_manager.NewClusterManager(
@@ -794,12 +805,22 @@ func TestCreateClusterHTTPRejectsUnavailableVersion(t *testing.T) {
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versions,
 			)
 			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, versions)
-			body := strings.Replace(createClusterRequestBody, `"kubernetes_version":"1.36.9"`, `"kubernetes_version":"`+version+`"`, 1)
-			request := httptest.NewRequest(http.MethodPost, clustersPath, strings.NewReader(body))
+			var payload map[string]any
+			require.NoError(t, json.Unmarshal([]byte(createClusterRequestBody), &payload))
+			payload[tc.field] = tc.value
+			body, err := json.Marshal(payload)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, clustersPath, strings.NewReader(string(body)))
 			request.Header.Set(contentTypeHeader, applicationJSON)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
-			assert.Equal(t, http.StatusUnprocessableEntity, response.Code, response.Body.String())
+			require.Equal(t, http.StatusUnprocessableEntity, response.Code, response.Body.String())
+			var problem struct {
+				Detail string `json:"detail"`
+			}
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &problem))
+			assert.Contains(t, problem.Detail, tc.value)
+			assert.Contains(t, problem.Detail, tc.detail)
 		})
 	}
 }

@@ -727,6 +727,12 @@ func TestClusterCreationValidation(t *testing.T) {
 		want   error
 	}{
 		{"missing name", func(p *strategies.CreateClusterResourceParams, _ *string) { p.Name = "" }, strategies.ErrClusterNameRequired},
+		{"uppercase name", func(p *strategies.CreateClusterResourceParams, _ *string) { p.Name = "NHT-Kub-Prod" }, strategies.ErrInvalidClusterName},
+		{"generated name too long", func(p *strategies.CreateClusterResourceParams, _ *string) { p.Name = strings.Repeat("a", 57) }, strategies.ErrInvalidClusterName},
+		{"worker deployment name too long", func(p *strategies.CreateClusterResourceParams, _ *string) {
+			p.Name = strings.Repeat("a", 56)
+			p.MachineDeployments[0].Name = "long-worker"
+		}, strategies.ErrInvalidClusterName},
 		{"missing namespace", func(_ *strategies.CreateClusterResourceParams, ns *string) { *ns = "" }, strategies.ErrClusterNamespaceRequired},
 		{"invalid tag", func(p *strategies.CreateClusterResourceParams, _ *string) {
 			p.Tags = map[string]string{"invalid/key": platformValue}

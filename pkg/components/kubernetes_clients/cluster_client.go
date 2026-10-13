@@ -369,10 +369,17 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	}
 	worker := p.MachineDeployments[0]
 	cpName, workerTemplateName, mdName := p.Name+"-cp", p.Name+"-worker", p.Name+"-"+worker.Name
-	for _, name := range []string{p.Name, cpName, workerTemplateName, mdName} {
+	for _, name := range []string{p.Name, cpName, workerTemplateName} {
 		if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
-			return strategies.ClusterInfo{}, fmt.Errorf("invalid resource name %q: %v", name, errs)
+			return strategies.ClusterInfo{}, fmt.Errorf("%w %q: generated resource name %q: %v", strategies.ErrInvalidClusterName, p.Name, name, errs)
 		}
+	}
+	if errs := validation.IsDNS1123Label(mdName); len(errs) > 0 {
+		// An invalid configured worker suffix remains a server configuration error.
+		if len(validation.IsDNS1123Label(worker.Name)) == 0 {
+			return strategies.ClusterInfo{}, fmt.Errorf("%w %q: generated resource name %q: %v", strategies.ErrInvalidClusterName, p.Name, mdName, errs)
+		}
+		return strategies.ClusterInfo{}, fmt.Errorf("invalid resource name %q: %v", mdName, errs)
 	}
 	if err := validateConfigurationObjects(d); err != nil {
 		return strategies.ClusterInfo{}, err

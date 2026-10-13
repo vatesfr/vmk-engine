@@ -14,7 +14,7 @@ type ClusterHandler struct {
 
 type ClusterCreateParams struct {
 	KubernetesVersion    string `json:"kubernetes_version" validate:"required" description:"Available Kubernetes release in major.minor.patch format, without a v prefix" example:"1.36.9"`
-	Name                 string `json:"name" validate:"required"`
+	Name                 string `json:"name" validate:"required" description:"Lowercase RFC 1123 label; generated resource names including suffixes must fit within 63 characters"`
 	Description          string `json:"description,omitempty" validate:"max=4000"`
 	ControlPlaneReplicas int32  `json:"control_plane_replicas" validate:"required,min=1"`
 	WorkerReplicas       int32  `json:"worker_replicas" validate:"required,min=1"`

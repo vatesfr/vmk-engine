@@ -3,6 +3,7 @@ package cluster_manager
 import (
 	"context"
 	"fmt"
+	"unicode/utf8"
 
 	"capv-proxy/pkg/strategies"
 )
@@ -35,6 +36,10 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 		return strategies.ClusterInfo{}, err
 	}
 
+	if utf8.RuneCountInString(params.Description) > strategies.MaxClusterDescriptionLength {
+		return strategies.ClusterInfo{}, strategies.ErrClusterDescriptionTooLong
+	}
+
 	if params.ControlPlaneIP == "" {
 		return strategies.ClusterInfo{}, strategies.ErrControlPlaneIPRequired
 	}
@@ -53,6 +58,7 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 
 	clusterInfo, err := c.clusterResources.Create(ctx, strategies.CreateClusterResourceParams{
 		Name:                 params.Name,
+		Description:          params.Description,
 		Defaults:             defaults,
 		ControlPlaneIP:       params.ControlPlaneIP,
 		VMNamePrefix:         params.VMNamePrefix,

@@ -576,6 +576,7 @@ func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResource
 
 func TestClusterResourceCreation(t *testing.T) {
 	p, objects, scheme := newClusterCreationTestSetup(t)
+	p.Description = "Cluster de l’équipe \"Backend\"\nTest 🚀"
 	creating := true
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -591,8 +592,19 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, fixtureCluster, info.Name)
 	require.Equal(t, p.Tags, info.Tags)
+	require.Equal(t, p.Description, info.Description)
 	cluster := &capiv1.Cluster{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: fixtureCluster, Namespace: fixtureNamespace}, cluster))
+	require.Equal(t, p.Description, cluster.Annotations["vmk.vates.tech/description"])
+	// A fresh client reads the persisted description for both detail and list.
+	freshClient := NewClusterClient(kube, fixtureNamespace)
+	detail, err := freshClient.Get(t.Context(), fixtureCluster)
+	require.NoError(t, err)
+	require.Equal(t, p.Description, detail.Description)
+	listed, err := freshClient.List(t.Context())
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.Equal(t, p.Description, listed[0].Description)
 	require.Nil(t, cluster.Spec.Paused)
 	require.Empty(t, cluster.Spec.Topology.ClassRef.Name)
 	require.Equal(t, []string{fixturePodCIDR}, cluster.Spec.ClusterNetwork.Pods.CIDRBlocks)

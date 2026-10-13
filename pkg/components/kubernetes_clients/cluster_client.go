@@ -49,6 +49,8 @@ const (
 	clusterTagLabelPrefix   = "tags.vmk.vates.tech/"
 )
 
+const clusterDescriptionAnnotation = "vmk.vates.tech/description"
+
 var _ strategies.ForManagingClusterResources = ClusterClient{}
 
 func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterClient {
@@ -216,6 +218,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 
 	info := strategies.ClusterInfo{
 		Name:                 value.GetName(),
+		Description:          value.Annotations[clusterDescriptionAnnotation],
 		Phase:                value.Status.Phase,
 		ControlPlaneEndpoint: controlPlaneEndpoint,
 		Version:              value.Spec.Topology.Version,
@@ -417,6 +420,10 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 		InfrastructureRef: capiv1.ContractVersionedObjectReference{APIGroup: xoGroup, Kind: xoClusterKind, Name: p.Name},
 	}}
 
+	if p.Description != "" {
+		cluster.Annotations = map[string]string{clusterDescriptionAnnotation: p.Description}
+	}
+
 	xoSpec := map[string]any{
 		endpointKey:     map[string]any{"host": p.ControlPlaneIP, "port": int64(d.EndpointPort), "subnet": int64(d.EndpointSubnet)},
 		"injectSSHKeys": false,
@@ -474,7 +481,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(before)); err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("activate Cluster %s: %w; inspect its paused state before retrying", p.Name, err)
 	}
-	return strategies.ClusterInfo{Name: p.Name, Phase: "Creating", Tags: optionalClusterTags(labels)}, nil
+	return strategies.ClusterInfo{Name: p.Name, Description: p.Description, Phase: "Creating", Tags: optionalClusterTags(labels)}, nil
 }
 
 // Replace only our two explicit tokens, leaving shell variables and command

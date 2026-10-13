@@ -160,8 +160,9 @@ keeping Kubernetes types out of the manager and shared contracts.
 `ClusterManager` implements `ForManagingClusters` for the HTTP component
 and requires `ForManagingClusterResources`, implemented by `ClusterClient`.
 The manager owns the use cases and application error handling; the client
-stores each tag as a label on the CAPI `Cluster` with the `tags.vmk.vates.tech/`
-prefix. Tags can be supplied during cluster creation or changed through the
+stores the optional description as the `vmk.vates.tech/description` annotation
+on the CAPI `Cluster`, alongside tags stored as labels with the
+`tags.vmk.vates.tech/` prefix. Tags can be supplied during cluster creation or changed through the
 HTTP tag routes; the Kubernetes resource is the source of truth across process
 restarts. Label-specific validation stays in `ClusterClient`, so another
 `ForManagingClusterResources` implementation can apply the constraints of

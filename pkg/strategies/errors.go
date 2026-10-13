@@ -8,6 +8,7 @@ import (
 // contract and can therefore be interpreted without depending on a concrete
 // implementation such as cluster_manager.
 var (
+	ErrClusterDescriptionTooLong              = errors.New("cluster description must not exceed 4000 characters")
 	ErrClusterNameRequired                    = errors.New("cluster name is required")
 	ErrControlPlaneReplicasRequired           = errors.New("control plane replicas is required")
 	ErrWorkerReplicasRequired                 = errors.New("worker replicas is required")

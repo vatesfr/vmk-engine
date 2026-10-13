@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-fuego/fuego"
@@ -74,4 +75,30 @@ func TestToHTTPErrorPreservesOtherHTTPStatuses(t *testing.T) {
 	var status fuego.ErrorWithStatus
 	require.ErrorAs(t, result, &status)
 	assert.Equal(t, http.StatusInternalServerError, status.StatusCode())
+}
+
+func TestClusterDescriptionHTTPValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		description string
+		isValid     bool
+	}{
+		{"empty", "", true},
+		{"special characters", "Cluster \"Backend\"\nÉquipe 🚀", true},
+		{"unicode boundary", strings.Repeat("🚀", strategies.MaxClusterDescriptionLength), true},
+		{"too long", strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := ClusterCreateParams{Name: "demo", Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: "192.0.2.10", VMNamePrefix: "demo"}
+			_, err := fuego.TransformAndValidate(t.Context(), body)
+			if !tc.isValid {
+				require.Error(t, err)
+				var status fuego.ErrorWithStatus
+				require.ErrorAs(t, toHTTPError(err), &status)
+				assert.Equal(t, http.StatusUnprocessableEntity, status.StatusCode())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

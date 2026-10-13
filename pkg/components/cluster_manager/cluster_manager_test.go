@@ -1,7 +1,9 @@
 package cluster_manager_test
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -455,6 +457,39 @@ func TestGetAllNodes(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tc.nodes, nodes)
+		})
+	}
+}
+
+func TestCreateClusterDescription(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		description string
+		isValid     bool
+	}{
+		{"empty", "", true},
+		{"special characters", "Cluster \"Backend\"\nÉquipe 🚀", true},
+		{"unicode boundary", strings.Repeat("🚀", strategies.MaxClusterDescriptionLength), true},
+		{"too long", strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resources, _, _, manager := newTestClusterManager(t)
+			params := strategies.CreateClusterParams{Name: clusterName, Description: tc.description, ControlPlaneReplicas: 1, WorkerReplicas: 1, ControlPlaneIP: controlPlaneIP}
+			if tc.isValid {
+				resources.EXPECT().Create(t.Context(), gomock.Any()).DoAndReturn(func(
+					_ context.Context, resourceParams strategies.CreateClusterResourceParams,
+				) (strategies.ClusterInfo, error) {
+					assert.Equal(t, tc.description, resourceParams.Description)
+					return strategies.ClusterInfo{Name: clusterName, Description: resourceParams.Description}, nil
+				})
+			}
+			info, err := manager.CreateCluster(t.Context(), params)
+			if !tc.isValid {
+				require.ErrorIs(t, err, strategies.ErrClusterDescriptionTooLong)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.description, info.Description)
+			}
 		})
 	}
 }

@@ -197,10 +197,12 @@ func TestCreateCluster(t *testing.T) {
 	validBody := handlers.ClusterCreateParams{
 		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
+		Description: "Cluster \"Backend\" 🚀\nTest",
 	}
 	expectedParams := strategies.CreateClusterParams{
 		Name: clusterName, ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
 		ControlPlaneIP: controlPlaneIP, VMNamePrefix: vmNamePrefix,
+		Description: "Cluster \"Backend\" 🚀\nTest",
 	}
 	testCases := map[string]struct {
 		serviceResult strategies.ClusterInfo
@@ -208,9 +210,10 @@ func TestCreateCluster(t *testing.T) {
 		expected      handlers.ClusterInfo
 	}{
 		testCaseSuccess: {
-			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase},
+			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description},
 			expected: handlers.ClusterInfo{
 				Name:               clusterName,
+				Description:        validBody.Description,
 				Phase:              clusterPhase,
 				ControlPlaneStatus: handlers.NewFromNodeStatus(strategies.NodeTypeStatus{}),
 				WorkerStatus:       handlers.NewFromNodeStatus(strategies.NodeTypeStatus{}),
@@ -238,6 +241,7 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 		err    error
 		status int
 	}{
+		"description too long":            {strategies.ErrClusterDescriptionTooLong, http.StatusUnprocessableEntity},
 		"cluster name required":           {strategies.ErrClusterNameRequired, http.StatusUnprocessableEntity},
 		"control plane replicas required": {strategies.ErrControlPlaneReplicasRequired, http.StatusUnprocessableEntity},
 		"worker replicas required":        {strategies.ErrWorkerReplicasRequired, http.StatusUnprocessableEntity},

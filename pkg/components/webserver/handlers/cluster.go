@@ -14,6 +14,7 @@ type ClusterHandler struct {
 
 type ClusterCreateParams struct {
 	Name                 string `json:"name" validate:"required"`
+	Description          string `json:"description,omitempty" validate:"max=4000"`
 	ControlPlaneReplicas int32  `json:"control_plane_replicas" validate:"required,min=1"`
 	WorkerReplicas       int32  `json:"worker_replicas" validate:"required,min=1"`
 	ControlPlaneIP       string `json:"control_plane_ip" validate:"required,ip"`
@@ -43,6 +44,7 @@ type ClusterConfigResponse struct {
 
 type ClusterInfo struct {
 	Name                 string            `json:"name,omitempty"`
+	Description          string            `json:"description,omitempty"`
 	Phase                string            `json:"phase,omitempty"`
 	CreatedAt            string            `json:"created_at,omitempty"`
 	ControlPlaneEndpoint string            `json:"control_plane_endpoint,omitempty"`
@@ -153,6 +155,7 @@ func (k ClusterHandler) CreateCluster(c fuego.ContextWithBody[ClusterCreateParam
 func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterParams {
 	return strategies.CreateClusterParams{
 		Name:                 value.Name,
+		Description:          value.Description,
 		ControlPlaneReplicas: value.ControlPlaneReplicas,
 		WorkerReplicas:       value.WorkerReplicas,
 		ControlPlaneIP:       value.ControlPlaneIP,
@@ -164,6 +167,7 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
 		Name:                 value.Name,
+		Description:          value.Description,
 		Phase:                value.Phase,
 		CreatedAt:            value.CreatedAt,
 		ControlPlaneEndpoint: value.ControlPlaneEndpoint,

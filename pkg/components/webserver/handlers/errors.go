@@ -35,7 +35,8 @@ func toHTTPError(err error) error {
 	}
 
 	switch {
-	case errors.Is(err, strategies.ErrClusterNameRequired),
+	case errors.Is(err, strategies.ErrClusterDescriptionTooLong),
+		errors.Is(err, strategies.ErrClusterNameRequired),
 		errors.Is(err, strategies.ErrControlPlaneReplicasRequired),
 		errors.Is(err, strategies.ErrWorkerReplicasRequired),
 		errors.Is(err, strategies.ErrControlPlaneIPRequired),

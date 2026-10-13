@@ -238,13 +238,21 @@ curl --request POST http://127.0.0.1:8080/kubernetes/clusters/ \
     "control_plane_replicas": 3,
     "worker_replicas": 2,
     "control_plane_ip": "10.30.138.14",
-    "vm_name_prefix": "jls-capi-dev-"
+    "vm_name_prefix": "jls-capi-dev-",
+    "description": "Development cluster for the backend team"
   }'
 ```
 
 The HTTP API supplies the cluster name, replica counts, control-plane IPv4
-address, VM name prefix and tags. The `cluster-defaults` ConfigMap in
+address, VM name prefix, description and tags. The `cluster-defaults` ConfigMap in
 `--namespace` is read on each creation; changes affect new clusters only.
+
+The optional `description` accepts up to 4,000 Unicode code points, including
+quotes, accents, emojis and line breaks (escaped as required by JSON). Longer
+descriptions return HTTP 422. It is stored on the CAPI `Cluster` in the
+`vmk.vates.tech/description` annotation and returned in creation, detail and list
+responses. Empty descriptions and clusters without this annotation omit the
+response field.
 
 This example reproduces the test cluster configuration. If `my-cluster`
 already exists, creation returns 409. To create another cluster alongside it,

@@ -1,8 +1,12 @@
 package strategies
 
+// MaxClusterDescriptionLength limits descriptions in Unicode code points.
+const MaxClusterDescriptionLength = 4000
+
 // CreateClusterParams describes the minimal cluster creation intent.
 type CreateClusterParams struct {
 	Name                 string
+	Description          string
 	ControlPlaneReplicas int32
 	WorkerReplicas       int32
 	ControlPlaneIP       string
@@ -35,6 +39,7 @@ type CreateClusterResourceParams struct {
 	ControlPlaneIP       string
 	VMNamePrefix         string
 	Name                 string
+	Description          string
 	ControlPlaneReplicas *int32
 	MachineDeployments   []MachineDeployment
 	Tags                 map[string]string
@@ -48,6 +53,7 @@ type MachineDeployment struct {
 // ClusterInfo is the shared representation returned by cluster Strategies.
 type ClusterInfo struct {
 	Name                 string
+	Description          string
 	Phase                string
 	CreatedAt            string
 	Version              string

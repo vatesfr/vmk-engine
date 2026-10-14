@@ -44,6 +44,7 @@ type ClusterConfigResponse struct {
 }
 
 type ClusterInfo struct {
+	IsAvailable          *bool             `json:"is_available,omitempty"`
 	Name                 string            `json:"name,omitempty"`
 	Description          string            `json:"description,omitempty"`
 	Phase                string            `json:"phase,omitempty"`
@@ -170,6 +171,7 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
+		IsAvailable:          &value.IsAvailable,
 		Name:                 value.Name,
 		Description:          value.Description,
 		Phase:                value.Phase,

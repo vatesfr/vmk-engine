@@ -24,6 +24,11 @@ interface.
 - Kubernetes deployment through a Helm chart with namespace-scoped RBAC,
   probes, and optional Ingress and autoscaling.
 
+Cluster list and detail responses include `is_available`, which is `true` only
+when the CAPI Cluster `Available` condition is `True`. Missing, `False`, or
+`Unknown` conditions yield `false`. This field can also be selected with
+`GET /kubernetes/clusters?fields=name,is_available`.
+
 ## HTTP errors
 
 Request validation now returns **422 Unprocessable Entity** instead of 400.

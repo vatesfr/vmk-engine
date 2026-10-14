@@ -94,6 +94,35 @@ func TestClusterClientList(t *testing.T) {
 	})
 }
 
+func TestClusterAvailability(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		conditions []metav1.Condition
+		available  bool
+	}{
+		{name: "missing condition"},
+		{name: "available", conditions: []metav1.Condition{{Type: capiv1.ClusterAvailableCondition, Status: metav1.ConditionTrue}}, available: true},
+		{name: "unavailable", conditions: []metav1.Condition{{Type: capiv1.ClusterAvailableCondition, Status: metav1.ConditionFalse}}},
+		{name: "unknown", conditions: []metav1.Condition{{Type: capiv1.ClusterAvailableCondition, Status: metav1.ConditionUnknown}}},
+		{name: "unrelated condition", conditions: []metav1.Condition{{Type: capiv1.ClusterControlPlaneAvailableCondition, Status: metav1.ConditionTrue}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			cluster := &capiv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+				Status:     capiv1.ClusterStatus{Phase: provisionedPhase, Conditions: testCase.conditions},
+			}
+			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			info, err := clusterClient.Get(t.Context(), clusterName)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.available, info.IsAvailable)
+			clusters, err := clusterClient.List(t.Context())
+			require.NoError(t, err)
+			require.Len(t, clusters, 1)
+			assert.Equal(t, testCase.available, clusters[0].IsAvailable)
+		})
+	}
+}
+
 func TestClusterClientGet(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		cluster := &capiv1.Cluster{

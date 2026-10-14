@@ -12,6 +12,7 @@ import (
 	"capv-proxy/pkg/strategies"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -217,6 +218,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 	}
 
 	info := strategies.ClusterInfo{
+		IsAvailable:          apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
 		Name:                 value.GetName(),
 		Description:          value.Annotations[clusterDescriptionAnnotation],
 		Phase:                value.Status.Phase,

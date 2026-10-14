@@ -14,6 +14,8 @@ import (
 	"capv-proxy/pkg/components/webserver/handlers"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
+
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -81,6 +83,7 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
 			expected: []handlers.ClusterInfo{{
+				IsAvailable:          ptr.To(false),
 				Name:                 clusterName,
 				Phase:                clusterPhase,
 				ControlPlaneEndpoint: controlPlaneIP,
@@ -117,6 +120,7 @@ func TestGetCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: expectedServiceResult,
 			expected: handlers.ClusterInfo{
+				IsAvailable:          ptr.To(false),
 				Name:                 clusterName,
 				Phase:                clusterPhase,
 				ControlPlaneEndpoint: controlPlaneIP,
@@ -215,6 +219,7 @@ func TestCreateCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description},
 			expected: handlers.ClusterInfo{
+				IsAvailable:        ptr.To(false),
 				Name:               clusterName,
 				Description:        validBody.Description,
 				Phase:              clusterPhase,

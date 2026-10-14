@@ -129,16 +129,16 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clustersPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
-					{Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint},
+					{Name: clusterName, Phase: clusterPhase, IsAvailable: true, ControlPlaneEndpoint: controlPlaneEndpoint},
 					{Name: secondClusterName, Phase: secondClusterPhase},
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"name":"cluster-2","phase":"Provisioning",
+				{"isAvailable":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -157,16 +157,16 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clustersPath + "?fields=*",
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
-					{Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint},
+					{Name: clusterName, Phase: clusterPhase, IsAvailable: true, ControlPlaneEndpoint: controlPlaneEndpoint},
 					{Name: secondClusterName, Phase: secondClusterPhase},
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"name":"cluster-2","phase":"Provisioning",
+				{"isAvailable":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -186,6 +186,29 @@ func TestHTTPRoutes(t *testing.T) {
 				{"name":"cluster-2","control_plane_status":{"ready_replicas":0}}
 			]`,
 		},
+		"list clusters with selected availability": {
+			method: http.MethodGet,
+			path:   clustersPath + "?fields=name,is_available",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{
+					{Name: clusterName, IsAvailable: true},
+					{Name: secondClusterName, IsAvailable: false},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `[{"name":"cluster-1","is_available":true},{"name":"cluster-2","is_available":false}]`,
+		},
+		"get available cluster": {
+			method: http.MethodGet,
+			path:   getClusterPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON: `{"name":"cluster-1","is_available":true,
+				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
+		},
 		"get cluster": {
 			method: http.MethodGet,
 			path:   getClusterPath,
@@ -195,7 +218,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -226,7 +249,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1",
+			expectedJSON: `{"is_available":false,"name":"cluster-1",
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":1,
 					"versions":[{"version":"v1.36.0","replicas":1},{"version":"v1.35.0","replicas":2}]},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":4,
@@ -312,7 +335,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -326,7 +349,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","tags":{"environment":"production"},
+			expectedJSON: `{"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},

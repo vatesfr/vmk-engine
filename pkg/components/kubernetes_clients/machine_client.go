@@ -117,7 +117,9 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		}
 	}
 
+	_, paused := machine.Annotations[capiv1.PausedAnnotation]
 	return strategies.ClusterNodeInfo{
+		Paused:        paused,
 		Name:          machine.Name,
 		NodeName:      nodeName,
 		Role:          role,
@@ -179,6 +181,48 @@ func (m MachineClient) DeleteMachine(ctx context.Context, clusterName, machineNa
 			return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionConflict, err)
 		}
 		return fmt.Errorf("delete Machine %s: %w", key, err)
+	}
+	return nil
+}
+
+// SetMachinePaused changes only the Machine pause annotation. Membership is
+// checked against spec.clusterName, and the patch guards against reassignment.
+func (m MachineClient) SetMachinePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+	if clusterName == "" {
+		return strategies.ErrClusterNameRequired
+	}
+	if machineName == "" {
+		return strategies.ErrNodeNameRequired
+	}
+	if m.namespace == "" {
+		return strategies.ErrClusterNamespaceRequired
+	}
+	machine := &capiv1.Machine{}
+	key := client.ObjectKey{Namespace: m.namespace, Name: machineName}
+	if err := m.kubernetesClient.Get(ctx, key, machine); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
+		}
+		return fmt.Errorf("get Machine %s: %w", key, err)
+	}
+	if machine.Spec.ClusterName != clusterName {
+		return strategies.ErrNodeNotFound
+	}
+	value, present := machine.Annotations[capiv1.PausedAnnotation]
+	if (paused && present && value == "") || (!paused && !present) {
+		return nil
+	}
+	before := machine.DeepCopy()
+	if paused {
+		if machine.Annotations == nil {
+			machine.Annotations = make(map[string]string)
+		}
+		machine.Annotations[capiv1.PausedAnnotation] = ""
+	} else {
+		delete(machine.Annotations, capiv1.PausedAnnotation)
+	}
+	if err := m.kubernetesClient.Patch(ctx, machine, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+		return pausePatchError(err, strategies.ErrNodeNotFound)
 	}
 	return nil
 }

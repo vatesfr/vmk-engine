@@ -59,6 +59,8 @@ func toHTTPError(err error) error {
 		}
 	case errors.Is(err, strategies.ErrClusterScalingConflict):
 		return fuego.ConflictError{Err: err, Title: "Cluster scaling conflict", Detail: err.Error()}
+	case errors.Is(err, strategies.ErrPauseUpdateConflict):
+		return fuego.ConflictError{Err: err, Title: "Pause update conflict", Detail: strategies.ErrPauseUpdateConflict.Error()}
 	case errors.Is(err, strategies.ErrNodeDeletionConflict):
 		return fuego.ConflictError{Err: err, Title: "Node deletion conflict", Detail: strategies.ErrNodeDeletionConflict.Error()}
 	case errors.Is(err, strategies.ErrNodeNotFound):

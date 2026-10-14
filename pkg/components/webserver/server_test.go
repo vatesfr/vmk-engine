@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -136,10 +137,10 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"isAvailable":false,"name":"cluster-2","phase":"Provisioning",
+				{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -164,10 +165,10 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"isAvailable":false,"name":"cluster-2","phase":"Provisioning",
+				{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -206,7 +207,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"name":"cluster-1","is_available":true,
+			expectedJSON: `{"is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -219,7 +220,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -250,7 +251,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_available":false,"name":"cluster-1",
+			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":1,
 					"versions":[{"version":"v1.36.0","replicas":1},{"version":"v1.35.0","replicas":2}]},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":4,
@@ -290,7 +291,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `[{"name":"control-plane-0","role":"control-plane",` +
+			expectedJSON: `[{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
 				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"}]`,
 		},
 		"get cluster nodes with all fields": {
@@ -303,7 +304,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `[{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}]`,
+			expectedJSON:   `[{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}]`,
 		},
 		"get cluster nodes with selected fields": {
 			method: http.MethodGet,
@@ -336,7 +337,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -350,7 +351,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
+			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -693,8 +694,8 @@ func TestGetAllNodesHTTP(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"},
-				{"name":"worker-0","role":"worker","status":"NotReady","$cluster":"other-cluster"}
+				{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"},
+				{"is_reconciliation_paused":false,"name":"worker-0","role":"worker","status":"NotReady","$cluster":"other-cluster"}
 			]`,
 		},
 		"empty list": {
@@ -784,7 +785,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
 					}
 				},
-				expectedStatus: http.StatusOK, expectedJSON: `[{"name":"node-1","nodeName":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
+				expectedStatus: http.StatusOK, expectedJSON: `[{"is_reconciliation_paused":false,"name":"node-1","nodeName":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
 			})
 		})
 	}
@@ -880,6 +881,45 @@ func TestScalingHTTP(t *testing.T) {
 	}
 }
 
+func TestPauseHTTP(t *testing.T) {
+	for _, node := range []bool{false, true} {
+		for _, paused := range []bool{false, true} {
+			for _, tc := range []struct {
+				err    error
+				status int
+			}{
+				{nil, http.StatusNoContent},
+				{strategies.ErrClusterNotFound, http.StatusNotFound},
+				{strategies.ErrNodeNotFound, http.StatusNotFound},
+				{strategies.ErrPauseUpdateConflict, http.StatusConflict},
+				{strategies.ErrNodeNameRequired, http.StatusUnprocessableEntity},
+				{errTest, http.StatusInternalServerError},
+			} {
+				path, method := getClusterPath+"/reconciliation/resume", http.MethodPost
+				if node {
+					path = getClusterPath + "/nodes/node-1/reconciliation/resume"
+				}
+				if paused {
+					path = strings.TrimSuffix(path, "/reconciliation/resume") + "/reconciliation/pause"
+					method = http.MethodPost
+				}
+				t.Run(method+path+strconv.Itoa(tc.status), func(t *testing.T) {
+					executeHTTPTestCase(t, httpTestCase{
+						method: method, path: path, expectedStatus: tc.status,
+						setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+							if node {
+								service.EXPECT().SetClusterNodePaused(ctx, clusterName, "node-1", paused).Return(tc.err)
+							} else {
+								service.EXPECT().SetClusterPaused(ctx, clusterName, paused).Return(tc.err)
+							}
+						},
+					})
+				})
+			}
+		}
+	}
+}
+
 func TestScalingHTTPValidation(t *testing.T) {
 	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
 		for _, tc := range []struct {
@@ -931,5 +971,53 @@ func TestScalingOpenAPI(t *testing.T) {
 		}
 		require.NotNil(t, body)
 		assert.Contains(t, body.Required, "replicas")
+	}
+}
+
+func TestPauseOpenAPI(t *testing.T) {
+	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
+	for _, base := range []string{"/kubernetes/clusters/{id}", "/kubernetes/clusters/{id}/nodes/{nodeName}"} {
+		for _, endpoint := range []struct {
+			method string
+			suffix string
+		}{
+			{http.MethodPost, "/reconciliation/pause"},
+			{http.MethodPost, "/reconciliation/resume"},
+		} {
+			route := document.Paths.Find(base + endpoint.suffix)
+			require.NotNil(t, route)
+			operation := route.GetOperation(endpoint.method)
+			require.NotNil(t, operation)
+			require.Nil(t, operation.RequestBody)
+			require.Contains(t, operation.Description, "Cluster API controllers")
+			require.Contains(t, operation.Description, "does not suspend VMs or running workloads")
+			require.Nil(t, route.Delete)
+			require.Nil(t, route.Put)
+			for _, status := range []int{204, 404, 409, 422} {
+				require.NotNil(t, operation.Responses.Status(status))
+			}
+			require.Empty(t, operation.Responses.Status(http.StatusNoContent).Value.Content)
+		}
+	}
+}
+
+func TestReconciliationPausedFieldSelection(t *testing.T) {
+	for _, paused := range []bool{false, true} {
+		value := strconv.FormatBool(paused)
+		executeHTTPTestCase(t, httpTestCase{
+			method: http.MethodGet, path: clustersPath + "?fields=is_reconciliation_paused", expectedStatus: http.StatusOK,
+			expectedJSON: `[{"is_reconciliation_paused":` + value + `}]`,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{{Name: clusterName, Paused: paused}}, nil)
+			},
+		})
+		executeHTTPTestCase(t, httpTestCase{
+			method: http.MethodGet, path: clusterNodesPath + "?fields=is_reconciliation_paused", expectedStatus: http.StatusOK,
+			expectedJSON: `[{"is_reconciliation_paused":` + value + `}]`,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{Name: "node-1", Paused: paused}}, nil)
+			},
+		})
 	}
 }

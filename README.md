@@ -182,6 +182,40 @@ go run ./cmd/http_server --help
 With `--swagger-ui=disabled`, the user interface is disabled, but the
 specification remains available under `/swagger/openapi.json`.
 
+## Pause and resume CAPI reconciliation
+
+Pause controls CAPI reconciliation; it does not stop VMs or running workloads.
+The namespace is the one configured for the server.
+
+```sh
+# Pause and resume a cluster.
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/reconciliation/pause
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/reconciliation/resume
+
+# Pause and resume a Machine using its CAPI metadata.name (not its Node name or VM UUID).
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abc/reconciliation/pause
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abc/reconciliation/resume
+```
+
+These endpoints take no body and return `204 No Content` after the requested
+state is saved. Cluster pause sets `spec.paused: true`; resume removes that field.
+Machine pause sets `cluster.x-k8s.io/paused: ""`, overwriting any previous value;
+resume removes only that annotation. Other fields and annotations are preserved.
+Repeated requests for the same state succeed. A missing cluster or Machine, or a
+Machine belonging to another cluster, returns `404`; invalid parameters return
+`422`. Concurrent modification returns `409`; read the resource again and retry.
+
+Cluster and node responses include `is_reconciliation_paused`, including when it is `false`, and
+collection endpoints support `?fields=name,is_reconciliation_paused`. For clusters this reflects
+`spec.paused`; for nodes it reflects the Machine's own pause annotation, regardless
+of its value. A Machine without its own annotation may still be affected by its
+parent cluster's pause. Resuming a cluster preserves individual Machine pauses;
+resuming a Machine preserves the parent cluster's pause. A Cluster pause annotation
+set externally is also preserved: these endpoints control only `spec.paused`.
+
+Deleting a paused cluster retains the existing behavior: deletion is requested
+first, then its `spec.paused` field is cleared to allow controller cleanup.
+
 ## HTTP API
 
 Base URL: `http://localhost:8080`.
@@ -196,6 +230,10 @@ Base URL: `http://localhost:8080`.
 | `PUT` | `/kubernetes/clusters/{id}/workers/replicas` | Sets the desired worker count | Working |
 | `PUT` | `/kubernetes/clusters/{id}/control-plane/replicas` | Sets the desired control-plane count | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
+| `POST` | `/kubernetes/clusters/{id}/reconciliation/pause` | Pauses cluster reconciliation | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/reconciliation/resume` | Resumes cluster reconciliation | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/pause` | Pauses a CAPI Machine | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/resume` | Removes a CAPI Machine pause | Idempotent, returns `204` |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 | `GET` | `/kubernetes/nodes` | Returns all CAPI Machines in the namespace | Working |
@@ -592,7 +630,7 @@ The service uses the following minimum permissions in the target namespace:
 | API group | Resources | Verbs |
 | --- | --- | --- |
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
-| `cluster.x-k8s.io` | `machines` | `get`, `list`, `delete` |
+| `cluster.x-k8s.io` | `machines` | `get`, `list`, `delete`, `patch` |
 | core group | `secrets`, `configmaps` | `get` |
 | `cluster.x-k8s.io` | `machinedeployments` | `create`, `get`, `list`, `patch` |
 | `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |

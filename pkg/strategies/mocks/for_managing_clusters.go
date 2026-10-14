@@ -218,6 +218,34 @@ func (mr *MockForManagingClustersMockRecorder) GetClusters(ctx any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusters", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusters), ctx)
 }
 
+// SetClusterNodePaused mocks base method.
+func (m *MockForManagingClusters) SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetClusterNodePaused", ctx, clusterName, machineName, paused)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetClusterNodePaused indicates an expected call of SetClusterNodePaused.
+func (mr *MockForManagingClustersMockRecorder) SetClusterNodePaused(ctx, clusterName, machineName, paused any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterNodePaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterNodePaused), ctx, clusterName, machineName, paused)
+}
+
+// SetClusterPaused mocks base method.
+func (m *MockForManagingClusters) SetClusterPaused(ctx context.Context, name string, paused bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetClusterPaused", ctx, name, paused)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetClusterPaused indicates an expected call of SetClusterPaused.
+func (mr *MockForManagingClustersMockRecorder) SetClusterPaused(ctx, name, paused any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterPaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterPaused), ctx, name, paused)
+}
+
 // SetClusterTag mocks base method.
 func (m *MockForManagingClusters) SetClusterTag(ctx context.Context, clusterID, tag, value string) error {
 	m.ctrl.T.Helper()

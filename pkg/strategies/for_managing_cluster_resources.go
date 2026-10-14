@@ -6,6 +6,7 @@ import "context"
 type ForManagingClusterResources interface {
 	SetWorkerReplicas(ctx context.Context, name string, replicas int32) error
 	SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error
+	SetPaused(ctx context.Context, name string, paused bool) error
 	Create(ctx context.Context, params CreateClusterResourceParams) (ClusterInfo, error)
 	List(ctx context.Context) ([]ClusterInfo, error)
 	Get(ctx context.Context, name string) (ClusterInfo, error)

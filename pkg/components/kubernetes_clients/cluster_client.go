@@ -220,6 +220,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 	}
 
 	info := strategies.ClusterInfo{
+		Paused:               ptr.Deref(value.Spec.Paused, false),
 		IsAvailable:          apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
 		Name:                 value.GetName(),
 		Description:          value.Annotations[clusterDescriptionAnnotation],
@@ -557,6 +558,26 @@ func validateScalingObject(obj client.Object, cluster *capiv1.Cluster) error {
 	return nil
 }
 
+// SetPaused changes only the Cluster spec pause field.
+func (c ClusterClient) SetPaused(ctx context.Context, name string, paused bool) error {
+	cluster, err := c.getClusterResource(ctx, name)
+	if err != nil {
+		return err
+	}
+	if (paused && ptr.Deref(cluster.Spec.Paused, false)) || (!paused && cluster.Spec.Paused == nil) {
+		return nil
+	}
+	before := cluster.DeepCopy()
+	cluster.Spec.Paused = nil
+	if paused {
+		cluster.Spec.Paused = ptr.To(true)
+	}
+	if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+		return pausePatchError(err, strategies.ErrClusterNotFound)
+	}
+	return nil
+}
+
 func (c ClusterClient) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
 	cluster, err := c.scalingCluster(ctx, name, replicas)
 	if err != nil {
@@ -646,5 +667,16 @@ func (c ClusterClient) patchReplicas(ctx context.Context, obj, before client.Obj
 		return fmt.Errorf("patch replicas: %w", err)
 	default:
 		return nil
+	}
+}
+
+func pausePatchError(err, notFound error) error {
+	switch {
+	case apierrors.IsNotFound(err):
+		return fmt.Errorf("%w: %w", notFound, err)
+	case apierrors.IsConflict(err):
+		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateConflict, err)
+	default:
+		return fmt.Errorf("patch pause state: %w", err)
 	}
 }

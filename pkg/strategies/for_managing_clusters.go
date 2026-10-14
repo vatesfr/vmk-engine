@@ -10,6 +10,8 @@ import (
 type ForManagingClusters interface {
 	SetWorkerReplicas(ctx context.Context, name string, replicas int32) error
 	SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error
+	SetClusterPaused(ctx context.Context, name string, paused bool) error
+	SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error
 	CreateCluster(ctx context.Context, params CreateClusterParams) (ClusterInfo, error)
 	GetClusters(ctx context.Context) ([]ClusterInfo, error)
 	GetCluster(ctx context.Context, name string) (ClusterInfo, error)
@@ -26,6 +28,7 @@ type ForManagingClusters interface {
 }
 
 type ClusterNodeInfo struct {
+	Paused        bool
 	Name          string
 	NodeName      string
 	Role          string

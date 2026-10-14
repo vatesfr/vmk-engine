@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"capv-proxy/pkg/strategies"
@@ -467,4 +468,30 @@ func TestDeleteMachineUsesResourceName(t *testing.T) {
 			require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(other), &capiv1.Machine{}))
 		})
 	}
+}
+
+func TestPauseMachineWithoutAnnotations(t *testing.T) {
+	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+	kube := newFakeClient(t, machine)
+	require.NoError(t, NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true))
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+	require.Contains(t, machine.Annotations, capiv1.PausedAnnotation)
+}
+
+func TestPauseRejectsConcurrentMachineReassignment(t *testing.T) {
+	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+	kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(machine).WithInterceptorFuncs(interceptor.Funcs{
+		Patch: func(ctx context.Context, underlying client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			current := &capiv1.Machine{}
+			require.NoError(t, underlying.Get(ctx, client.ObjectKeyFromObject(obj), current))
+			current.Spec.ClusterName = otherClusterName
+			require.NoError(t, underlying.Update(ctx, current))
+			return underlying.Patch(ctx, obj, patch, opts...)
+		},
+	}).Build()
+	err := NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true)
+	require.ErrorIs(t, err, strategies.ErrPauseUpdateConflict)
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+	require.Equal(t, otherClusterName, machine.Spec.ClusterName)
+	require.NotContains(t, machine.Annotations, capiv1.PausedAnnotation)
 }

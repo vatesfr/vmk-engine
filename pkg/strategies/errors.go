@@ -13,6 +13,8 @@ var (
 	ErrInvalidControlPlaneReplicas            = errors.New("control plane replicas must be odd when using stacked etcd")
 	ErrClusterScalingConflict                 = errors.New("cluster cannot be scaled in its current configuration or state")
 	ErrClusterScalingFailed                   = errors.New("failed to set cluster replicas")
+	ErrPauseUpdateConflict                    = errors.New("resource changed during pause update; retry the request")
+	ErrPauseUpdateFailed                      = errors.New("failed to update pause state")
 	ErrClusterDescriptionTooLong              = errors.New("cluster description must not exceed 4000 characters")
 	ErrNodeDeletionConflict                   = errors.New("node changed during deletion; retry the request")
 	ErrNodeNameRequired                       = errors.New("node name is required")

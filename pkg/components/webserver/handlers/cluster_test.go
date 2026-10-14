@@ -83,6 +83,7 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 			}},
 			expected: []handlers.ClusterInfo{{
+				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
 				Name:                 clusterName,
 				Phase:                clusterPhase,
@@ -120,6 +121,7 @@ func TestGetCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: expectedServiceResult,
 			expected: handlers.ClusterInfo{
+				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
 				Name:                 clusterName,
 				Phase:                clusterPhase,
@@ -155,7 +157,8 @@ func TestGetClusterNodesInfo(t *testing.T) {
 				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
 			}},
 			expected: []handlers.ClusterNodeInfo{{
-				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+				Paused: ptr.To(false),
+				Name:   nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
 			}},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -219,6 +222,7 @@ func TestCreateCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description},
 			expected: handlers.ClusterInfo{
+				Paused:             ptr.To(false),
 				IsAvailable:        ptr.To(false),
 				Name:               clusterName,
 				Description:        validBody.Description,
@@ -374,8 +378,8 @@ func TestGetAllNodes(t *testing.T) {
 				{Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 			expected: []handlers.ClusterNodeInfo{
-				{Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
-				{Name: "worker-0", Role: "worker", Status: "NotReady"},
+				{Paused: ptr.To(false), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
+				{Paused: ptr.To(false), Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 		},
 		"empty result":                      {serviceResult: []strategies.ClusterNodeInfo{}, expected: []handlers.ClusterNodeInfo{}},

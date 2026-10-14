@@ -607,3 +607,29 @@ func TestCreateClusterUsesInjectedVersionStrategy(t *testing.T) {
 	_, err := manager.CreateCluster(t.Context(), params)
 	require.NoError(t, err)
 }
+
+func TestSetPaused(t *testing.T) {
+	for _, paused := range []bool{true, false} {
+		ctrl := gomock.NewController(t)
+		resources := mocks.NewMockForManagingClusterResources(ctrl)
+		machines := mocks.NewMockForManagingClusterMachines(ctrl)
+		manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil)
+		resources.EXPECT().SetPaused(t.Context(), clusterName, paused).Return(nil)
+		require.NoError(t, manager.SetClusterPaused(t.Context(), clusterName, paused))
+		gomock.InOrder(
+			resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, nil),
+			machines.EXPECT().SetMachinePaused(t.Context(), clusterName, deleteNodeName, paused).Return(nil),
+		)
+		require.NoError(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused))
+		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), "", paused), strategies.ErrClusterNameRequired)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), "", deleteNodeName, paused), strategies.ErrClusterNameRequired)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, "", paused), strategies.ErrNodeNameRequired)
+		resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused), strategies.ErrClusterNotFound)
+		resources.EXPECT().SetPaused(t.Context(), clusterName, paused).Return(strategies.ErrPauseUpdateConflict)
+		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), clusterName, paused), strategies.ErrPauseUpdateConflict)
+		resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, nil)
+		machines.EXPECT().SetMachinePaused(t.Context(), clusterName, deleteNodeName, paused).Return(strategies.ErrPauseUpdateConflict)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused), strategies.ErrPauseUpdateConflict)
+	}
+}

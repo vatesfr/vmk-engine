@@ -167,10 +167,24 @@ func (m *MockForManagingClusterResources) SetControlPlaneReplicas(ctx context.Co
 	return ret0
 }
 
+// SetPaused mocks base method.
+func (m *MockForManagingClusterResources) SetPaused(ctx context.Context, name string, paused bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPaused", ctx, name, paused)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
 // SetControlPlaneReplicas indicates an expected call of SetControlPlaneReplicas.
 func (mr *MockForManagingClusterResourcesMockRecorder) SetControlPlaneReplicas(ctx, name, replicas any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetControlPlaneReplicas), ctx, name, replicas)
+}
+
+// SetPaused indicates an expected call of SetPaused.
+func (mr *MockForManagingClusterResourcesMockRecorder) SetPaused(ctx, name, paused any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPaused", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetPaused), ctx, name, paused)
 }
 
 // SetTag mocks base method.

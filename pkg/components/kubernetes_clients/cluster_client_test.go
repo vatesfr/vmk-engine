@@ -27,40 +27,44 @@ import (
 )
 
 const (
-	scalingNoopCase       = "noop"
-	scalingListCase       = "list failure"
-	scalingGoneCase       = "target disappeared"
-	scalingAdmissionCase  = "admission rejection"
-	scalingGetCase        = "get failure"
-	scalingOtherCluster   = "unrelated-cluster"
-	scalingFinalizer      = "scaling-test"
-	scalingConflictCase   = "concurrent change"
-	scalingTarget         = "scaling-resource"
-	otherK8sVersion       = "v1.35.0"
-	k8sVersion            = "v1.32.0"
-	clusterName           = "test-cluster"
-	testNamespace         = "capv"
-	provisionedPhase      = "Provisioned"
-	provisioningPhase     = "Provisioning"
-	caseEmptyName         = "empty name"
-	caseEmptyNamespace    = "empty namespace"
-	errClusterName        = "cluster name is required"
-	errClusterNamespace   = "cluster namespace is required"
-	errNotFound           = "not found"
-	caseEmptyTagValue     = "empty value"
-	testTagLabelPrefix    = "tags.vmk.vates.tech/"
-	ownerTag              = "owner"
-	platformValue         = "platform"
-	productionValue       = "production"
-	testCluster           = "demo"
-	testCreationNamespace = "default"
-	testVersion           = "v1.36.1"
-	testPodCIDR           = "172.31.0.0/16"
-	testControlPlane      = "demo-cp"
-	testOriginalPrefix    = "original"
-	testServiceCIDR       = "192.168.0.0/16"
-	testDomain            = "cluster.local"
-	testWorkerName        = "md-0"
+	scalingNoopCase          = "noop"
+	scalingListCase          = "list failure"
+	scalingGoneCase          = "target disappeared"
+	scalingAdmissionCase     = "admission rejection"
+	scalingGetCase           = "get failure"
+	scalingOtherCluster      = "unrelated-cluster"
+	scalingFinalizer         = "scaling-test"
+	scalingConflictCase      = "concurrent change"
+	scalingTarget            = "scaling-resource"
+	otherK8sVersion          = "v1.35.0"
+	k8sVersion               = "v1.32.0"
+	clusterName              = "test-cluster"
+	testNamespace            = "capv"
+	provisionedPhase         = "Provisioned"
+	provisioningPhase        = "Provisioning"
+	caseEmptyName            = "empty name"
+	caseEmptyNamespace       = "empty namespace"
+	errClusterName           = "cluster name is required"
+	errClusterNamespace      = "cluster namespace is required"
+	errNotFound              = "not found"
+	caseEmptyTagValue        = "empty value"
+	testTagLabelPrefix       = "tags.vmk.vates.tech/"
+	ownerTag                 = "owner"
+	platformValue            = "platform"
+	productionValue          = "production"
+	testCluster              = "demo"
+	testCreationNamespace    = "default"
+	testVersion              = "v1.36.1"
+	testPodCIDR              = "172.31.0.0/16"
+	testControlPlane         = "demo-cp"
+	testOriginalPrefix       = "original"
+	testServiceCIDR          = "192.168.0.0/16"
+	testDomain               = "cluster.local"
+	testWorkerName           = "md-0"
+	kubeVIP                  = "kube-vip"
+	ciliumCNI                = "cilium"
+	pauseMachineResource     = "machines"
+	preservedAnnotationValue = "preserved"
 )
 
 var errTest = errors.New("test error")
@@ -817,11 +821,6 @@ func TestRenderBootstrapCommands(t *testing.T) {
 	require.Error(t, renderBootstrapCommands(map[string]any{commandsKey: []any{int64(1)}}, "v1.36.2", "10.0.0.8"))
 }
 
-const (
-	kubeVIP   = "kube-vip"
-	ciliumCNI = "cilium"
-)
-
 func scalingObjects() (*capiv1.Cluster, *capiv1.MachineDeployment, *unstructured.Unstructured) {
 	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: testNamespace, UID: "cluster-uid"}}
 	cluster.Spec.ControlPlaneRef = capiv1.ContractVersionedObjectReference{APIGroup: cpGroup, Kind: controlPlaneKind, Name: "custom-cp"}
@@ -1108,4 +1107,91 @@ func TestScalingMissingClusterAndNamespace(t *testing.T) {
 	require.ErrorIs(t, service.SetControlPlaneReplicas(t.Context(), "", 3), strategies.ErrClusterNameRequired)
 	service.namespace = ""
 	require.ErrorIs(t, service.SetWorkerReplicas(t.Context(), "demo", 3), strategies.ErrClusterNamespaceRequired)
+}
+
+func TestPauseRoundTrip(t *testing.T) {
+	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Annotations: map[string]string{"keep": preservedAnnotationValue}}}
+	machine := &capiv1.Machine{
+		ObjectMeta: metav1.ObjectMeta{Name: deleteMachineName, Namespace: testNamespace, Annotations: map[string]string{"keep": preservedAnnotationValue, capiv1.PausedAnnotation: "old"}},
+		Spec:       capiv1.MachineSpec{ClusterName: clusterName},
+	}
+	kube := newFakeClient(t, cluster, machine)
+	clusters := NewClusterClient(kube, testNamespace)
+	machines := NewMachineClient(kube, testNamespace)
+	for _, paused := range []bool{true, true, false, false} {
+		require.NoError(t, clusters.SetPaused(t.Context(), clusterName, paused))
+		require.NoError(t, machines.SetMachinePaused(t.Context(), clusterName, machine.Name, paused))
+		require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(cluster), cluster))
+		require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+		require.Equal(t, paused, toInfo(cluster).Paused)
+		require.Equal(t, paused, toClusterNodeInfo(machine).Paused)
+		require.Equal(t, preservedAnnotationValue, cluster.Annotations["keep"])
+		require.Equal(t, preservedAnnotationValue, machine.Annotations["keep"])
+		value, present := machine.Annotations[capiv1.PausedAnnotation]
+		require.Equal(t, paused, present)
+		require.Empty(t, value)
+		if !paused {
+			require.Nil(t, cluster.Spec.Paused)
+		}
+	}
+}
+
+func TestResumeClusterPreservesMachinePause(t *testing.T) {
+	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}, Spec: capiv1.ClusterSpec{Paused: ptr.To(true)}}
+	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+	machine.Annotations = map[string]string{capiv1.PausedAnnotation: ""}
+	kube := newFakeClient(t, cluster, machine)
+	require.NoError(t, NewClusterClient(kube, testNamespace).SetPaused(t.Context(), clusterName, false))
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+	require.True(t, toClusterNodeInfo(machine).Paused)
+}
+
+func TestPauseValidation(t *testing.T) {
+	machine := machineWithStatus(deleteMachineName, testNamespace, otherClusterName, false, "")
+	machine.Labels[capiv1.ClusterNameLabel] = clusterName
+	kube := newFakeClient(t, machine)
+	clusters := NewClusterClient(kube, testNamespace)
+	machines := NewMachineClient(kube, testNamespace)
+	for _, paused := range []bool{true, false} {
+		require.ErrorIs(t, clusters.SetPaused(t.Context(), "", paused), strategies.ErrClusterNameRequired)
+		require.ErrorIs(t, NewClusterClient(kube, "").SetPaused(t.Context(), clusterName, paused), strategies.ErrClusterNamespaceRequired)
+		require.ErrorIs(t, clusters.SetPaused(t.Context(), clusterName, paused), strategies.ErrClusterNotFound)
+		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), "", machine.Name, paused), strategies.ErrClusterNameRequired)
+		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, "", paused), strategies.ErrNodeNameRequired)
+		require.ErrorIs(t, NewMachineClient(kube, "").SetMachinePaused(t.Context(), clusterName, machine.Name, paused), strategies.ErrClusterNamespaceRequired)
+		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, "missing", paused), strategies.ErrNodeNotFound)
+		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, machine.Name, paused), strategies.ErrNodeNotFound)
+	}
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+	require.Empty(t, machine.Annotations)
+}
+
+func TestPausePatchErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		err, want error
+	}{
+		{"conflict", apierrors.NewConflict(schema.GroupResource{Group: capiv1.GroupVersion.Group, Resource: pauseMachineResource}, deleteMachineName, errTest), strategies.ErrPauseUpdateConflict},
+		{"not found", apierrors.NewNotFound(schema.GroupResource{Group: capiv1.GroupVersion.Group, Resource: pauseMachineResource}, deleteMachineName), nil},
+		{"failure", errTest, errTest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
+			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+			kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(cluster, machine).WithInterceptorFuncs(interceptor.Funcs{
+				Patch: func(_ context.Context, _ client.WithWatch, obj client.Object, patch client.Patch, _ ...client.PatchOption) error {
+					data, err := patch.Data(obj)
+					require.NoError(t, err)
+					require.Contains(t, string(data), `"resourceVersion"`)
+					return tc.err
+				},
+			}).Build()
+			clusterWant, machineWant := tc.want, tc.want
+			if tc.want == nil {
+				clusterWant, machineWant = strategies.ErrClusterNotFound, strategies.ErrNodeNotFound
+			}
+			require.ErrorIs(t, NewClusterClient(kube, testNamespace).SetPaused(t.Context(), clusterName, true), clusterWant)
+			require.ErrorIs(t, NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true), machineWant)
+		})
+	}
 }

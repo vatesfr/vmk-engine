@@ -272,3 +272,19 @@ autoscaler annotations yield 409. Invalid counts yield 422; an absent Cluster yi
 404. Infrastructure errors retain their technical causes internally and yield 500.
 The namespace-scoped RBAC grants get/list/patch on MachineDeployments and get/patch
 on KubeadmControlPlanes in addition to their existing create permission.
+
+## Pause and resume CAPI reconciliation
+
+`POST` on `/kubernetes/clusters/{id}/reconciliation/pause` and
+`/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/pause` pauses reconciliation.
+`POST` on `/kubernetes/clusters/{id}/reconciliation/resume` and
+`/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/resume` resumes it. These routes invoke the pause setters through
+ClusterHandler and ClusterManager. ClusterClient patches only `spec.paused`;
+MachineClient patches only `cluster.x-k8s.io/paused`, after checking membership
+with `spec.clusterName`. Patches include an optimistic resourceVersion lock;
+conflicts are exposed as HTTP 409. The configured namespace scopes both operations.
+
+The `Paused` field in the shared models and `is_reconciliation_paused` in HTTP DTOs report each resource's
+configured pause independently. Resuming a cluster does not remove individual
+Machine annotations, and resuming a Machine does not change the cluster spec.
+Existing cluster deletion still clears spec pause after requesting deletion.

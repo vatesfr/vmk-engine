@@ -207,3 +207,29 @@ func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterName, node
 	}
 	return nil
 }
+
+func (c ClusterManager) SetClusterPaused(ctx context.Context, name string, paused bool) error {
+	if err := validateClusterName(name); err != nil {
+		return err
+	}
+	if err := c.clusterResources.SetPaused(ctx, name, paused); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
+	}
+	return nil
+}
+
+func (c ClusterManager) SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+	if err := validateClusterName(clusterName); err != nil {
+		return err
+	}
+	if machineName == "" {
+		return strategies.ErrNodeNameRequired
+	}
+	if _, err := c.clusterResources.Get(ctx, clusterName); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
+	}
+	if err := c.clusterMachines.SetMachinePaused(ctx, clusterName, machineName, paused); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
+	}
+	return nil
+}

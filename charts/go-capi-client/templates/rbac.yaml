@@ -24,7 +24,7 @@ rules:
     verbs: ["get", "list", "create", "delete", "patch"]
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["machines"]
-    verbs: ["get", "list", "delete"]
+    verbs: ["get", "list", "delete", "patch"]
   - apiGroups: [""]
     resources: ["secrets", "configmaps"]
     verbs: ["get"]

@@ -48,6 +48,7 @@ type ClusterConfigResponse struct {
 }
 
 type ClusterInfo struct {
+	Paused               *bool             `json:"is_reconciliation_paused,omitempty" description:"Whether Cluster API reconciliation is paused via spec.paused. VMs and workloads continue running"`
 	IsAvailable          *bool             `json:"is_available,omitempty"`
 	Name                 string            `json:"name,omitempty"`
 	Description          string            `json:"description,omitempty"`
@@ -90,6 +91,7 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 }
 
 type ClusterNodeInfo struct {
+	Paused        *bool      `json:"is_reconciliation_paused,omitempty" description:"Machine CAPI reconciliation pause; independent of cluster pause. VMs and workloads keep running"`
 	Name          string     `json:"name,omitempty"`
 	NodeName      string     `json:"nodeName,omitempty"`
 	Role          string     `json:"role,omitempty"`
@@ -176,6 +178,7 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
 		IsAvailable:          &value.IsAvailable,
+		Paused:               &value.Paused,
 		Name:                 value.Name,
 		Description:          value.Description,
 		Phase:                value.Phase,
@@ -197,6 +200,7 @@ func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
 			Endpoint:      node.Endpoint,
 			NodeID:        node.MachineID,
 			ParentCluster: node.ParentCluster,
+			Paused:        &node.Paused,
 		}
 	})
 }
@@ -290,4 +294,27 @@ func (k ClusterHandler) SetControlPlaneReplicas(c fuego.ContextWithBody[ClusterR
 		return nil, toHTTPError(err)
 	}
 	return nil, nil
+}
+
+func (k ClusterHandler) PauseCluster(c fuego.ContextNoBody) (any, error) {
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), c.PathParam("id"), true))
+}
+
+func (k ClusterHandler) ResumeCluster(c fuego.ContextNoBody) (any, error) {
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), c.PathParam("id"), false))
+}
+
+func (k ClusterHandler) PauseClusterNode(c fuego.ContextNoBody) (any, error) {
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), c.PathParam("id"), c.PathParam("nodeName"), true))
+}
+
+func (k ClusterHandler) ResumeClusterNode(c fuego.ContextNoBody) (any, error) {
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), c.PathParam("id"), c.PathParam("nodeName"), false))
+}
+
+func toHTTPErrorOrNil(err error) error {
+	if err == nil {
+		return nil
+	}
+	return toHTTPError(err)
 }

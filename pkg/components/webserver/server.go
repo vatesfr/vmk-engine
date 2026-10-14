@@ -115,6 +115,19 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		noContentResponse(), notFoundResponse("Cluster or node not found"), validationResponse(),
 	)
 
+	fuego.Post(clusterRouter, "/{id}/reconciliation/pause", clusterHandler.PauseCluster,
+		pauseRouteOptions("Pause cluster reconciliation")...,
+	)
+	fuego.Post(clusterRouter, "/{id}/reconciliation/resume", clusterHandler.ResumeCluster,
+		pauseRouteOptions("Resume cluster reconciliation")...,
+	)
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeName}/reconciliation/pause", clusterHandler.PauseClusterNode,
+		pauseRouteOptions("Pause Machine reconciliation by CAPI Machine name")...,
+	)
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeName}/reconciliation/resume", clusterHandler.ResumeClusterNode,
+		pauseRouteOptions("Remove the Machine pause annotation; the parent cluster may remain paused")...,
+	)
+
 	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags, notFoundResponse("Cluster not found"))
 	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
 	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag,
@@ -151,5 +164,14 @@ func noContentResponse() fuego.RouteOption {
 		r.Operation.AddResponse(http.StatusNoContent, openapi3.NewResponse().
 			WithDescription(http.StatusText(http.StatusNoContent)).
 			WithContent(openapi3.Content{}))
+	}
+}
+
+func pauseRouteOptions(description string) []fuego.RouteOption {
+	return []fuego.RouteOption{
+		fuego.OptionDescription(description + ". Only affects reconciliation by Cluster API controllers; does not suspend VMs or running workloads."),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster or node not found"), validationResponse(),
+		fuego.OptionAddResponse(http.StatusConflict, "Resource changed during pause update; retry", fuego.Response{Type: fuego.HTTPError{}}),
 	}
 }

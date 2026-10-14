@@ -84,3 +84,17 @@ func (mr *MockForManagingClusterMachinesMockRecorder) GetMachinesByCluster(ctx, 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachinesByCluster", reflect.TypeOf((*MockForManagingClusterMachines)(nil).GetMachinesByCluster), ctx, clusterName)
 }
+
+// SetMachinePaused mocks base method.
+func (m *MockForManagingClusterMachines) SetMachinePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetMachinePaused", ctx, clusterName, machineName, paused)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetMachinePaused indicates an expected call of SetMachinePaused.
+func (mr *MockForManagingClusterMachinesMockRecorder) SetMachinePaused(ctx, clusterName, machineName, paused any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMachinePaused", reflect.TypeOf((*MockForManagingClusterMachines)(nil).SetMachinePaused), ctx, clusterName, machineName, paused)
+}

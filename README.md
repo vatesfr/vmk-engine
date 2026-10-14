@@ -193,6 +193,8 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
+| `PUT` | `/kubernetes/clusters/{id}/workers/replicas` | Sets the desired worker count | Working |
+| `PUT` | `/kubernetes/clusters/{id}/control-plane/replicas` | Sets the desired control-plane count | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
@@ -411,7 +413,68 @@ returns `404`; an empty cluster or node name at the service boundary returns
 
 This operation deletes an individual node without changing the desired
 replica count. Its owning controller can create a replacement. To permanently
-reduce cluster capacity, the owner must be scaled separately.
+reduce cluster capacity, use the replicas endpoints below.
+
+### Changing replica counts
+
+Set the number of workers:
+
+```bash
+curl --request PUT \
+  http://127.0.0.1:8080/kubernetes/clusters/demo/workers/replicas \
+  --header 'Content-Type: application/json' \
+  --data '{"replicas":3}'
+```
+
+Set the number of control-plane machines independently:
+
+```bash
+curl --request PUT \
+  http://127.0.0.1:8080/kubernetes/clusters/demo/control-plane/replicas \
+  --header 'Content-Type: application/json' \
+  --data '{"replicas":3}'
+```
+
+Both endpoints require an integer `replicas` between 1 and 2147483647. Zero
+workers are not supported. With stacked etcd, the control-plane count must be
+odd; external-etcd control planes may use an even count. The service reads
+etcd configuration from the existing KubeadmControlPlane, not creation defaults.
+
+A successful call returns `204 No Content` once Kubernetes confirms the desired
+count was written, including when that count was already set. CAPI reconciles
+machines asynchronously and performs its normal drain and cleanup on scale-down.
+The service changes only `spec.replicas`; it does not select individual machines
+for deletion. Use `GET /kubernetes/clusters/demo` and
+`GET /kubernetes/clusters/demo/nodes` to follow progress. Cluster status, including
+`desired_replicas`, may temporarily lag behind the accepted request.
+
+This first version supports clusters without `spec.topology`, with exactly one
+worker MachineDeployment and a KubeadmControlPlane. Workers are discovered in the
+configured namespace using the cluster label and verified against `spec.clusterName`;
+the control plane is resolved through `spec.controlPlaneRef`, without assuming
+resource name suffixes. Cluster owner references, when present, must match the
+current Cluster UID. Worker deployments with either CAPI autoscaler size
+annotation cannot be scaled through these endpoints.
+
+| Code | Meaning |
+| --- | --- |
+| `400` | Malformed JSON, incompatible type, integer overflow, or unknown field |
+| `404` | Cluster not found |
+| `409` | Cluster/target paused or deleting, unsupported topology/provider, absent or ambiguous target, autoscaler management, ownership mismatch, or concurrent target change |
+| `422` | Missing/null replicas (including an empty body), count below 1, invalid stacked-etcd parity, or Kubernetes admission rejecting the count |
+| `500` | Unexpected Kubernetes or service configuration error |
+
+Patches include the target's `resourceVersion`. A concurrent change returns
+`409` without automatic retries. Read the current state before submitting the
+same desired count again. A timeout can leave the write outcome uncertain;
+inspect the state before retrying. Each route performs at most one write, so
+there is no cross-resource rollback. The Cluster and target state checks are
+reads, not a transaction across resources: another actor can change the Cluster
+or add a worker group between validation and the target patch.
+
+The routes use the existing HTTP middleware; `AuthRequired` currently forwards
+requests without enforcing authentication. RBAC permissions must be upgraded
+along with the service (see Required RBAC permissions below).
 
 Each node entry includes a `node_id` field when the CAPI `Machine` exposes a
 Xen Orchestra `providerID` (for example `xenorchestra://<pool>/<vm-uuid>`). The
@@ -531,9 +594,9 @@ The service uses the following minimum permissions in the target namespace:
 | `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
 | `cluster.x-k8s.io` | `machines` | `get`, `list`, `delete` |
 | core group | `secrets`, `configmaps` | `get` |
-| `cluster.x-k8s.io` | `machinedeployments` | `create` |
+| `cluster.x-k8s.io` | `machinedeployments` | `create`, `get`, `list`, `patch` |
 | `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |
-| `controlplane.cluster.x-k8s.io` | `kubeadmcontrolplanes` | `create` |
+| `controlplane.cluster.x-k8s.io` | `kubeadmcontrolplanes` | `create`, `get`, `patch` |
 | `bootstrap.cluster.x-k8s.io` | `kubeadmconfigtemplates` | `create` |
 
 Secret access allows the service to read kubeconfigs. Treat the ServiceAccount

@@ -22,6 +22,7 @@ import (
 )
 
 const (
+	scalingWorkerTarget            = "workers"
 	k8sVersion                     = "v1.36.0"
 	clusterNotFoundTitle           = "Cluster not found"
 	productionValue                = "production"
@@ -845,5 +846,90 @@ func TestCreateClusterHTTPRejectsInvalidParameters(t *testing.T) {
 			assert.Contains(t, problem.Detail, tc.value)
 			assert.Contains(t, problem.Detail, tc.detail)
 		})
+	}
+}
+
+func TestScalingHTTP(t *testing.T) {
+	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
+		for _, tc := range []struct {
+			name   string
+			err    error
+			status int
+		}{
+			{"success", nil, http.StatusNoContent},
+			{"not found", fmt.Errorf("wrapped: %w", strategies.ErrClusterNotFound), http.StatusNotFound},
+			{"conflict", strategies.ErrClusterScalingConflict, http.StatusConflict},
+			{"invalid", strategies.ErrInvalidReplicas, http.StatusUnprocessableEntity},
+			{"etcd parity", strategies.ErrInvalidControlPlaneReplicas, http.StatusUnprocessableEntity},
+			{"admission rejected", fmt.Errorf("%w: %w", strategies.ErrReplicasRejected, errTest), http.StatusUnprocessableEntity},
+			{"technical error", errTest, http.StatusInternalServerError},
+		} {
+			t.Run(target+"/"+tc.name, func(t *testing.T) {
+				executeHTTPTestCase(t, httpTestCase{
+					method: http.MethodPut, path: clustersPath + "/demo/" + target + "/replicas", body: `{"replicas":3}`, expectedStatus: tc.status,
+					setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+						if target == "workers" {
+							service.EXPECT().SetWorkerReplicas(ctx, "demo", int32(3)).Return(tc.err)
+						} else {
+							service.EXPECT().SetControlPlaneReplicas(ctx, "demo", int32(3)).Return(tc.err)
+						}
+					},
+				})
+			})
+		}
+	}
+}
+
+func TestScalingHTTPValidation(t *testing.T) {
+	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
+		for _, tc := range []struct {
+			body   string
+			status int
+		}{
+			{`{}`, 422},
+			{`{"replicas":null}`, 422},
+			{`{"replicas":0}`, 422},
+			{`{"replicas":-1}`, 422},
+			{``, 422},
+			{`{`, 400},
+			{`{"replicas":"3"}`, 400},
+			{`{"replicas":1.5}`, 400},
+			{`{"replicas":2147483648}`, 400},
+			{`{"replicas":3,"unknown":true}`, 400},
+		} {
+			t.Run(target+"/"+tc.body, func(t *testing.T) {
+				executeHTTPTestCase(t, httpTestCase{method: http.MethodPut, path: clustersPath + "/demo/" + target + "/replicas", body: tc.body, expectedStatus: tc.status})
+			})
+		}
+	}
+}
+
+func TestScalingOpenAPI(t *testing.T) {
+	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
+	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
+		route := document.Paths.Find("/kubernetes/clusters/{id}/" + target + "/replicas")
+		require.NotNil(t, route)
+		require.NotNil(t, route.Put)
+		require.Nil(t, route.Post)
+		require.NotNil(t, route.Put.RequestBody)
+		for _, status := range []int{204, 400, 404, 409, 422} {
+			require.NotNil(t, route.Put.Responses.Status(status))
+		}
+		assert.Empty(t, route.Put.Responses.Status(204).Value.Content)
+		parameter := route.Put.Parameters.GetByInAndName("path", "id")
+		require.NotNil(t, parameter)
+		assert.True(t, parameter.Required)
+		requestBody := route.Put.RequestBody.Value
+		require.NotNil(t, requestBody)
+		media := requestBody.Content.Get("application/json")
+		require.NotNil(t, media, "content: %v", requestBody.Content)
+		schema := media.Schema
+		body := schema.Value
+		if body == nil {
+			body = document.Components.Schemas[strings.TrimPrefix(schema.Ref, "#/components/schemas/")].Value
+		}
+		require.NotNil(t, body)
+		assert.Contains(t, body.Required, "replicas")
 	}
 }

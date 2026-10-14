@@ -244,3 +244,31 @@ errors use node terminology. Node responses expose `name` (the stable resource
 name), optional `nodeName` (the registered Node name from `status.nodeRef.name`),
 and `node_id` (the provider VM UUID). The Node name is descriptive and is not
 used to address deletion requests.
+
+## Replica updates
+
+Two independent PUT endpoints under `/kubernetes/clusters/{id}` set desired
+counts: `/workers/replicas` and `/control-plane/replicas`. Both accept
+`{"replicas":3}` and return an empty 204 after Kubernetes acknowledges the write.
+The existing Cluster and node GET endpoints expose asynchronous convergence;
+Cluster status can lag behind the accepted desired count.
+
+Handlers validate a required `*int32`, ClusterManager validates the application
+parameters, and ClusterClient resolves and patches a single target. Workers use
+the cluster label plus `spec.clusterName` and require exactly one MachineDeployment.
+Control planes use `spec.controlPlaneRef` and require KubeadmControlPlane v1beta2.
+Existing Cluster owner references must match the current Cluster UID. The existing
+unstructured control-plane representation avoids adding another API dependency.
+
+Only `spec.replicas` changes, using an optimistic merge patch with resourceVersion.
+Same-value requests skip the write. Concurrent target changes yield 409; there are
+no automatic retries or cross-resource rollbacks. Read-side checks of the Cluster
+and worker group membership are not atomic with the target patch.
+
+Counts start at one; stacked-etcd control planes require odd counts, as determined
+from their current kubeadm configuration. Paused/deleting resources, topology-managed
+clusters, unsupported control-plane providers, missing/ambiguous targets, and worker
+autoscaler annotations yield 409. Invalid counts yield 422; an absent Cluster yields
+404. Infrastructure errors retain their technical causes internally and yield 500.
+The namespace-scoped RBAC grants get/list/patch on MachineDeployments and get/patch
+on KubeadmControlPlanes in addition to their existing create permission.

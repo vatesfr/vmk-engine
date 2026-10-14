@@ -35,7 +35,11 @@ func toHTTPError(err error) error {
 	}
 
 	switch {
-	case errors.Is(err, strategies.ErrClusterDescriptionTooLong),
+	case errors.Is(err, strategies.ErrReplicasRejected):
+		return fuego.HTTPError{Err: err, Status: http.StatusUnprocessableEntity, Title: "Invalid cluster parameters", Detail: strategies.ErrReplicasRejected.Error()}
+	case errors.Is(err, strategies.ErrInvalidReplicas),
+		errors.Is(err, strategies.ErrInvalidControlPlaneReplicas),
+		errors.Is(err, strategies.ErrClusterDescriptionTooLong),
 		errors.Is(err, strategies.ErrInvalidClusterName),
 		errors.Is(err, strategies.ErrNodeNameRequired),
 		errors.Is(err, strategies.ErrClusterVersionRequired),
@@ -53,6 +57,8 @@ func toHTTPError(err error) error {
 			Title:  "Invalid cluster parameters",
 			Detail: err.Error(),
 		}
+	case errors.Is(err, strategies.ErrClusterScalingConflict):
+		return fuego.ConflictError{Err: err, Title: "Cluster scaling conflict", Detail: err.Error()}
 	case errors.Is(err, strategies.ErrNodeDeletionConflict):
 		return fuego.ConflictError{Err: err, Title: "Node deletion conflict", Detail: strategies.ErrNodeDeletionConflict.Error()}
 	case errors.Is(err, strategies.ErrNodeNotFound):

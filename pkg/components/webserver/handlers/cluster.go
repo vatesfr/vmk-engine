@@ -25,6 +25,10 @@ type ClusterCreateParams struct {
 	Tags map[string]string `json:"tags,omitempty"`
 }
 
+type ClusterReplicasParams struct {
+	Replicas *int32 `json:"replicas" validate:"required,min=1" description:"Desired machine count; at least 1. Stacked-etcd control planes require an odd count." example:"3"`
+}
+
 type ClusterCreateTagParams struct {
 	// Kubernetes limits label values to 63 characters:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
@@ -261,6 +265,28 @@ func (k ClusterHandler) GetAllNodes(c fuego.ContextNoBody) ([]ClusterNodeInfo, e
 
 func (k ClusterHandler) DeleteClusterNode(c fuego.ContextNoBody) (any, error) {
 	if err := k.clusterService.DeleteClusterNode(c.Context(), c.PathParam("id"), c.PathParam("nodeName")); err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, nil
+}
+
+func (k ClusterHandler) SetWorkerReplicas(c fuego.ContextWithBody[ClusterReplicasParams]) (any, error) {
+	params, err := c.Body()
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.SetWorkerReplicas(c.Context(), c.PathParam("id"), *params.Replicas); err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, nil
+}
+
+func (k ClusterHandler) SetControlPlaneReplicas(c fuego.ContextWithBody[ClusterReplicasParams]) (any, error) {
+	params, err := c.Body()
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.SetControlPlaneReplicas(c.Context(), c.PathParam("id"), *params.Replicas); err != nil {
 		return nil, toHTTPError(err)
 	}
 	return nil, nil

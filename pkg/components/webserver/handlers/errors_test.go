@@ -52,6 +52,8 @@ func TestToHTTPErrorApplicationValidation(t *testing.T) {
 		strategies.ErrClusterTagNameRequired,
 		strategies.ErrInvalidClusterTagName,
 		strategies.ErrInvalidClusterTagValue,
+		strategies.ErrInvalidReplicas,
+		strategies.ErrInvalidControlPlaneReplicas,
 	} {
 		t.Run(cause.Error(), func(t *testing.T) {
 			input := fmt.Errorf("operation: %w", cause)
@@ -62,6 +64,16 @@ func TestToHTTPErrorApplicationValidation(t *testing.T) {
 			assert.ErrorIs(t, result, cause)
 		})
 	}
+}
+
+func TestReplicaAdmissionErrorKeepsTechnicalCausePrivate(t *testing.T) {
+	cause := errors.New("private webhook diagnostics")
+	input := fmt.Errorf("%w: %w", strategies.ErrReplicasRejected, cause)
+	var problem fuego.HTTPError
+	require.ErrorAs(t, toHTTPError(input), &problem)
+	require.Equal(t, http.StatusUnprocessableEntity, problem.StatusCode())
+	require.Equal(t, strategies.ErrReplicasRejected.Error(), problem.Detail)
+	require.ErrorIs(t, problem, cause)
 }
 
 func TestToHTTPErrorPreservesOtherHTTPStatuses(t *testing.T) {

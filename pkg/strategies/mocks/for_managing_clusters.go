@@ -231,3 +231,31 @@ func (mr *MockForManagingClustersMockRecorder) SetClusterTag(ctx, clusterID, tag
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterTag), ctx, clusterID, tag, value)
 }
+
+// SetControlPlaneReplicas mocks base method.
+func (m *MockForManagingClusters) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, name, replicas)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetControlPlaneReplicas indicates an expected call of SetControlPlaneReplicas.
+func (mr *MockForManagingClustersMockRecorder) SetControlPlaneReplicas(ctx, name, replicas any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetControlPlaneReplicas), ctx, name, replicas)
+}
+
+// SetWorkerReplicas mocks base method.
+func (m *MockForManagingClusters) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, name, replicas)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetWorkerReplicas indicates an expected call of SetWorkerReplicas.
+func (mr *MockForManagingClustersMockRecorder) SetWorkerReplicas(ctx, name, replicas any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetWorkerReplicas), ctx, name, replicas)
+}

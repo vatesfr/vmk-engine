@@ -91,6 +91,19 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster already exists", fuego.Response{Type: fuego.HTTPError{}}),
 		decodingResponse(), validationResponse(),
 	)
+
+	fuego.Put(clusterRouter, "/{id}/workers/replicas", clusterHandler.SetWorkerReplicas,
+		fuego.OptionDescription("Sets spec.replicas on the cluster’s single MachineDeployment. A 204 confirms the desired count was saved; machine reconciliation is asynchronous."),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster not found"), decodingResponse(), validationResponse(),
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster state, configuration or concurrent update prevents scaling", fuego.Response{Type: fuego.HTTPError{}}),
+	)
+	fuego.Put(clusterRouter, "/{id}/control-plane/replicas", clusterHandler.SetControlPlaneReplicas,
+		fuego.OptionDescription("Sets desired KubeadmControlPlane replicas. Stacked etcd requires an odd count. A 204 confirms the write; machine reconciliation is asynchronous."),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster not found"), decodingResponse(), validationResponse(),
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster state, configuration or concurrent update prevents scaling", fuego.Response{Type: fuego.HTTPError{}}),
+	)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster,
 		fuego.OptionDefaultStatusCode(http.StatusNoContent),
 		noContentResponse(), notFoundResponse("Cluster not found"), validationResponse(),

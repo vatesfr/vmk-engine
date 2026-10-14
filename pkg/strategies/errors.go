@@ -8,6 +8,11 @@ import (
 // contract and can therefore be interpreted without depending on a concrete
 // implementation such as cluster_manager.
 var (
+	ErrReplicasRejected                       = errors.New("replica count rejected by Kubernetes")
+	ErrInvalidReplicas                        = errors.New("replicas must be at least 1")
+	ErrInvalidControlPlaneReplicas            = errors.New("control plane replicas must be odd when using stacked etcd")
+	ErrClusterScalingConflict                 = errors.New("cluster cannot be scaled in its current configuration or state")
+	ErrClusterScalingFailed                   = errors.New("failed to set cluster replicas")
 	ErrClusterDescriptionTooLong              = errors.New("cluster description must not exceed 4000 characters")
 	ErrNodeDeletionConflict                   = errors.New("node changed during deletion; retry the request")
 	ErrNodeNameRequired                       = errors.New("node name is required")

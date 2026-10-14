@@ -16,15 +16,26 @@ import (
 
 	"capv-proxy/pkg/strategies"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 )
 
 const (
+	scalingNoopCase       = "noop"
+	scalingListCase       = "list failure"
+	scalingGoneCase       = "target disappeared"
+	scalingAdmissionCase  = "admission rejection"
+	scalingGetCase        = "get failure"
+	scalingOtherCluster   = "unrelated-cluster"
+	scalingFinalizer      = "scaling-test"
+	scalingConflictCase   = "concurrent change"
+	scalingTarget         = "scaling-resource"
 	otherK8sVersion       = "v1.35.0"
 	k8sVersion            = "v1.32.0"
 	clusterName           = "test-cluster"
@@ -810,3 +821,291 @@ const (
 	kubeVIP   = "kube-vip"
 	ciliumCNI = "cilium"
 )
+
+func scalingObjects() (*capiv1.Cluster, *capiv1.MachineDeployment, *unstructured.Unstructured) {
+	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: testNamespace, UID: "cluster-uid"}}
+	cluster.Spec.ControlPlaneRef = capiv1.ContractVersionedObjectReference{APIGroup: cpGroup, Kind: controlPlaneKind, Name: "custom-cp"}
+	owner := metav1.OwnerReference{APIVersion: capiv1.GroupVersion.String(), Kind: scalingClusterKind, Name: cluster.Name, UID: cluster.UID}
+	md := &capiv1.MachineDeployment{ObjectMeta: metav1.ObjectMeta{
+		Name: "custom-workers", Namespace: testNamespace,
+		Labels: map[string]string{capiv1.ClusterNameLabel: cluster.Name}, OwnerReferences: []metav1.OwnerReference{owner},
+	}}
+	md.Spec.ClusterName = cluster.Name
+	md.Spec.Replicas = ptr.To(int32(1))
+	cp := resource(cpGroup, controlPlaneKind, "custom-cp", testNamespace, map[string]any{"replicas": int64(1), "version": "v1.36.1", "kubeadmConfigSpec": map[string]any{}})
+	cp.SetOwnerReferences([]metav1.OwnerReference{owner})
+	return cluster, md, cp
+}
+
+func TestSetClusterReplicas(t *testing.T) {
+	for _, controlPlane := range []bool{false, true} {
+		name := "workers"
+		if controlPlane {
+			name = "control-plane"
+		}
+		t.Run(name, func(t *testing.T) {
+			cluster, md, cp := scalingObjects()
+			otherCluster, otherMD, _ := scalingObjects()
+			otherCluster.Name = scalingOtherCluster
+			otherMD.Name = "other-workers"
+			otherMD.Spec.ClusterName = scalingOtherCluster
+			otherMD.Labels[capiv1.ClusterNameLabel] = scalingOtherCluster
+			k8s := newFakeClient(t, cluster, md, cp, otherCluster, otherMD)
+			service := NewClusterClient(k8s, testNamespace)
+			for _, replicas := range []int32{3, 1, 1} {
+				var err error
+				if controlPlane {
+					err = service.SetControlPlaneReplicas(t.Context(), "demo", replicas)
+				} else {
+					err = service.SetWorkerReplicas(t.Context(), "demo", replicas)
+				}
+				require.NoError(t, err)
+				require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
+				require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(cp), cp))
+				actual, _, err := unstructured.NestedInt64(cp.Object, "spec", "replicas")
+				require.NoError(t, err)
+				if controlPlane {
+					require.Equal(t, int64(replicas), actual)
+					require.Equal(t, int32(1), *md.Spec.Replicas)
+				} else {
+					require.Equal(t, replicas, *md.Spec.Replicas)
+					require.Equal(t, int64(1), actual)
+				}
+				require.Equal(t, "v1.36.1", cp.Object["spec"].(map[string]any)["version"])
+				require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(otherMD), otherMD))
+				require.Equal(t, int32(1), *otherMD.Spec.Replicas)
+			}
+		})
+	}
+}
+
+func TestClusterScalingGuards(t *testing.T) {
+	cases := []struct {
+		name         string
+		controlPlane bool
+		replicas     int32
+		mutate       func(*capiv1.Cluster, *capiv1.MachineDeployment, *unstructured.Unstructured) []client.Object
+		want         error
+	}{
+		{name: "invalid replicas", replicas: 0, want: strategies.ErrInvalidReplicas},
+		{name: "negative replicas", controlPlane: true, replicas: -1, want: strategies.ErrInvalidReplicas},
+		{name: "cluster paused", mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Spec.Paused = ptr.To(true)
+			return nil
+		}},
+		{name: "cluster annotation pause", controlPlane: true, mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Annotations = map[string]string{capiv1.PausedAnnotation: ""}
+			return nil
+		}},
+		{name: "cluster deleting", mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.DeletionTimestamp = ptr.To(metav1.Now())
+			c.Finalizers = []string{scalingFinalizer}
+			return nil
+		}},
+		{name: "topology", mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Spec.Topology.ClassRef.Name = "class"
+			return nil
+		}},
+		{name: "autoscaler", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.Annotations = map[string]string{capiv1.AutoscalerMinSizeAnnotation: "1"}
+			return nil
+		}},
+		{name: "worker paused", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.Annotations = map[string]string{capiv1.PausedAnnotation: ""}
+			return nil
+		}},
+		{name: "worker spec paused", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.Spec.Paused = ptr.To(true)
+			return nil
+		}},
+		{name: "control plane deleting", controlPlane: true, mutate: func(_ *capiv1.Cluster, _ *capiv1.MachineDeployment, cp *unstructured.Unstructured) []client.Object {
+			cp.SetDeletionTimestamp(ptr.To(metav1.Now()))
+			cp.SetFinalizers([]string{scalingFinalizer})
+			return nil
+		}},
+		{name: "worker deleting", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.DeletionTimestamp = ptr.To(metav1.Now())
+			md.Finalizers = []string{scalingFinalizer}
+			return nil
+		}},
+		{name: "worker owner mismatch", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.OwnerReferences[0].UID = "old-cluster"
+			return nil
+		}},
+		{name: "worker cluster mismatch", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.Spec.ClusterName = scalingOtherCluster
+			return nil
+		}},
+		{name: "multiple workers", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			other := md.DeepCopy()
+			other.Name = "second"
+			return []client.Object{other}
+		}},
+		{name: "no workers", mutate: func(_ *capiv1.Cluster, md *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			md.Labels = nil
+			return nil
+		}},
+		{name: "unsupported provider", controlPlane: true, mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Spec.ControlPlaneRef.Kind = "Other"
+			return nil
+		}},
+		{name: "missing reference", controlPlane: true, mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Spec.ControlPlaneRef.Name = ""
+			return nil
+		}},
+		{name: "missing control plane", controlPlane: true, mutate: func(c *capiv1.Cluster, _ *capiv1.MachineDeployment, _ *unstructured.Unstructured) []client.Object {
+			c.Spec.ControlPlaneRef.Name = "missing"
+			return nil
+		}},
+		{name: "control plane paused", controlPlane: true, mutate: func(_ *capiv1.Cluster, _ *capiv1.MachineDeployment, cp *unstructured.Unstructured) []client.Object {
+			cp.SetAnnotations(map[string]string{capiv1.PausedAnnotation: ""})
+			return nil
+		}},
+		{name: "control plane owner mismatch", controlPlane: true, mutate: func(_ *capiv1.Cluster, _ *capiv1.MachineDeployment, cp *unstructured.Unstructured) []client.Object {
+			owners := cp.GetOwnerReferences()
+			owners[0].UID = "old"
+			cp.SetOwnerReferences(owners)
+			return nil
+		}},
+		{name: "stacked etcd even", controlPlane: true, replicas: 2, want: strategies.ErrInvalidControlPlaneReplicas},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster, md, cp := scalingObjects()
+			objects := []client.Object{cluster, md, cp}
+			if tc.mutate != nil {
+				objects = append(objects, tc.mutate(cluster, md, cp)...)
+			}
+			service := NewClusterClient(newFakeClient(t, objects...), testNamespace)
+			replicas := tc.replicas
+			if replicas == 0 && tc.name != "invalid replicas" {
+				replicas = 3
+			}
+			var err error
+			if tc.controlPlane {
+				err = service.SetControlPlaneReplicas(t.Context(), "demo", replicas)
+			} else {
+				err = service.SetWorkerReplicas(t.Context(), "demo", replicas)
+			}
+			want := tc.want
+			if want == nil {
+				want = strategies.ErrClusterScalingConflict
+			}
+			require.ErrorIs(t, err, want)
+		})
+	}
+}
+
+func TestScalingExternalEtcd(t *testing.T) {
+	cluster, md, cp := scalingObjects()
+	require.NoError(t, unstructured.SetNestedMap(cp.Object, map[string]any{"endpoints": []any{"https://etcd:2379"}}, "spec", "kubeadmConfigSpec", "clusterConfiguration", "etcd", "external"))
+	service := NewClusterClient(newFakeClient(t, cluster, md, cp), testNamespace)
+	require.NoError(t, service.SetControlPlaneReplicas(t.Context(), "demo", 2))
+}
+
+func TestScalingPreservesResourcesAndNamespace(t *testing.T) {
+	cluster, md, cp := scalingObjects()
+	md.Annotations = map[string]string{"scaling.example/annotation": "preserved"}
+	md.Spec.Template.Spec.Version = "v1.36.1"
+	cp.SetAnnotations(map[string]string{"scaling.example/annotation": "preserved"})
+	require.NoError(t, unstructured.SetNestedMap(cp.Object, map[string]any{"spec": map[string]any{"infrastructureRef": reference(xoGroup, xoMachineTemplateKind, "demo-cp")}}, "spec", "machineTemplate"))
+	otherMD := md.DeepCopy()
+	otherMD.Namespace = otherNamespace
+	otherCP := cp.DeepCopy()
+	otherCP.SetNamespace(otherNamespace)
+	k8s := newFakeClient(t, cluster, md, cp, otherMD, otherCP)
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(cp), cp))
+	expectedMD, expectedCP := md.DeepCopy(), cp.DeepCopy()
+	service := NewClusterClient(k8s, testNamespace)
+	require.NoError(t, service.SetWorkerReplicas(t.Context(), cluster.Name, 3))
+	require.NoError(t, service.SetControlPlaneReplicas(t.Context(), cluster.Name, 3))
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(cp), cp))
+	expectedMD.Spec.Replicas = ptr.To(int32(3))
+	expectedMD.ResourceVersion = md.ResourceVersion
+	require.NoError(t, unstructured.SetNestedField(expectedCP.Object, int64(3), "spec", "replicas"))
+	expectedCP.SetResourceVersion(cp.GetResourceVersion())
+	require.Equal(t, expectedMD, md)
+	require.Equal(t, expectedCP, cp)
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(otherMD), otherMD))
+	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(otherCP), otherCP))
+	require.Equal(t, int32(1), *otherMD.Spec.Replicas)
+	count, _, err := unstructured.NestedInt64(otherCP.Object, "spec", "replicas")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
+
+func TestScalingPatchAndErrors(t *testing.T) {
+	for _, controlPlane := range []bool{false, true} {
+		for _, kind := range []string{scalingNoopCase, scalingConflictCase, scalingGoneCase, scalingAdmissionCase, "timeout", scalingGetCase, scalingListCase} {
+			if controlPlane && kind == scalingListCase {
+				continue
+			}
+			t.Run(kind+map[bool]string{true: "/cp", false: "/workers"}[controlPlane], func(t *testing.T) {
+				cluster, md, cp := scalingObjects()
+				patches := 0
+				injected := errors.New("technical failure")
+				interceptors := interceptor.Funcs{Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					patches++
+					data, err := patch.Data(obj)
+					require.NoError(t, err)
+					require.Contains(t, string(data), "resourceVersion")
+					require.NotContains(t, string(data), "kubeadmConfigSpec")
+					switch kind {
+					case scalingConflictCase:
+						return apierrors.NewConflict(schema.GroupResource{Resource: scalingTarget}, obj.GetName(), injected)
+					case scalingGoneCase:
+						return apierrors.NewNotFound(schema.GroupResource{Resource: scalingTarget}, obj.GetName())
+					case scalingAdmissionCase:
+						return apierrors.NewInvalid(schema.GroupKind{Kind: scalingTarget}, obj.GetName(), nil)
+					default:
+						return injected
+					}
+				}}
+				if kind == scalingGetCase {
+					interceptors.Get = func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+						return injected
+					}
+				}
+				if kind == scalingListCase {
+					interceptors.List = func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+						return injected
+					}
+				}
+				k8s := interceptor.NewClient(newFakeClient(t, cluster, md, cp).(client.WithWatch), interceptors)
+				service := NewClusterClient(k8s, testNamespace)
+				replicas := int32(3)
+				if kind == scalingNoopCase {
+					replicas = 1
+				}
+				var err error
+				if controlPlane {
+					err = service.SetControlPlaneReplicas(t.Context(), "demo", replicas)
+				} else {
+					err = service.SetWorkerReplicas(t.Context(), "demo", replicas)
+				}
+				switch kind {
+				case scalingNoopCase:
+					require.NoError(t, err)
+					require.Zero(t, patches)
+				case scalingConflictCase, scalingGoneCase:
+					require.ErrorIs(t, err, strategies.ErrClusterScalingConflict)
+				case scalingAdmissionCase:
+					require.ErrorIs(t, err, strategies.ErrReplicasRejected)
+					require.True(t, apierrors.IsInvalid(err))
+				default:
+					require.ErrorIs(t, err, injected)
+				}
+			})
+		}
+	}
+}
+
+func TestScalingMissingClusterAndNamespace(t *testing.T) {
+	service := NewClusterClient(newFakeClient(t), testNamespace)
+	require.ErrorIs(t, service.SetWorkerReplicas(t.Context(), "missing", 3), strategies.ErrClusterNotFound)
+	require.ErrorIs(t, service.SetControlPlaneReplicas(t.Context(), "", 3), strategies.ErrClusterNameRequired)
+	service.namespace = ""
+	require.ErrorIs(t, service.SetWorkerReplicas(t.Context(), "demo", 3), strategies.ErrClusterNamespaceRequired)
+}

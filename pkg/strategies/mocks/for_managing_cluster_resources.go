@@ -159,6 +159,20 @@ func (mr *MockForManagingClusterResourcesMockRecorder) List(ctx any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockForManagingClusterResources)(nil).List), ctx)
 }
 
+// SetControlPlaneReplicas mocks base method.
+func (m *MockForManagingClusterResources) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, name, replicas)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetControlPlaneReplicas indicates an expected call of SetControlPlaneReplicas.
+func (mr *MockForManagingClusterResourcesMockRecorder) SetControlPlaneReplicas(ctx, name, replicas any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetControlPlaneReplicas), ctx, name, replicas)
+}
+
 // SetTag mocks base method.
 func (m *MockForManagingClusterResources) SetTag(ctx context.Context, clusterName, tag, value string) error {
 	m.ctrl.T.Helper()
@@ -171,4 +185,18 @@ func (m *MockForManagingClusterResources) SetTag(ctx context.Context, clusterNam
 func (mr *MockForManagingClusterResourcesMockRecorder) SetTag(ctx, clusterName, tag, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetTag), ctx, clusterName, tag, value)
+}
+
+// SetWorkerReplicas mocks base method.
+func (m *MockForManagingClusterResources) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, name, replicas)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetWorkerReplicas indicates an expected call of SetWorkerReplicas.
+func (mr *MockForManagingClusterResourcesMockRecorder) SetWorkerReplicas(ctx, name, replicas any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetWorkerReplicas), ctx, name, replicas)
 }

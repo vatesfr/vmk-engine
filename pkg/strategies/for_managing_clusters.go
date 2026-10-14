@@ -8,6 +8,8 @@ import (
 
 //go:generate go run -mod=mod go.uber.org/mock/mockgen -source=for_managing_clusters.go -destination=mocks/for_managing_clusters.go -package=mocks
 type ForManagingClusters interface {
+	SetWorkerReplicas(ctx context.Context, name string, replicas int32) error
+	SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error
 	CreateCluster(ctx context.Context, params CreateClusterParams) (ClusterInfo, error)
 	GetClusters(ctx context.Context) ([]ClusterInfo, error)
 	GetCluster(ctx context.Context, name string) (ClusterInfo, error)

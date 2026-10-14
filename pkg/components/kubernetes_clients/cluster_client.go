@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
@@ -27,6 +28,7 @@ type ClusterClient struct {
 }
 
 const (
+	scalingClusterKind      = "Cluster"
 	xoGroup                 = "vates.infrastructure.cluster.x-k8s.io"
 	cpGroup                 = "controlplane.cluster.x-k8s.io"
 	bootstrapGroup          = "bootstrap.cluster.x-k8s.io"
@@ -508,4 +510,141 @@ func renderBootstrapCommands(config map[string]any, version, endpoint string) er
 		commands[i] = replace.Replace(command)
 	}
 	return unstructured.SetNestedStringSlice(config, commands, commandsKey)
+}
+
+func scalingConflict(reason string) error {
+	return fmt.Errorf("%w: %s", strategies.ErrClusterScalingConflict, reason)
+}
+
+func (c ClusterClient) scalingCluster(ctx context.Context, name string, replicas int32) (*capiv1.Cluster, error) {
+	if replicas < 1 {
+		return nil, strategies.ErrInvalidReplicas
+	}
+	cluster, err := c.getClusterResource(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateScalingObject(cluster, cluster); err != nil {
+		return nil, err
+	}
+	if ptr.Deref(cluster.Spec.Paused, false) {
+		return nil, scalingConflict("Cluster is paused")
+	}
+	if cluster.Spec.Topology.IsDefined() {
+		return nil, scalingConflict("topology-managed clusters are not supported")
+	}
+	return cluster, nil
+}
+
+func validateScalingObject(obj client.Object, cluster *capiv1.Cluster) error {
+	if !obj.GetDeletionTimestamp().IsZero() {
+		return scalingConflict("resource is being deleted")
+	}
+	if _, paused := obj.GetAnnotations()[capiv1.PausedAnnotation]; paused {
+		return scalingConflict("resource is paused")
+	}
+	if name, found := obj.GetLabels()[capiv1.ClusterNameLabel]; found && name != cluster.Name {
+		return scalingConflict("resource belongs to another Cluster")
+	}
+	for _, owner := range obj.GetOwnerReferences() {
+		if owner.Kind == scalingClusterKind {
+			gv, err := schema.ParseGroupVersion(owner.APIVersion)
+			if err != nil || gv.Group != capiv1.GroupVersion.Group || owner.Name != cluster.Name || owner.UID != cluster.UID {
+				return scalingConflict("resource has a different Cluster owner")
+			}
+		}
+	}
+	return nil
+}
+
+func (c ClusterClient) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
+	cluster, err := c.scalingCluster(ctx, name, replicas)
+	if err != nil {
+		return err
+	}
+	deployments := &capiv1.MachineDeploymentList{}
+	if err := c.kubernetesClient.List(ctx, deployments, client.InNamespace(c.namespace),
+		client.MatchingLabels{capiv1.ClusterNameLabel: cluster.Name}); err != nil {
+		return fmt.Errorf("list worker deployments: %w", err)
+	}
+	if len(deployments.Items) != 1 {
+		return scalingConflict("scaling requires exactly one worker MachineDeployment")
+	}
+	deployment := &deployments.Items[0]
+	if deployment.Spec.ClusterName != cluster.Name {
+		return scalingConflict("worker deployment belongs to another Cluster")
+	}
+	if err := validateScalingObject(deployment, cluster); err != nil {
+		return err
+	}
+	if ptr.Deref(deployment.Spec.Paused, false) {
+		return scalingConflict("worker deployment is paused")
+	}
+	for _, key := range []string{capiv1.AutoscalerMinSizeAnnotation, capiv1.AutoscalerMaxSizeAnnotation} {
+		if _, found := deployment.Annotations[key]; found {
+			return scalingConflict("worker deployment is managed by an autoscaler")
+		}
+	}
+	if deployment.Spec.Replicas != nil && *deployment.Spec.Replicas == replicas {
+		return nil
+	}
+	before := deployment.DeepCopy()
+	deployment.Spec.Replicas = ptr.To(replicas)
+	return c.patchReplicas(ctx, deployment, before)
+}
+
+func (c ClusterClient) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
+	cluster, err := c.scalingCluster(ctx, name, replicas)
+	if err != nil {
+		return err
+	}
+	ref := cluster.Spec.ControlPlaneRef
+	if ref.Name == "" || ref.APIGroup != cpGroup || ref.Kind != controlPlaneKind {
+		return scalingConflict("a KubeadmControlPlane reference is required")
+	}
+	controlPlane := &unstructured.Unstructured{}
+	controlPlane.SetGroupVersionKind(schema.GroupVersionKind{Group: cpGroup, Version: "v1beta2", Kind: controlPlaneKind})
+	if err := c.kubernetesClient.Get(ctx, client.ObjectKey{Namespace: c.namespace, Name: ref.Name}, controlPlane); err != nil {
+		if apierrors.IsNotFound(err) {
+			return scalingConflict("referenced KubeadmControlPlane is missing")
+		}
+		return fmt.Errorf("get control plane: %w", err)
+	}
+	if err := validateScalingObject(controlPlane, cluster); err != nil {
+		return err
+	}
+	_, externalEtcd, err := unstructured.NestedMap(controlPlane.Object, "spec", "kubeadmConfigSpec", "clusterConfiguration", "etcd", "external")
+	if err != nil {
+		return fmt.Errorf("read control plane etcd configuration: %w", err)
+	}
+	if !externalEtcd && replicas%2 == 0 {
+		return strategies.ErrInvalidControlPlaneReplicas
+	}
+	current, found, err := unstructured.NestedInt64(controlPlane.Object, "spec", "replicas")
+	if err != nil {
+		return fmt.Errorf("read control plane replicas: %w", err)
+	}
+	if found && current == int64(replicas) {
+		return nil
+	}
+	before := controlPlane.DeepCopy()
+	if err := unstructured.SetNestedField(controlPlane.Object, int64(replicas), "spec", "replicas"); err != nil {
+		return err
+	}
+	return c.patchReplicas(ctx, controlPlane, before)
+}
+
+func (c ClusterClient) patchReplicas(ctx context.Context, obj, before client.Object) error {
+	err := c.kubernetesClient.Patch(ctx, obj, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{}))
+	switch {
+	case apierrors.IsConflict(err), apierrors.IsNotFound(err):
+		return scalingConflict("target changed during scaling; read its state before retrying")
+	case apierrors.IsInvalid(err):
+		// Only the replicas field is changed. Keep webhook details internal.
+		return fmt.Errorf("%w: %w", strategies.ErrReplicasRejected, err)
+	case err != nil:
+		return fmt.Errorf("patch replicas: %w", err)
+	default:
+		return nil
+	}
 }

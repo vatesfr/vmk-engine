@@ -95,7 +95,7 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 type ClusterNodeInfo struct {
 	Paused        *bool      `json:"is_reconciliation_paused,omitempty" description:"Machine CAPI reconciliation pause; independent of cluster pause. VMs and workloads keep running"`
 	Name          string     `json:"name,omitempty"`
-	NodeName      string     `json:"nodeName,omitempty"`
+	NodeName      string     `json:"node_name,omitempty"`
 	Role          string     `json:"role,omitempty"`
 	Status        string     `json:"status,omitempty"`
 	Endpoint      string     `json:"endpoint,omitempty"`

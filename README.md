@@ -435,10 +435,10 @@ curl http://127.0.0.1:8080/kubernetes/clusters/demo/nodes
 ```
 
 The `name` field always contains the CAPI resource name, the stable identifier
-used by the delete endpoint. The optional `nodeName` field contains
+used by the delete endpoint. The optional `node_name` field contains
 `status.nodeRef.name`, the registered Kubernetes Node name; it is omitted until
 the Node reference is available. `name` remains the resource identifier before
-and after registration; `nodeName` is descriptive and is not used for deletion.
+and after registration; `node_name` is descriptive and is not used for deletion.
 
 Delete a node using its `name` from the nodes response:
 

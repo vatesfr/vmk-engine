@@ -785,7 +785,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
 					}
 				},
-				expectedStatus: http.StatusOK, expectedJSON: `[{"is_reconciliation_paused":false,"name":"node-1","nodeName":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
+				expectedStatus: http.StatusOK, expectedJSON: `[{"is_reconciliation_paused":false,"name":"node-1","node_name":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
 			})
 		})
 	}

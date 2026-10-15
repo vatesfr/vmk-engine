@@ -241,7 +241,7 @@ UID and resource-version preconditions to protect against concurrent replacement
 or reassignment. The HTTP boundary returns 204 without waiting for finalizers.
 Replica counts are unchanged. HTTP routes, parameters, responses, and application
 errors use node terminology. Node responses expose `name` (the stable resource
-name), optional `nodeName` (the registered Node name from `status.nodeRef.name`),
+name), optional `node_name` (the registered Node name from `status.nodeRef.name`),
 and `node_id` (the provider VM UUID). The Node name is descriptive and is not
 used to address deletion requests.
 

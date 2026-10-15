@@ -138,6 +138,38 @@ func TestClusterAvailability(t *testing.T) {
 	}
 }
 
+func TestClusterInitialization(t *testing.T) {
+	for _, testCase := range []struct {
+		name                      string
+		controlPlaneInitialized   *bool
+		infrastructureProvisioned *bool
+	}{
+		{name: "not reported"},
+		{name: "not initialized", controlPlaneInitialized: ptr.To(false), infrastructureProvisioned: ptr.To(false)},
+		{name: "infrastructure provisioned", controlPlaneInitialized: ptr.To(false), infrastructureProvisioned: ptr.To(true)},
+		{name: "initialized", controlPlaneInitialized: ptr.To(true), infrastructureProvisioned: ptr.To(true)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			cluster := &capiv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+				Status: capiv1.ClusterStatus{Initialization: capiv1.ClusterInitializationStatus{
+					ControlPlaneInitialized:   testCase.controlPlaneInitialized,
+					InfrastructureProvisioned: testCase.infrastructureProvisioned,
+				}},
+			}
+			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			info, err := clusterClient.Get(t.Context(), clusterName)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.controlPlaneInitialized, info.IsControlPlaneInitialized)
+			assert.Equal(t, testCase.infrastructureProvisioned, info.IsInfrastructureProvisioned)
+			clusters, err := clusterClient.List(t.Context())
+			require.NoError(t, err)
+			require.Len(t, clusters, 1)
+			assert.Equal(t, info, clusters[0])
+		})
+	}
+}
+
 func TestClusterClientGet(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		cluster := &capiv1.Cluster{

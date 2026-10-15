@@ -29,6 +29,13 @@ when the CAPI Cluster `Available` condition is `True`. Missing, `False`, or
 `Unknown` conditions yield `false`. This field can also be selected with
 `GET /kubernetes/clusters?fields=name,is_available`.
 
+Cluster responses also expose `is_control_plane_initialized` and
+`is_infrastructure_provisioned` from CAPI `status.initialization`. Each field is
+omitted when CAPI has not reported it; explicit `false` values are preserved.
+These milestones remain `true` once completed and do not indicate current
+availability. They can be selected with
+`GET /kubernetes/clusters?fields=name,is_control_plane_initialized,is_infrastructure_provisioned`.
+
 ## HTTP errors
 
 Request validation now returns **422 Unprocessable Entity** instead of 400.

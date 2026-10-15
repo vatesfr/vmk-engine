@@ -146,6 +146,62 @@ func TestGetCluster(t *testing.T) {
 	}
 }
 
+func TestClusterInitializationResponse(t *testing.T) {
+	for _, testCase := range []struct {
+		name                        string
+		isControlPlaneInitialized   *bool
+		isInfrastructureProvisioned *bool
+		expectedJSON                string
+	}{
+		{name: "not reported", expectedJSON: `{}`},
+		{
+			name: "not initialized", isControlPlaneInitialized: ptr.To(false), isInfrastructureProvisioned: ptr.To(false),
+			expectedJSON: `{"is_control_plane_initialized":false,"is_infrastructure_provisioned":false}`,
+		},
+		{
+			name: "infrastructure provisioned", isControlPlaneInitialized: ptr.To(false), isInfrastructureProvisioned: ptr.To(true),
+			expectedJSON: `{"is_control_plane_initialized":false,"is_infrastructure_provisioned":true}`,
+		},
+		{
+			name: "initialized", isControlPlaneInitialized: ptr.To(true), isInfrastructureProvisioned: ptr.To(true),
+			expectedJSON: `{"is_control_plane_initialized":true,"is_infrastructure_provisioned":true}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service, handler := newClusterHandler(t)
+			info := strategies.ClusterInfo{
+				IsControlPlaneInitialized:   testCase.isControlPlaneInitialized,
+				IsInfrastructureProvisioned: testCase.isInfrastructureProvisioned,
+			}
+			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(info, nil)
+			result, err := handler.GetCluster(newContextWithClusterID())
+			require.NoError(t, err)
+			assert.Equal(t, testCase.isControlPlaneInitialized, result.IsControlPlaneInitialized)
+			assert.Equal(t, testCase.isInfrastructureProvisioned, result.IsInfrastructureProvisioned)
+			encoded, err := json.Marshal(result)
+			require.NoError(t, err)
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(encoded, &fields))
+			for field := range fields {
+				if field != "is_control_plane_initialized" && field != "is_infrastructure_provisioned" {
+					delete(fields, field)
+				}
+			}
+			encoded, err = json.Marshal(fields)
+			require.NoError(t, err)
+			assert.JSONEq(t, testCase.expectedJSON, string(encoded))
+
+			service.EXPECT().GetClusters(gomock.Any()).Return([]strategies.ClusterInfo{info}, nil)
+			ctx := fuego.NewMockContextNoBody().SetQueryParam("fields", "is_control_plane_initialized,is_infrastructure_provisioned")
+			clusters, err := handler.GetClusters(ctx)
+			require.NoError(t, err)
+			encoded, err = json.Marshal(clusters)
+			require.NoError(t, err)
+			assert.JSONEq(t, "["+testCase.expectedJSON+"]", string(encoded))
+		})
+	}
+}
+
 func TestGetClusterNodesInfo(t *testing.T) {
 	testCases := map[string]struct {
 		serviceResult []strategies.ClusterNodeInfo

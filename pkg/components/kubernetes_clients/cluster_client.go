@@ -220,14 +220,16 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 	}
 
 	info := strategies.ClusterInfo{
-		Paused:               ptr.Deref(value.Spec.Paused, false),
-		IsAvailable:          apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
-		Name:                 value.GetName(),
-		Description:          value.Annotations[clusterDescriptionAnnotation],
-		Phase:                value.Status.Phase,
-		ControlPlaneEndpoint: controlPlaneEndpoint,
-		Version:              value.Spec.Topology.Version,
-		Tags:                 optionalClusterTags(value.Labels),
+		Paused:                      ptr.Deref(value.Spec.Paused, false),
+		IsAvailable:                 apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
+		IsControlPlaneInitialized:   value.Status.Initialization.ControlPlaneInitialized,
+		IsInfrastructureProvisioned: value.Status.Initialization.InfrastructureProvisioned,
+		Name:                        value.GetName(),
+		Description:                 value.Annotations[clusterDescriptionAnnotation],
+		Phase:                       value.Status.Phase,
+		ControlPlaneEndpoint:        controlPlaneEndpoint,
+		Version:                     value.Spec.Topology.Version,
+		Tags:                        optionalClusterTags(value.Labels),
 	}
 	if info.Version == "" && value.Status.ControlPlane != nil && len(value.Status.ControlPlane.Versions) == 1 {
 		info.Version = value.Status.ControlPlane.Versions[0].Version

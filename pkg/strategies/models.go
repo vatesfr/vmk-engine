@@ -53,17 +53,19 @@ type MachineDeployment struct {
 
 // ClusterInfo is the shared representation returned by cluster Strategies.
 type ClusterInfo struct {
-	Paused               bool
-	IsAvailable          bool
-	Name                 string
-	Description          string
-	Phase                string
-	CreatedAt            string
-	Version              string
-	ControlPlaneEndpoint string
-	ControlPlanesStatus  NodeTypeStatus
-	WorkersStatus        NodeTypeStatus
-	Tags                 map[string]string
+	Paused                      bool
+	IsAvailable                 bool
+	IsControlPlaneInitialized   *bool
+	IsInfrastructureProvisioned *bool
+	Name                        string
+	Description                 string
+	Phase                       string
+	CreatedAt                   string
+	Version                     string
+	ControlPlaneEndpoint        string
+	ControlPlanesStatus         NodeTypeStatus
+	WorkersStatus               NodeTypeStatus
+	Tags                        map[string]string
 }
 
 type NodeTypeStatus struct {

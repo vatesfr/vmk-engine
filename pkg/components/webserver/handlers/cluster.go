@@ -48,16 +48,18 @@ type ClusterConfigResponse struct {
 }
 
 type ClusterInfo struct {
-	Paused               *bool             `json:"is_reconciliation_paused,omitempty" description:"Whether Cluster API reconciliation is paused via spec.paused. VMs and workloads continue running"`
-	IsAvailable          *bool             `json:"is_available,omitempty"`
-	Name                 string            `json:"name,omitempty"`
-	Description          string            `json:"description,omitempty"`
-	Phase                string            `json:"phase,omitempty"`
-	CreatedAt            string            `json:"created_at,omitempty"`
-	ControlPlaneEndpoint string            `json:"control_plane_endpoint,omitempty"`
-	ControlPlaneStatus   *NodeStatus       `json:"control_plane_status,omitempty"`
-	WorkerStatus         *NodeStatus       `json:"worker_status,omitempty"`
-	Tags                 map[string]string `json:"tags,omitempty"`
+	Paused                      *bool             `json:"is_reconciliation_paused,omitempty" description:"Cluster API reconciliation paused via spec.paused. VMs and workloads continue running"`
+	IsAvailable                 *bool             `json:"is_available,omitempty"`
+	IsControlPlaneInitialized   *bool             `json:"is_control_plane_initialized,omitempty" description:"Control plane initialization milestone; stays true once reached. Omitted if unreported"`
+	IsInfrastructureProvisioned *bool             `json:"is_infrastructure_provisioned,omitempty" description:"Infrastructure provisioning milestone; stays true once reached. Omitted if unreported"`
+	Name                        string            `json:"name,omitempty"`
+	Description                 string            `json:"description,omitempty"`
+	Phase                       string            `json:"phase,omitempty"`
+	CreatedAt                   string            `json:"created_at,omitempty"`
+	ControlPlaneEndpoint        string            `json:"control_plane_endpoint,omitempty"`
+	ControlPlaneStatus          *NodeStatus       `json:"control_plane_status,omitempty"`
+	WorkerStatus                *NodeStatus       `json:"worker_status,omitempty"`
+	Tags                        map[string]string `json:"tags,omitempty"`
 }
 
 type NodeStatus struct {
@@ -177,16 +179,18 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
-		IsAvailable:          &value.IsAvailable,
-		Paused:               &value.Paused,
-		Name:                 value.Name,
-		Description:          value.Description,
-		Phase:                value.Phase,
-		CreatedAt:            value.CreatedAt,
-		ControlPlaneEndpoint: value.ControlPlaneEndpoint,
-		ControlPlaneStatus:   NewFromNodeStatus(value.ControlPlanesStatus),
-		WorkerStatus:         NewFromNodeStatus(value.WorkersStatus),
-		Tags:                 value.Tags,
+		IsAvailable:                 &value.IsAvailable,
+		IsControlPlaneInitialized:   value.IsControlPlaneInitialized,
+		IsInfrastructureProvisioned: value.IsInfrastructureProvisioned,
+		Paused:                      &value.Paused,
+		Name:                        value.Name,
+		Description:                 value.Description,
+		Phase:                       value.Phase,
+		CreatedAt:                   value.CreatedAt,
+		ControlPlaneEndpoint:        value.ControlPlaneEndpoint,
+		ControlPlaneStatus:          NewFromNodeStatus(value.ControlPlanesStatus),
+		WorkerStatus:                NewFromNodeStatus(value.WorkersStatus),
+		Tags:                        value.Tags,
 	}
 }
 

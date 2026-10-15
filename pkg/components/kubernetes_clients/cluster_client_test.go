@@ -662,8 +662,15 @@ func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResource
 func TestClusterResourceCreation(t *testing.T) {
 	p, objects, scheme := newClusterCreationTestSetup(t)
 	p.Description = "Cluster de l’équipe \"Backend\"\nTest 🚀"
+	createdAt := metav1.NewTime(time.Date(2026, time.October, 15, 10, 0, 0, 0, time.UTC))
 	creating := true
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if _, ok := obj.(*capiv1.Cluster); ok {
+				obj.SetCreationTimestamp(createdAt)
+			}
+			return c.Create(ctx, obj, opts...)
+		},
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			if creating {
 				require.Fail(t, "creation must not read Kubernetes templates")
@@ -678,6 +685,16 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, testCluster, info.Name)
 	require.Equal(t, p.Tags, info.Tags)
 	require.Equal(t, p.Description, info.Description)
+	require.Equal(t, "Creating", info.Phase)
+	responseCreatedAt, err := time.Parse("2006-01-02 15:04:05 -0700 MST", info.CreatedAt)
+	require.NoError(t, err)
+	require.True(t, createdAt.Time.Equal(responseCreatedAt))
+	require.Equal(t, p.Version, info.Version)
+	require.Equal(t, "https://192.0.2.10:6443", info.ControlPlaneEndpoint)
+	require.Equal(t, strategies.NodeTypeStatus{DesiredReplicas: 3}, info.ControlPlanesStatus)
+	require.Equal(t, strategies.NodeTypeStatus{DesiredReplicas: 2}, info.WorkersStatus)
+	require.False(t, info.IsAvailable)
+	require.False(t, info.Paused)
 	cluster := &capiv1.Cluster{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: testCluster, Namespace: testCreationNamespace}, cluster))
 	require.Equal(t, p.Description, cluster.Annotations["vmk.vates.tech/description"])

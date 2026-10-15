@@ -495,7 +495,19 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(before)); err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("activate Cluster %s: %w; inspect its paused state before retrying", p.Name, err)
 	}
-	return strategies.ClusterInfo{Name: p.Name, Description: p.Description, Phase: "Creating", Tags: optionalClusterTags(labels)}, nil
+	// Desired counts are known before controllers report their observed status.
+	// Leave observed replica counts at zero while provisioning starts.
+	return strategies.ClusterInfo{
+		Name:                 p.Name,
+		Description:          p.Description,
+		Phase:                "Creating",
+		CreatedAt:            cluster.CreationTimestamp.String(),
+		Version:              p.Version,
+		ControlPlaneEndpoint: fmt.Sprintf("https://%s:%d", p.ControlPlaneIP, d.EndpointPort),
+		ControlPlanesStatus:  strategies.NodeTypeStatus{DesiredReplicas: int(*p.ControlPlaneReplicas)},
+		WorkersStatus:        strategies.NodeTypeStatus{DesiredReplicas: int(*worker.Replicas)},
+		Tags:                 optionalClusterTags(labels),
+	}, nil
 }
 
 // Replace only our two explicit tokens, leaving shell variables and command

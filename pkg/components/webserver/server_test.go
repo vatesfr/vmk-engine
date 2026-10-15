@@ -1021,3 +1021,40 @@ func TestReconciliationPausedFieldSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateClusterDescriptionHTTP(t *testing.T) {
+	const emptyDescriptionBody = `{"description":""}`
+	for _, tc := range []struct {
+		name, body, description string
+		status                  int
+		call                    bool
+		err                     error
+	}{
+		{name: "edit", body: `{"description":"Équipe 🚀\nBackend"}`, description: "Équipe 🚀\nBackend", status: 204, call: true},
+		{name: "clear", body: emptyDescriptionBody, status: 204, call: true},
+		{
+			name: "boundary", body: `{"description":"` + strings.Repeat("🚀", strategies.MaxClusterDescriptionLength) + `"}`,
+			description: strings.Repeat("🚀", strategies.MaxClusterDescriptionLength), status: 204, call: true,
+		},
+		{name: "too long", body: `{"description":"` + strings.Repeat("é", strategies.MaxClusterDescriptionLength+1) + `"}`, status: 422},
+		{name: "missing", body: `{}`, status: 422},
+		{name: "null", body: `{"description":null}`, status: 422},
+		{name: "numeric description", body: `{"description":123}`, status: 400},
+		{name: "malformed", body: `{"description":`, status: 400},
+		{name: "unexpected property", body: `{"description":"", "other":true}`, status: 400},
+		{name: "not found", body: emptyDescriptionBody, status: 404, call: true, err: strategies.ErrClusterNotFound},
+		{name: "conflict", body: emptyDescriptionBody, status: 409, call: true, err: strategies.ErrClusterDescriptionUpdateConflict},
+		{name: "failure", body: emptyDescriptionBody, status: 500, call: true, err: errTest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{
+				method: http.MethodPut, path: getClusterPath + "/description", body: tc.body, expectedStatus: tc.status,
+				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+					if tc.call {
+						service.EXPECT().SetClusterDescription(ctx, clusterName, tc.description).Return(tc.err)
+					}
+				},
+			})
+		})
+	}
+}

@@ -15,6 +15,8 @@ var (
 	ErrClusterScalingFailed                   = errors.New("failed to set cluster replicas")
 	ErrPauseUpdateConflict                    = errors.New("resource changed during pause update; retry the request")
 	ErrPauseUpdateFailed                      = errors.New("failed to update pause state")
+	ErrClusterDescriptionUpdateFailed         = errors.New("failed to update cluster description")
+	ErrClusterDescriptionUpdateConflict       = errors.New("cluster changed during description update; retry the request")
 	ErrClusterDescriptionTooLong              = errors.New("cluster description must not exceed 4000 characters")
 	ErrNodeDeletionConflict                   = errors.New("node changed during deletion; retry the request")
 	ErrNodeNameRequired                       = errors.New("node name is required")

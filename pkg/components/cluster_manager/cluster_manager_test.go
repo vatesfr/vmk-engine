@@ -633,3 +633,34 @@ func TestSetPaused(t *testing.T) {
 		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused), strategies.ErrPauseUpdateConflict)
 	}
 }
+
+func TestSetClusterDescription(t *testing.T) {
+	for _, tc := range []struct {
+		name, description    string
+		resourceErr, wantErr error
+	}{
+		{name: clusterName, description: "Équipe 🚀\nBackend"},
+		{name: clusterName},
+		{name: clusterName, description: strings.Repeat("🚀", strategies.MaxClusterDescriptionLength)},
+		{name: clusterName, description: strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), wantErr: strategies.ErrClusterDescriptionTooLong},
+		{wantErr: strategies.ErrClusterNameRequired},
+		{name: clusterName, resourceErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
+		{name: clusterName, resourceErr: strategies.ErrClusterDescriptionUpdateConflict, wantErr: strategies.ErrClusterDescriptionUpdateConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resources, _, _, manager := newTestClusterManager(t)
+			if tc.wantErr == nil || tc.resourceErr != nil {
+				resources.EXPECT().SetDescription(t.Context(), tc.name, tc.description).Return(tc.resourceErr)
+			}
+			err := manager.SetClusterDescription(t.Context(), tc.name, tc.description)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+				if tc.resourceErr != nil {
+					require.ErrorIs(t, err, strategies.ErrClusterDescriptionUpdateFailed)
+				}
+			}
+		})
+	}
+}

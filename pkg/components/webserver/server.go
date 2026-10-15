@@ -92,6 +92,13 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		decodingResponse(), validationResponse(),
 	)
 
+	fuego.Put(clusterRouter, "/{id}/description", clusterHandler.SetClusterDescription,
+		fuego.OptionDescription("Replaces the cluster description. An empty string clears it. Maximum 4000 Unicode code points."),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster not found"), decodingResponse(), validationResponse(),
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster changed during description update; retry", fuego.Response{Type: fuego.HTTPError{}}),
+	)
+
 	fuego.Put(clusterRouter, "/{id}/workers/replicas", clusterHandler.SetWorkerReplicas,
 		fuego.OptionDescription("Sets spec.replicas on the cluster’s single MachineDeployment. A 204 confirms the desired count was saved; machine reconciliation is asynchronous."),
 		fuego.OptionDefaultStatusCode(http.StatusNoContent),

@@ -1244,3 +1244,57 @@ func TestPausePatchErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestSetDescriptionPersistence(t *testing.T) {
+	for _, annotations := range []map[string]string{nil, {"description-test-metadata": preservedAnnotationValue, clusterDescriptionAnnotation: "initial description"}} {
+		t.Run("annotations", func(t *testing.T) {
+			original := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName, Namespace: testNamespace, Annotations: annotations,
+				Labels: map[string]string{"description-test-metadata": preservedAnnotationValue},
+			}, Spec: capiv1.ClusterSpec{Paused: ptr.To(true)}}
+			kube := newFakeClient(t, original)
+			resource := NewClusterClient(kube, testNamespace)
+			for _, description := range []string{"Équipe \"Backend\" 🚀\nTest", "updated", "updated", "", ""} {
+				require.NoError(t, resource.SetDescription(t.Context(), clusterName, description))
+				stored := &capiv1.Cluster{}
+				require.NoError(t, kube.Get(t.Context(), types.NamespacedName{Name: clusterName, Namespace: testNamespace}, stored))
+				require.Equal(t, description, stored.Annotations[clusterDescriptionAnnotation])
+				require.Equal(t, original.Annotations["description-test-metadata"], stored.Annotations["description-test-metadata"])
+				require.Equal(t, original.Labels, stored.Labels)
+				require.Equal(t, original.Spec, stored.Spec)
+				if description == "" {
+					require.NotContains(t, stored.Annotations, clusterDescriptionAnnotation)
+				}
+				fresh := NewClusterClient(kube, testNamespace)
+				info, err := fresh.Get(t.Context(), clusterName)
+				require.NoError(t, err)
+				require.Equal(t, description, info.Description)
+				listed, err := fresh.List(t.Context())
+				require.NoError(t, err)
+				require.Len(t, listed, 1)
+				require.Equal(t, description, listed[0].Description)
+			}
+		})
+	}
+}
+
+func TestSetDescriptionErrors(t *testing.T) {
+	resource := NewClusterClient(newFakeClient(t), testNamespace)
+	require.ErrorIs(t, resource.SetDescription(t.Context(), clusterName, "new"), strategies.ErrClusterNotFound)
+	for _, tc := range []struct{ patchErr, wantErr error }{
+		{apierrors.NewConflict(schema.GroupResource{Resource: "clusters"}, clusterName, errTest), strategies.ErrClusterDescriptionUpdateConflict},
+		{apierrors.NewNotFound(schema.GroupResource{Resource: "clusters"}, clusterName), strategies.ErrClusterNotFound},
+		{errTest, errTest},
+	} {
+		t.Run(tc.wantErr.Error(), func(t *testing.T) {
+			kube := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
+				WithObjects(&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+						return tc.patchErr
+					},
+				}).Build()
+			require.ErrorIs(t, NewClusterClient(kube, testNamespace).SetDescription(t.Context(), clusterName, "new"), tc.wantErr)
+		})
+	}
+}

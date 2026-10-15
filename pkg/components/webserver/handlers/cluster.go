@@ -25,6 +25,10 @@ type ClusterCreateParams struct {
 	Tags map[string]string `json:"tags,omitempty"`
 }
 
+type ClusterDescriptionParams struct {
+	Description *string `json:"description" validate:"required,max=4000" description:"Cluster description, up to 4000 Unicode code points. An empty string clears it."`
+}
+
 type ClusterReplicasParams struct {
 	Replicas *int32 `json:"replicas" validate:"required,min=1" description:"Desired machine count; at least 1. Stacked-etcd control planes require an odd count." example:"3"`
 }
@@ -321,4 +325,12 @@ func toHTTPErrorOrNil(err error) error {
 		return nil
 	}
 	return toHTTPError(err)
+}
+
+func (k ClusterHandler) SetClusterDescription(c fuego.ContextWithBody[ClusterDescriptionParams]) (any, error) {
+	params, err := c.Body()
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterDescription(c.Context(), c.PathParam("id"), *params.Description))
 }

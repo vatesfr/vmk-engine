@@ -234,6 +234,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
+| `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
 | `PUT` | `/kubernetes/clusters/{id}/workers/replicas` | Sets the desired worker count | Working |
 | `PUT` | `/kubernetes/clusters/{id}/control-plane/replicas` | Sets the desired control-plane count | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
@@ -324,6 +325,19 @@ HTTP 422 with validation details. Generated resource names (including the
 `-cp`, `-worker` and worker deployment suffixes) must fit within 63 characters.
 The `cluster-defaults` ConfigMap in `--namespace` is read on each creation;
 changes affect new clusters only.
+
+To edit the description of an existing cluster:
+
+```bash
+curl --request PUT http://127.0.0.1:8080/kubernetes/clusters/demo/description \
+  --header 'Content-Type: application/json' \
+  --data '{"description":"Updated cluster description"}'
+```
+
+Send `{"description":""}` to clear it. The `description` field is required and
+must be a string (missing or null values return `422`). Success returns `204`
+without a body; unknown clusters return `404`, concurrent changes return `409`,
+and malformed bodies return `400`.
 
 The optional `description` accepts up to 4,000 Unicode code points, including
 quotes, accents, emojis and line breaks (escaped as required by JSON). Longer

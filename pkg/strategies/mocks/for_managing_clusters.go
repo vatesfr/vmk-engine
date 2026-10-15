@@ -287,3 +287,17 @@ func (mr *MockForManagingClustersMockRecorder) SetWorkerReplicas(ctx, name, repl
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetWorkerReplicas), ctx, name, replicas)
 }
+
+// SetClusterDescription mocks base method.
+func (m *MockForManagingClusters) SetClusterDescription(ctx context.Context, name, description string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetClusterDescription", ctx, name, description)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetClusterDescription indicates an expected call of SetClusterDescription.
+func (mr *MockForManagingClustersMockRecorder) SetClusterDescription(ctx, name, description any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterDescription", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterDescription), ctx, name, description)
+}

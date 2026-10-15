@@ -233,3 +233,16 @@ func (c ClusterManager) SetClusterNodePaused(ctx context.Context, clusterName, m
 	}
 	return nil
 }
+
+func (c ClusterManager) SetClusterDescription(ctx context.Context, name, description string) error {
+	if err := validateClusterName(name); err != nil {
+		return err
+	}
+	if utf8.RuneCountInString(description) > strategies.MaxClusterDescriptionLength {
+		return strategies.ErrClusterDescriptionTooLong
+	}
+	if err := c.clusterResources.SetDescription(ctx, name, description); err != nil {
+		return fmt.Errorf("%w: %w", strategies.ErrClusterDescriptionUpdateFailed, err)
+	}
+	return nil
+}

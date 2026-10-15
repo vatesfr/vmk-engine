@@ -694,3 +694,33 @@ func pausePatchError(err, notFound error) error {
 		return fmt.Errorf("patch pause state: %w", err)
 	}
 }
+
+// SetDescription patches only the description annotation, preserving other metadata.
+func (c ClusterClient) SetDescription(ctx context.Context, name, description string) error {
+	cluster, err := c.getClusterResource(ctx, name)
+	if err != nil {
+		return err
+	}
+	if cluster.Annotations[clusterDescriptionAnnotation] == description {
+		return nil
+	}
+	before := cluster.DeepCopy()
+	if description == "" {
+		delete(cluster.Annotations, clusterDescriptionAnnotation)
+	} else {
+		if cluster.Annotations == nil {
+			cluster.Annotations = make(map[string]string)
+		}
+		cluster.Annotations[clusterDescriptionAnnotation] = description
+	}
+	if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+		if apierrors.IsNotFound(err) {
+			return strategies.ErrClusterNotFound
+		}
+		if apierrors.IsConflict(err) {
+			return strategies.ErrClusterDescriptionUpdateConflict
+		}
+		return fmt.Errorf("patch cluster description: %w", err)
+	}
+	return nil
+}

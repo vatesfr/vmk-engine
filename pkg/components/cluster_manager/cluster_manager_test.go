@@ -24,7 +24,7 @@ type testCreateClusterParams struct {
 
 const (
 	deleteNodeName       = "node"
-	clusterVersion       = "1.36.9"
+	clusterVersion       = "1.36.5"
 	clusterName          = "test-cluster"
 	secondClusterName    = "test-cluster-2"
 	emptyClusterName     = ""
@@ -211,7 +211,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
 	clusterResources.EXPECT().Create(t.Context(), strategies.CreateClusterResourceParams{
-		Version:              "v1.36.9",
+		Version:              "v" + clusterVersion,
 		ControlPlaneIP:       params.ControlPlaneIP,
 		VMNamePrefix:         params.VMNamePrefix,
 		Name:                 clusterName,

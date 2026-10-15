@@ -35,7 +35,7 @@ func (v VersionManager) IsVersionAvailable(version string) bool {
 func availableVersions() []strategies.VersionGroup {
 	return []strategies.VersionGroup{
 		{Version: "1.37", Releases: []string{"1.37.1"}},
-		{Version: "1.36", Releases: []string{"1.36.9", "1.36.8", "1.36.7", "1.36.6", "1.36.5", "1.36.4", "1.36.3", "1.36.2", "1.36.1"}},
-		{Version: "1.35", Releases: []string{"1.35.5", "1.35.4", "1.35.3", "1.35.2", "1.35.1"}},
+		{Version: "1.36", Releases: []string{"1.36.5", "1.36.4", "1.36.3", "1.36.2", "1.36.1"}},
+		{Version: "1.35", Releases: []string{"1.35.9", "1.35.8", "1.35.7", "1.35.6", "1.35.5", "1.35.4", "1.35.3", "1.35.2", "1.35.1"}},
 	}
 }

@@ -2,6 +2,7 @@ package versionmanager_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,7 @@ func TestVersionCatalogue(t *testing.T) {
 	assert.Equal(t, "1.35", versions[2].Version)
 	for _, group := range versions {
 		for _, release := range group.Releases {
+			assert.True(t, strings.HasPrefix(release, group.Version+"."), "%s must belong to %s", release, group.Version)
 			assert.True(t, manager.IsVersionAvailable(release), release)
 		}
 	}

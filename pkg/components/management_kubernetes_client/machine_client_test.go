@@ -583,3 +583,30 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 		assert.Contains(t, err.Error(), "list Machines by UUID")
 	})
 }
+
+func TestGetNodeNameChecksMembershipAndRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		name, cluster, nodeRef string
+		wantErr                error
+	}{
+		{"registered", clusterName, resolvedNodeName, nil},
+		{"other cluster", otherClusterName, resolvedNodeName, strategies.ErrNodeNotFound},
+		{"not registered", clusterName, "", strategies.ErrNodeNotRegistered},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			machine := machineWithStatus(deleteMachineName, testNamespace, tc.cluster, false, "")
+			if tc.nodeRef != "" {
+				machine.Status.NodeRef = capiv1.MachineNodeReference{Name: tc.nodeRef}
+			}
+			fc := newFakeClient(t, machine)
+			service := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+			name, err := service.GetNodeName(t.Context(), clusterUUID, uuids.NodeID(tc.cluster, deleteMachineName))
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, resolvedNodeName, name)
+			}
+		})
+	}
+}

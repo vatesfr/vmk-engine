@@ -53,6 +53,8 @@ type ClusterConfigResponse struct {
 }
 
 type ClusterInfo struct {
+	IsCordon                    *bool             `json:"is_cordon,omitempty"`
+	IsDraining                  *bool             `json:"is_draining,omitempty" description:"Cordoned node with at least one terminating pod; cluster value means any node"`
 	Paused                      *bool             `json:"is_reconciliation_paused,omitempty" description:"Cluster API reconciliation paused via spec.paused. VMs and workloads continue running"`
 	IsAvailable                 *bool             `json:"is_available,omitempty"`
 	ID                          *uuid.UUID        `json:"id,omitempty"`
@@ -100,6 +102,8 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 
 type ClusterNodeInfo struct {
 	ID            *uuid.UUID `json:"id,omitempty"`
+	IsCordon      *bool      `json:"is_cordon,omitempty"`
+	IsDraining    *bool      `json:"is_draining,omitempty" description:"Cordoned node with at least one terminating pod; cluster value means any node"`
 	Paused        *bool      `json:"is_reconciliation_paused,omitempty" description:"Machine CAPI reconciliation pause; independent of cluster pause. VMs and workloads keep running"`
 	Name          string     `json:"name,omitempty"`
 	NodeName      string     `json:"node_name,omitempty"`
@@ -209,6 +213,8 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
+		IsCordon:                    value.IsCordon,
+		IsDraining:                  value.IsDraining,
 		IsAvailable:                 &value.IsAvailable,
 		IsControlPlaneInitialized:   value.IsControlPlaneInitialized,
 		IsInfrastructureProvisioned: value.IsInfrastructureProvisioned,
@@ -227,6 +233,8 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 
 func toNodeInfo(node strategies.ClusterNodeInfo) ClusterNodeInfo {
 	return ClusterNodeInfo{
+		IsCordon:      node.IsCordon,
+		IsDraining:    node.IsDraining,
 		ID:            &node.ID,
 		NodeName:      node.NodeName,
 		Paused:        &node.Paused,

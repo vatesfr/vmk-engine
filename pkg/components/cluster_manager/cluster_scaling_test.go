@@ -41,7 +41,9 @@ func TestSetReplicas(t *testing.T) {
 						resources.EXPECT().SetWorkerReplicas(t.Context(), tc.cluster, tc.replicas).Return(tc.resourceErr)
 					}
 				}
-				manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil)
+				manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil,
+					nil, nil,
+				)
 				var err error
 				if controlPlane {
 					err = manager.SetControlPlaneReplicas(t.Context(), tc.cluster, tc.replicas)

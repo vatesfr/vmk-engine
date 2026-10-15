@@ -88,6 +88,12 @@ flowchart LR
     machines -->|writes via| api
     secrets --> api
     defaults --> api
+    manager --> workloadport[ForManagingWorkloadNodes]
+    manager --> stateport[ForGettingWorkloadNodeStates]
+    workloadport --> workload[workload_kubernetes_client.NodeClient]
+    stateport --> workload
+    workload --> configport
+    workload --> target[Workload Kubernetes API]
 
     configurator[cmd/http_server/main.go\nConfigurator] -. creates and wires .-> http
     configurator -. creates and wires .-> manager
@@ -96,6 +102,7 @@ flowchart LR
     configurator -. creates .-> secrets
     configurator -. creates and wires .-> versions
     configurator -. creates\nRegisterIndexes\nStart\nWaitForCacheSync .-> cache
+    configurator -. creates and wires .-> workload
 ```
 
 The roles from Component + Strategy map to the code as follows:
@@ -214,9 +221,47 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
 | `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
 | `pkg/components/management_kubernetes_client/` | Kubernetes implementations of resource Strategies; informer cache UUID  |
+| `pkg/components/workload_kubernetes_client/` | Workload Node actions, observed states and dynamic client creation |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `pkg/uuids/` | Pure UUID v5 utilities: namespace constants and `ClusterID`/`NodeID` helpers |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
+
+## Workload Node operations
+
+`ClusterManager` consumes separate `ForManagingWorkloadNodes` and
+`ForGettingWorkloadNodeStates` Strategies, both implemented by
+`workload_kubernetes_client.NodeClient`. The workload component consumes
+`ForGettingClusterConfig`; the configurator injects the management `SecretClient`
+for that contract. There is no concrete dependency between these components.
+
+Action routes identify clusters and Machines by UUID.
+`MachineClient.GetNodeName` resolves the UUIDs through the informer cache, verifies
+cluster membership against a fresh Machine read and reads
+`status.nodeRef.name`. Missing registration returns a domain conflict before
+creating the workload connection. The workload component parses the current
+Secret kubeconfig into a new typed client-go client per operation. The management
+client remains bound to its original cluster throughout concurrent requests.
+
+Cordon and uncordon use an optimistic patch of `spec.unschedulable`. Drain
+cordons first, validates candidate pods, submits UID-protected `policy/v1`
+evictions and polls until completion. PDB throttling is retried within a bounded,
+cancellable context. Mirror and completed pods are skipped; unmanaged pods,
+DaemonSets and emptyDir volumes need their corresponding request options.
+An accepted drain always leaves the Node cordoned unless another actor changes it.
+No operation registry, annotations or background drain tasks are maintained.
+
+Read enrichment is best effort and lists Nodes and Pods once per cluster with a
+five-second deadline. `IsCordon` and `IsDraining` use optional booleans throughout
+the Strategies and HTTP DTOs. `IsDraining` means cordoned with at least one
+terminating pod, independently of which actor initiated the deletion. Node
+responses join this snapshot to Machines by `status.nodeRef.name`. Cluster
+responses aggregate with any-true semantics; an unknown value prevents claiming
+false. Missing Machine registrations are included as unknown. Explicit false
+values survive JSON serialization and field projection; unknown fields are omitted.
+
+Workload permissions are supplied by the retrieved kubeconfig: Nodes get/list/patch,
+Pods list, and pods/eviction create across namespaces. They are independent of the
+management chart's namespace-scoped Role, which already permits Secret reads.
 
 ## Configuration and variability
 

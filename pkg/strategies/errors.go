@@ -8,6 +8,12 @@ import (
 // contract and can therefore be interpreted without depending on a concrete
 // implementation such as cluster_manager.
 var (
+	ErrNodeNotRegistered                      = errors.New("machine has no Kubernetes node reference")
+	ErrNodeOperationConflict                  = errors.New("node operation conflicts with its current state")
+	ErrDrainBlocked                           = errors.New("drain blocked by pod configuration")
+	ErrInvalidDrainOptions                    = errors.New("invalid drain options")
+	ErrWorkloadUnavailable                    = errors.New("workload cluster or kubeconfig unavailable")
+	ErrDrainTimeout                           = errors.New("drain timed out; node remains cordoned")
 	ErrReplicasRejected                       = errors.New("replica count rejected by Kubernetes")
 	ErrInvalidReplicas                        = errors.New("replicas must be at least 1")
 	ErrInvalidControlPlaneReplicas            = errors.New("control plane replicas must be odd when using stacked etcd")

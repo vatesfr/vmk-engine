@@ -55,6 +55,8 @@ type MachineDeployment struct {
 
 // ClusterInfo is the shared representation returned by cluster Strategies.
 type ClusterInfo struct {
+	IsCordon                    *bool
+	IsDraining                  *bool
 	Paused                      bool
 	IsAvailable                 bool
 	ID                          uuid.UUID

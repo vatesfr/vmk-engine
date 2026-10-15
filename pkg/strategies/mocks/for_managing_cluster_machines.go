@@ -101,6 +101,21 @@ func (mr *MockForManagingClusterMachinesMockRecorder) GetMachinesByCluster(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMachinesByCluster", reflect.TypeOf((*MockForManagingClusterMachines)(nil).GetMachinesByCluster), ctx, clusterID)
 }
 
+// GetNodeName mocks base method.
+func (m *MockForManagingClusterMachines) GetNodeName(ctx context.Context, clusterID, machineID uuid.UUID) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeName", ctx, clusterID, machineID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNodeName indicates an expected call of GetNodeName.
+func (mr *MockForManagingClusterMachinesMockRecorder) GetNodeName(ctx, clusterID, machineID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeName", reflect.TypeOf((*MockForManagingClusterMachines)(nil).GetNodeName), ctx, clusterID, machineID)
+}
+
 // SetMachinePaused mocks base method.
 func (m *MockForManagingClusterMachines) SetMachinePaused(ctx context.Context, clusterID, machineID uuid.UUID, paused bool) error {
 	m.ctrl.T.Helper()

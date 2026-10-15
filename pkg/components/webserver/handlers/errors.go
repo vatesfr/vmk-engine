@@ -49,6 +49,14 @@ func toHTTPError(err error) error {
 	}
 
 	switch {
+	case errors.Is(err, strategies.ErrWorkloadUnavailable):
+		return fuego.HTTPError{Err: err, Status: http.StatusServiceUnavailable, Title: "Workload cluster unavailable", Detail: strategies.ErrWorkloadUnavailable.Error()}
+	case errors.Is(err, strategies.ErrDrainTimeout):
+		return fuego.HTTPError{Err: err, Status: http.StatusGatewayTimeout, Title: "Drain timed out", Detail: strategies.ErrDrainTimeout.Error()}
+	case errors.Is(err, strategies.ErrNodeNotRegistered), errors.Is(err, strategies.ErrNodeOperationConflict), errors.Is(err, strategies.ErrDrainBlocked):
+		return fuego.ConflictError{Err: err, Title: "Node operation blocked", Detail: err.Error()}
+	case errors.Is(err, strategies.ErrInvalidDrainOptions):
+		return fuego.HTTPError{Err: err, Status: http.StatusUnprocessableEntity, Title: "Invalid drain options", Detail: strategies.ErrInvalidDrainOptions.Error()}
 	case errors.Is(err, strategies.ErrReplicasRejected):
 		return fuego.HTTPError{Err: err, Status: http.StatusUnprocessableEntity, Title: "Invalid cluster parameters", Detail: strategies.ErrReplicasRejected.Error()}
 	case errors.Is(err, strategies.ErrInvalidReplicas),

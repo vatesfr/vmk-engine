@@ -202,7 +202,9 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 	clusterConfigs := mocks.NewMockForGettingClusterConfig(ctrl)
 	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
-	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager())
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager(),
+		nil, nil,
+	)
 	params := strategies.CreateClusterParams{
 		Version:              clusterVersion,
 		Name:                 clusterName,
@@ -244,6 +246,7 @@ func TestCreateClusterDefaultsError(t *testing.T) {
 		mocks.NewMockForManagingClusterMachines(ctrl),
 		clusterDefaults,
 		versionmanager.NewVersionManager(),
+		nil, nil,
 	)
 
 	_, err := clusterManager.CreateCluster(t.Context(), strategies.CreateClusterParams{
@@ -454,7 +457,9 @@ func newTestClusterManager(t *testing.T) (
 	clusterMachines := mocks.NewMockForManagingClusterMachines(ctrl)
 	clusterDefaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(gomock.Any()).Return(clusterCreationDefaults, nil).AnyTimes()
-	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager())
+	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager(),
+		nil, nil,
+	)
 
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
 }
@@ -576,7 +581,9 @@ func TestDeleteClusterNode(t *testing.T) {
 					nodes.EXPECT().DeleteMachine(t.Context(), tc.cluster, tc.node).After(get).Return(tc.deleteErr)
 				}
 			}
-			err := cluster_manager.NewClusterManager(resources, nil, nodes, nil, nil).DeleteClusterNode(t.Context(), tc.cluster, tc.node)
+			err := cluster_manager.NewClusterManager(resources, nil, nodes, nil, nil,
+				nil, nil,
+			).DeleteClusterNode(t.Context(), tc.cluster, tc.node)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {
@@ -615,6 +622,7 @@ func TestCreateClusterRejectsInvalidParametersBeforeReadingDefaults(t *testing.T
 			manager := cluster_manager.NewClusterManager(
 				mocks.NewMockForManagingClusterResources(ctrl), nil, nil,
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versionmanager.NewVersionManager(),
+				nil, nil,
 			)
 			result, err := manager.CreateCluster(t.Context(), strategies.CreateClusterParams{
 				Name: tc.name, Version: tc.version, ControlPlaneIP: controlPlaneIP,
@@ -634,7 +642,9 @@ func TestCreateClusterUsesInjectedVersionStrategy(t *testing.T) {
 	versions := mocks.NewMockForManagingVersions(ctrl)
 	defaults := mocks.NewMockForGettingClusterCreationDefaults(ctrl)
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
-	manager := cluster_manager.NewClusterManager(resources, nil, nil, defaults, versions)
+	manager := cluster_manager.NewClusterManager(resources, nil, nil, defaults, versions,
+		nil, nil,
+	)
 	params := strategies.CreateClusterParams{
 		Name: clusterName, Version: "1.99.1", ControlPlaneIP: controlPlaneIP,
 		ControlPlaneReplicas: controlPlaneReplicas, WorkerReplicas: workerReplicas,
@@ -658,7 +668,7 @@ func TestSetPaused(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		resources := mocks.NewMockForManagingClusterResources(ctrl)
 		machines := mocks.NewMockForManagingClusterMachines(ctrl)
-		manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil)
+		manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, nil)
 		resources.EXPECT().SetPaused(t.Context(), clusterUUID, paused).Return(nil)
 		require.NoError(t, manager.SetClusterPaused(t.Context(), clusterUUID, paused))
 		gomock.InOrder(

@@ -99,6 +99,20 @@ func (mr *MockForManagingClustersMockRecorder) DeleteClusterTag(ctx, id, tag any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterTag), ctx, id, tag)
 }
 
+// DrainClusterNode mocks base method.
+func (m *MockForManagingClusters) DrainClusterNode(ctx context.Context, clusterID, nodeID uuid.UUID, options strategies.DrainOptions) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DrainClusterNode", ctx, clusterID, nodeID, options)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DrainClusterNode indicates an expected call of DrainClusterNode.
+func (mr *MockForManagingClustersMockRecorder) DrainClusterNode(ctx, clusterID, nodeID, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DrainClusterNode", reflect.TypeOf((*MockForManagingClusters)(nil).DrainClusterNode), ctx, clusterID, nodeID, options)
+}
+
 // GetAllNodes mocks base method.
 func (m *MockForManagingClusters) GetAllNodes(ctx context.Context) ([]strategies.ClusterNodeInfo, error) {
 	m.ctrl.T.Helper()
@@ -246,6 +260,20 @@ func (m *MockForManagingClusters) SetClusterDescription(ctx context.Context, id 
 func (mr *MockForManagingClustersMockRecorder) SetClusterDescription(ctx, id, description any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterDescription", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterDescription), ctx, id, description)
+}
+
+// SetClusterNodeCordon mocks base method.
+func (m *MockForManagingClusters) SetClusterNodeCordon(ctx context.Context, clusterID, nodeID uuid.UUID, cordoned bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetClusterNodeCordon", ctx, clusterID, nodeID, cordoned)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetClusterNodeCordon indicates an expected call of SetClusterNodeCordon.
+func (mr *MockForManagingClustersMockRecorder) SetClusterNodeCordon(ctx, clusterID, nodeID, cordoned any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterNodeCordon", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterNodeCordon), ctx, clusterID, nodeID, cordoned)
 }
 
 // SetClusterNodePaused mocks base method.

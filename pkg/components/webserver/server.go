@@ -135,6 +135,13 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		pauseRouteOptions("Remove the Machine pause annotation; the parent cluster may remain paused")...,
 	)
 
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeID}/cordon", clusterHandler.CordonNode, nodeOperationOptions("Cordon the Kubernetes Node resolved from the CAPI Machine UUID")...)
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeID}/uncordon", clusterHandler.UncordonNode, nodeOperationOptions("Uncordon the Kubernetes Node resolved from the CAPI Machine UUID")...)
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeID}/drain", clusterHandler.DrainNode,
+		append(nodeOperationOptions("Cordon and drain the Node, respecting PDBs. Waits until completion. "+
+			"The Node remains cordoned after success or failure. Send {} for default options."), decodingResponse())...,
+	)
+
 	fuego.Get(clusterRouter, "/{id}/tags", clusterHandler.GetClusterTags, notFoundResponse("Cluster not found"))
 	fuego.Get(clusterRouter, "/{id}/tags/{tag}", clusterHandler.GetClusterTag, notFoundResponse("Cluster or tag not found"), validationResponse())
 	fuego.Put(clusterRouter, "/{id}/tags/{tag}", clusterHandler.CreateOrUpdateClusterTag,
@@ -181,5 +188,16 @@ func pauseRouteOptions(description string) []fuego.RouteOption {
 		fuego.OptionDefaultStatusCode(http.StatusNoContent),
 		noContentResponse(), notFoundResponse("Cluster or node not found"), validationResponse(),
 		fuego.OptionAddResponse(http.StatusConflict, "Resource changed during pause update; retry", fuego.Response{Type: fuego.HTTPError{}}),
+	}
+}
+
+func nodeOperationOptions(description string) []fuego.RouteOption {
+	return []fuego.RouteOption{
+		fuego.OptionDescription(description),
+		fuego.OptionDefaultStatusCode(http.StatusNoContent),
+		noContentResponse(), notFoundResponse("Cluster, Machine or Kubernetes Node not found"), validationResponse(),
+		fuego.OptionAddResponse(http.StatusConflict, "Node not registered, concurrent change or drain blocked; node may remain cordoned", fuego.Response{Type: fuego.HTTPError{}}),
+		fuego.OptionAddResponse(http.StatusServiceUnavailable, "Workload cluster or kubeconfig unavailable", fuego.Response{Type: fuego.HTTPError{}}),
+		fuego.OptionAddResponse(http.StatusGatewayTimeout, "Drain timed out; node remains cordoned", fuego.Response{Type: fuego.HTTPError{}}),
 	}
 }

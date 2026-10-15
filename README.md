@@ -18,6 +18,8 @@ interface.
 - health checks through `GET /ping`;
 - create, read, list, and delete CAPI `Cluster` resources;
 - read a cluster kubeconfig from a Kubernetes `Secret`;
+- cordon, uncordon and drain workload Nodes using dynamically created clients;
+- expose optional cordon and draining states on nodes and clusters;
 - interactive OpenAPI documentation with Swagger UI or Stoplight;
 - Kubernetes access using a `kubeconfig` or in-cluster configuration;
 - non-root Docker image;
@@ -45,8 +47,10 @@ Clients that handle validation failures by status must accept 422.
 |---|---|
 | 400 | Request body cannot be decoded: malformed JSON, incompatible field type, or unknown field |
 | 422 | Missing required field, invalid cluster name, invalid IP, replica count below 1, or invalid tag name/value |
-| 404 | Cluster or tag not found |
-| 409 | Cluster already exists |
+| 404 | Cluster, Machine, Node or tag not found |
+| 409 | Resource conflict, unregistered Node or drain blocked by pod configuration |
+| 503 | Workload cluster or kubeconfig unavailable |
+| 504 | Drain deadline exceeded; the Node remains cordoned |
 | 500 | Internal failure or missing server configuration |
 
 Errors use the existing Fuego response format (`status`, `title`, `detail`,
@@ -227,6 +231,76 @@ set externally is also preserved: these endpoints control only `spec.paused`.
 Deleting a paused cluster retains the existing behavior: deletion is requested
 first, then its `spec.paused` field is cleared to allow controller cleanup.
 
+## Cordon, uncordon and drain
+
+These operations use the cluster UUID in `{id}` and the CAPI Machine UUID in
+`{nodeID}`, matching the other node routes. The service resolves the cluster and
+Machine UUIDs, checks membership against a fresh Machine read, then resolves
+`Machine.status.nodeRef.name` to the workload Node. An unregistered Machine
+returns `409`; an absent Machine or one belonging to another cluster returns `404`.
+
+Set `CLUSTER_ID` and `NODE_ID` to the IDs returned by the cluster and node APIs.
+
+```bash
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/$CLUSTER_ID/nodes/$NODE_ID/cordon"
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/$CLUSTER_ID/nodes/$NODE_ID/uncordon"
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/$CLUSTER_ID/nodes/$NODE_ID/drain" \
+  --header 'Content-Type: application/json' \
+  --data '{"timeout_seconds":300,"ignore_daemon_sets":true}'
+```
+
+Cordon and uncordon are idempotent and only patch `Node.spec.unschedulable`.
+Drain cordons automatically, then uses `policy/v1` evictions with Pod UID
+preconditions, respecting PodDisruptionBudgets and each pod's termination grace
+period. It retries PDB throttling and waits for the affected pods to disappear.
+There is no automatic uncordon after success, timeout, cancellation or partial
+failure. An explicit uncordon returns the Node to service. An accepted eviction
+cannot be undone by cancelling the HTTP request. Successful operations return
+`204 No Content`; drain completion does not guarantee replacement pods are ready.
+
+Send `{}` to drain with defaults. The optional body fields are:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `timeout_seconds` | `300` | Deadline for the operation, maximum `1800`; `0` uses the default |
+| `ignore_daemon_sets` | `false` | Leave DaemonSet pods running instead of blocking the drain |
+| `delete_empty_dir_data` | `false` | Allow eviction of pods using `emptyDir`, accepting loss of that data |
+| `force` | `false` | Allow eviction of pods without a controller; PDBs still apply |
+
+Mirror pods and completed pods are skipped. Blocking pod configurations return
+`409` before starting that round of evictions. A timeout returns `504`, and the
+request can be retried to continue a partial drain. The HTTP client and ingress
+must permit requests lasting as long as the chosen timeout.
+
+A [workload cluster](https://cluster-api.sigs.k8s.io/reference/glossary#workload-cluster)
+is the cluster managed by Cluster API where user applications run. The management
+cluster hosts the CAPI controllers, Machines and kubeconfig Secrets.
+`management_kubernetes_client` accesses the management cluster;
+`workload_kubernetes_client` accesses the workload cluster's Nodes and Pods.
+
+For each operation the service reads `<cluster>-kubeconfig`, key `value`, from
+the management namespace and creates a separate workload connection in memory.
+Kubeconfig rotation takes effect on the next operation; no kubeconfig file is
+written. The API endpoint must be reachable from the service. The kubeconfig's
+identity needs `get`, `list`, `patch` on Nodes, `list` on Pods across namespaces,
+and `create` on `pods/eviction`. These permissions belong to the workload cluster;
+the management ServiceAccount retains its existing namespace-scoped permissions.
+
+Node responses expose `is_cordon` from `Node.spec.unschedulable`. `is_draining`
+is true when the Node is cordoned and at least one assigned pod has a
+`deletionTimestamp`. This is an observed indicator: an unrelated pod deletion
+can set it, and a drain blocked by a PDB can leave it false. It also observes
+drains started outside this service without storing operation state.
+
+Cluster list and detail responses aggregate these fields: true means at least
+one Node is true; false means all known Nodes are false and none are unknown.
+Unknown fields are omitted, while known false values remain present. Missing
+Node references or an inaccessible workload API do not prevent returning the
+available CAPI information. A pod-list failure can still return `is_cordon`;
+`is_draining` remains known false on uncordoned Nodes. Reads list Nodes and Pods
+once per workload cluster, with a five-second deadline per cluster. Collection
+field selection supports both fields, for example `?fields=name,is_cordon,is_draining`.
+
 ## HTTP API
 
 Base URL: `http://localhost:8080`.
@@ -246,6 +320,9 @@ Base URL: `http://localhost:8080`.
 | `POST` | `/kubernetes/clusters/{id}/reconciliation/resume` | Resumes cluster reconciliation | Idempotent, returns `204` |
 | `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/pause` | Pauses a CAPI Machine by UUID | Idempotent, returns `204` |
 | `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/resume` | Removes a CAPI Machine pause by UUID | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/cordon` | Cordon the workload Node identified by a CAPI Machine UUID | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/uncordon` | Uncordon the workload Node | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/drain` | Cordon, evict pods and wait for drain completion | Returns `204`, leaves Node cordoned |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 | `GET` | `/kubernetes/nodes` | Returns all CAPI Machines in the namespace | Working |
@@ -765,7 +842,8 @@ cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
 pkg/components/version_manager/ available Kubernetes releases and validation
-pkg/components/management_kubernetes_client/ Kubernetes Strategy implementations
+pkg/components/management_kubernetes_client/ Management-cluster Kubernetes Strategies
+pkg/components/workload_kubernetes_client/   Workload Nodes, Pods and dynamic connections
 pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use

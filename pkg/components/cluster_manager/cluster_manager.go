@@ -13,6 +13,8 @@ import (
 )
 
 type ClusterManager struct {
+	workloadNodes           strategies.ForManagingWorkloadNodes
+	workloadStates          strategies.ForGettingWorkloadNodeStates
 	versions                strategies.ForManagingVersions
 	clusterResources        strategies.ForManagingClusterResources
 	clusterConfigs          strategies.ForGettingClusterConfig
@@ -28,9 +30,13 @@ func NewClusterManager(
 	clusterMachines strategies.ForManagingClusterMachines,
 	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults,
 	versions strategies.ForManagingVersions,
+	workloadNodes strategies.ForManagingWorkloadNodes,
+	workloadStates strategies.ForGettingWorkloadNodeStates,
 ) ClusterManager {
 	return ClusterManager{
 		versions:                versions,
+		workloadNodes:           workloadNodes,
+		workloadStates:          workloadStates,
 		clusterResources:        clusterResources,
 		clusterConfigs:          clusterConfigs,
 		clusterMachines:         clusterMachines,
@@ -95,6 +101,9 @@ func (c ClusterManager) GetClusters(ctx context.Context) ([]strategies.ClusterIn
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterListingFailed, err)
 	}
+	for i := range clusters {
+		c.enrichCluster(ctx, &clusters[i])
+	}
 	return clusters, nil
 }
 
@@ -103,6 +112,7 @@ func (c ClusterManager) GetClusterByUUID(ctx context.Context, id uuid.UUID) (str
 	if err != nil {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
 	}
+	c.enrichCluster(ctx, &cluster)
 	return cluster, nil
 }
 
@@ -116,6 +126,7 @@ func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, id uuid.UUID) (
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
 	}
+	c.enrichNodes(ctx, nodes)
 	return nodes, nil
 }
 
@@ -124,6 +135,7 @@ func (c ClusterManager) GetAllNodes(ctx context.Context) ([]strategies.ClusterNo
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
 	}
+	c.enrichNodes(ctx, nodes)
 	return nodes, nil
 }
 
@@ -132,7 +144,9 @@ func (c ClusterManager) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strate
 	if err != nil {
 		return strategies.ClusterNodeInfo{}, err
 	}
-	return node, nil
+	nodes := []strategies.ClusterNodeInfo{node}
+	c.enrichNodes(ctx, nodes)
+	return nodes[0], nil
 }
 
 func (c ClusterManager) GetClusterConfig(ctx context.Context, id uuid.UUID) (string, error) {

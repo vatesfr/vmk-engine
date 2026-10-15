@@ -15,6 +15,7 @@ import (
 	"capv-proxy/pkg/components/management_kubernetes_client"
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver"
+	"capv-proxy/pkg/components/workload_kubernetes_client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -132,9 +133,11 @@ func run(opts options) error {
 	k8sSecretClient := management_kubernetes_client.NewSecretClient(k8sClient, opts.namespace)
 	k8sMachineClient := management_kubernetes_client.NewMachineClient(k8sClient, informerCache, opts.namespace)
 	k8sConfigMapClient := management_kubernetes_client.NewConfigMapClient(k8sClient, opts.namespace)
+	workloadClient := workload_kubernetes_client.NewNodeClient(k8sSecretClient)
 	versionManager := versionmanager.NewVersionManager()
 	clusterManager := cluster_manager.NewClusterManager(
 		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,
+		workloadClient, workloadClient,
 	)
 
 	httpServer := webserver.HttpServer{

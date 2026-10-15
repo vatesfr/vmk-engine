@@ -285,3 +285,28 @@ func (m MachineClient) SetMachinePaused(ctx context.Context, clusterID, machineI
 	}
 	return nil
 }
+
+// GetNodeName resolves a Machine by UUID and rechecks its membership with a fresh read.
+func (m MachineClient) GetNodeName(ctx context.Context, clusterID, machineID uuid.UUID) (string, error) {
+	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
+		return "", err
+	}
+	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
+	if err != nil {
+		return "", err
+	}
+	if err := m.kubernetesClient.Get(ctx, client.ObjectKeyFromObject(machine), machine); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
+		}
+		return "", err
+	}
+	node := toClusterNodeInfo(machine)
+	if node.ID != machineID || node.ParentCluster != clusterID {
+		return "", strategies.ErrNodeNotFound
+	}
+	if node.NodeName == "" {
+		return "", strategies.ErrNodeNotRegistered
+	}
+	return node.NodeName, nil
+}

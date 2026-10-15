@@ -880,6 +880,7 @@ func TestCreateClusterHTTPRejectsInvalidParameters(t *testing.T) {
 			manager := cluster_manager.NewClusterManager(
 				mocks.NewMockForManagingClusterResources(ctrl), nil, nil,
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versions,
+				nil, nil,
 			)
 			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, versions)
 			var payload map[string]any

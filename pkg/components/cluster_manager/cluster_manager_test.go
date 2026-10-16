@@ -334,7 +334,7 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		clusterResources, _, clusterMachines, clusterManager := newTestClusterManager(t)
 		expected := []strategies.ClusterNodeInfo{
-			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP},
+			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP, Version: clusterVersion},
 			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
 		}
 		clusterResources.EXPECT().GetByUUID(t.Context(), clusterID).Return(clusterInfo, nil)
@@ -496,7 +496,7 @@ func TestGetAllNodes(t *testing.T) {
 		err   error
 	}{
 		"success": {nodes: []strategies.ClusterNodeInfo{
-			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP},
+			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP, Version: clusterVersion},
 			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
 		}},
 		"empty result": {nodes: []strategies.ClusterNodeInfo{}},

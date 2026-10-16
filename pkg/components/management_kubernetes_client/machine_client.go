@@ -188,6 +188,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		Endpoint:      machineEndpoint(machine.Status.Addresses),
 		MachineID:     machineID,
 		ParentCluster: uuids.ClusterID(clusterName),
+		Version:       machine.Spec.Version,
 	}
 }
 

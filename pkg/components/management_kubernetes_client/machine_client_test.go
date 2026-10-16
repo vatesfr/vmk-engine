@@ -610,3 +610,23 @@ func TestGetNodeNameChecksMembershipAndRegistration(t *testing.T) {
 		})
 	}
 }
+
+func TestMachineClientNodeVersion(t *testing.T) {
+	for _, version := range []string{"v1.36.0", "v1.35.4", ""} {
+		t.Run("version="+version, func(t *testing.T) {
+			machine := machineWithStatus("machine", testNamespace, clusterName, false, metav1.ConditionTrue)
+			machine.Spec.Version = version
+			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
+
+			clusterNodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
+			require.NoError(t, err)
+			require.Len(t, clusterNodes, 1)
+			assert.Equal(t, version, clusterNodes[0].Version)
+
+			allNodes, err := machineClient.GetAllMachines(t.Context())
+			require.NoError(t, err)
+			require.Len(t, allNodes, 1)
+			assert.Equal(t, version, allNodes[0].Version)
+		})
+	}
+}

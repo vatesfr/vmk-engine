@@ -303,11 +303,12 @@ func TestHTTPRoutes(t *testing.T) {
 					Role:          controlPlaneNodeRole,
 					Status:        controlPlaneNodeStatus,
 					Endpoint:      controlPlaneNodeEndpoint,
+					Version:       k8sVersion,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
-				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `"}]`,
+				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
 		},
 		"get cluster nodes with all fields": {
 			method: http.MethodGet,
@@ -315,13 +316,13 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
-					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, Version: k8sVersion,
 					ParentCluster: clusterUUID,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
-				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `"}]`,
+				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
 		},
 		"get cluster nodes with selected fields": {
 			method: http.MethodGet,
@@ -329,11 +330,22 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
-					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, Version: k8sVersion,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `[{"name":"control-plane-0","status":"Ready"}]`,
+		},
+		"get cluster nodes with selected version": {
+			method: http.MethodGet,
+			path:   clusterNodesPath + "?fields=name,version",
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
+					Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Version: k8sVersion,
+				}}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `[{"name":"control-plane-0","version":"v1.36.0"}]`,
 		},
 		"get cluster config": {
 			method: http.MethodGet,
@@ -737,14 +749,14 @@ func TestGetAllNodesHTTP(t *testing.T) {
 		"list all nodes": {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{
-					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, ParentCluster: clusterUUID},
+					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, ParentCluster: clusterUUID, Version: k8sVersion},
 					{Name: "worker-0", Role: "worker", Status: "NotReady", ParentCluster: uuid.FromStringOrNil("10000000-0000-0000-0000-000000000001")},
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
 				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11",` +
-				`"$cluster":"` + clusterUUID.String() + `"},
+				`"$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"},
 				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"worker-0","role":"worker","status":"NotReady","$cluster":"10000000-0000-0000-0000-000000000001"}
 			]`,
 		},

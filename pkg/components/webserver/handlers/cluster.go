@@ -112,6 +112,7 @@ type ClusterNodeInfo struct {
 	Endpoint      string     `json:"endpoint,omitempty"`
 	MachineID     *uuid.UUID `json:"machine_id,omitempty"`
 	ParentCluster *uuid.UUID `json:"$cluster,omitempty"`
+	Version       string     `json:"version,omitempty"`
 }
 
 func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHandler {
@@ -244,6 +245,7 @@ func toNodeInfo(node strategies.ClusterNodeInfo) ClusterNodeInfo {
 		Status:        node.Status,
 		Endpoint:      node.Endpoint,
 		MachineID:     node.MachineID,
+		Version:       node.Version,
 	}
 }
 

@@ -219,11 +219,11 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: []strategies.ClusterNodeInfo{{
-				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID,
+				ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion,
 			}},
 			expected: []handlers.ClusterNodeInfo{{
 				Paused: ptr.To(false),
-				ID:     &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID,
+				ID:     ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion,
 			}},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -483,12 +483,12 @@ func TestGetAllNodes(t *testing.T) {
 	}{
 		"maps all node fields and preserves order": {
 			serviceResult: []strategies.ClusterNodeInfo{
-				{ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID},
-				{ID: workerUUID, Name: workerName, Role: "worker", Status: "NotReady", ParentCluster: clusterUUID},
+				{ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion},
+				{ID: workerUUID, ParentCluster: clusterUUID, Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 			expected: []handlers.ClusterNodeInfo{
-				{Paused: ptr.To(false), ID: &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID},
-				{Paused: ptr.To(false), ID: &workerUUID, Name: workerName, Role: "worker", Status: "NotReady", ParentCluster: &clusterUUID},
+				{ID: ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Paused: ptr.To(false), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion},
+				{ID: ptr.To(workerUUID), ParentCluster: ptr.To(clusterUUID), Paused: ptr.To(false), Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 		},
 		"empty result":                      {serviceResult: []strategies.ClusterNodeInfo{}, expected: []handlers.ClusterNodeInfo{}},

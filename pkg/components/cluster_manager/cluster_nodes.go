@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/gofrs/uuid"
+	"github.com/samber/lo"
+	lop "github.com/samber/lo/parallel"
 
 	"capv-proxy/pkg/strategies"
 )
@@ -62,16 +64,18 @@ func (c ClusterManager) enrichNodes(ctx context.Context, nodes []strategies.Clus
 	if c.workloadStates == nil {
 		return
 	}
-	states := make(map[uuid.UUID]map[string]strategies.WorkloadNodeState)
-	for i := range nodes {
-		clusterName := nodes[i].ParentCluster
-		if _, fetched := states[clusterName]; !fetched {
-			// A partial result can still contain known cordon states after a pod-list failure.
-			states[clusterName] = c.getNodeStates(ctx, clusterName)
+	indicesByCluster := lo.GroupBy(lo.Range(len(nodes)), func(i int) uuid.UUID {
+		return nodes[i].ParentCluster
+	})
+	lop.ForEach(lo.Values(indicesByCluster), func(indices []int, _ int) {
+		// Each cluster owns distinct indices; no result map is shared between goroutines.
+		// A partial result can still contain known cordon states after a pod-list failure.
+		states := c.getNodeStates(ctx, nodes[indices[0]].ParentCluster)
+		for _, i := range indices {
+			state := states[nodes[i].NodeName]
+			nodes[i].IsCordon, nodes[i].IsDraining = state.IsCordon, state.IsDraining
 		}
-		state := states[clusterName][nodes[i].NodeName]
-		nodes[i].IsCordon, nodes[i].IsDraining = state.IsCordon, state.IsDraining
-	}
+	})
 }
 
 func (c ClusterManager) enrichCluster(ctx context.Context, cluster *strategies.ClusterInfo) {

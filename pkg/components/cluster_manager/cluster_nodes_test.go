@@ -1,6 +1,7 @@
 package cluster_manager_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -59,17 +60,17 @@ func TestNodeEnrichmentGroupsReadsAndPreservesUnknown(t *testing.T) {
 	machines := mocks.NewMockForManagingClusterMachines(ctrl)
 	states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
 	machines.EXPECT().GetAllMachines(gomock.Any()).Return([]strategies.ClusterNodeInfo{
-		{Name: "m1", NodeName: "n1", ParentCluster: uuids.ClusterID("one")},
-		{Name: "m2", NodeName: "n2", ParentCluster: uuids.ClusterID("one")},
-		{Name: "m3", NodeName: "n3", ParentCluster: uuids.ClusterID("two")},
+		{Name: "m1", NodeName: "n1", ParentCluster: uuids.ClusterID(clusterName)},
+		{Name: "m2", NodeName: "n2", ParentCluster: uuids.ClusterID(clusterName)},
+		{Name: "m3", NodeName: "n3", ParentCluster: uuids.ClusterID(secondClusterName)},
 	}, nil)
-	states.EXPECT().GetNodeStates(gomock.Any(), "one").Return(map[string]strategies.WorkloadNodeState{
+	states.EXPECT().GetNodeStates(gomock.Any(), clusterName).Return(map[string]strategies.WorkloadNodeState{
 		"n1": {IsCordon: ptr.To(true), IsDraining: ptr.To(true)}, "n2": {IsCordon: ptr.To(false), IsDraining: ptr.To(false)},
 	}, nil).Times(1)
-	states.EXPECT().GetNodeStates(gomock.Any(), "two").Return(nil, errors.New("offline"))
+	states.EXPECT().GetNodeStates(gomock.Any(), secondClusterName).Return(nil, errors.New("offline"))
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
-	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID("one")).Return(strategies.ClusterInfo{Name: "one"}, nil)
-	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID("two")).Return(strategies.ClusterInfo{Name: "two"}, nil)
+	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(clusterName)).Return(strategies.ClusterInfo{Name: clusterName}, nil)
+	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(secondClusterName)).Return(strategies.ClusterInfo{Name: secondClusterName}, nil)
 	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, states)
 	nodes, err := manager.GetAllNodes(t.Context())
 	require.NoError(t, err)
@@ -121,4 +122,102 @@ func TestClusterAggregationOmitsFalseWhenMachineHasNoNode(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, cluster.IsCordon)
 	require.Nil(t, cluster.IsDraining)
+}
+
+// Both calls must start before either is released, without relying on timings.
+func TestEnrichmentReadsClustersConcurrentlyAndPreservesOrder(t *testing.T) {
+	for _, collection := range []string{"clusters", "nodes"} {
+		t.Run(collection, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			resources := mocks.NewMockForManagingClusterResources(ctrl)
+			machines := mocks.NewMockForManagingClusterMachines(ctrl)
+			states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			started := make(chan string, 2)
+			release := make(chan struct{})
+			defer close(release)
+			read := func(ctx context.Context, name string) (map[string]strategies.WorkloadNodeState, error) {
+				started <- name
+				select {
+				case <-release:
+					value := name == clusterName
+					return map[string]strategies.WorkloadNodeState{
+						"n1": {IsCordon: ptr.To(value), IsDraining: ptr.To(false)},
+						"n2": {IsCordon: ptr.To(value), IsDraining: ptr.To(false)},
+					}, nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			states.EXPECT().GetNodeStates(gomock.Any(), clusterName).DoAndReturn(read).Times(1)
+			states.EXPECT().GetNodeStates(gomock.Any(), secondClusterName).DoAndReturn(read).Times(1)
+			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil, nil, states)
+			type result struct {
+				names   []string
+				cordons []*bool
+				err     error
+			}
+			var run func() result
+			var wantNames []string
+			var wantCordons []*bool
+			if collection == "clusters" {
+				resources.EXPECT().List(ctx).Return([]strategies.ClusterInfo{{Name: clusterName}, {Name: secondClusterName}}, nil)
+				wantNames = []string{clusterName, secondClusterName}
+				wantCordons = []*bool{ptr.To(true), ptr.To(false)}
+				run = func() result {
+					clusters, err := manager.GetClusters(ctx)
+					output := result{err: err}
+					for _, cluster := range clusters {
+						output.names = append(output.names, cluster.Name)
+						output.cordons = append(output.cordons, cluster.IsCordon)
+					}
+					return output
+				}
+			} else {
+				resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: clusterName, ID: clusterUUID}, nil)
+				resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(secondClusterName)).Return(strategies.ClusterInfo{Name: secondClusterName, ID: uuids.ClusterID(secondClusterName)}, nil)
+				manager = cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, states)
+				machines.EXPECT().GetAllMachines(ctx).Return([]strategies.ClusterNodeInfo{
+					{Name: "m1", NodeName: "n1", ParentCluster: clusterUUID},
+					{Name: "m2", NodeName: "n1", ParentCluster: uuids.ClusterID(secondClusterName)},
+					{Name: "m3", NodeName: "n2", ParentCluster: clusterUUID},
+				}, nil)
+				wantNames = []string{"m1", "m2", "m3"}
+				wantCordons = []*bool{ptr.To(true), ptr.To(false), ptr.To(true)}
+				run = func() result {
+					nodes, err := manager.GetAllNodes(ctx)
+					output := result{err: err}
+					for _, node := range nodes {
+						output.names = append(output.names, node.Name)
+						output.cordons = append(output.cordons, node.IsCordon)
+					}
+					return output
+				}
+			}
+			done := make(chan result, 1)
+			go func() { done <- run() }()
+			names := make([]string, 0, 2)
+			for range 2 {
+				select {
+				case name := <-started:
+					names = append(names, name)
+				case <-ctx.Done():
+					t.Fatal("cluster reads did not start concurrently")
+				}
+			}
+			require.ElementsMatch(t, []string{clusterName, secondClusterName}, names)
+			// Release both reads after verifying they started concurrently.
+			release <- struct{}{}
+			release <- struct{}{}
+			select {
+			case output := <-done:
+				require.NoError(t, output.err)
+				require.Equal(t, wantNames, output.names)
+				require.Equal(t, wantCordons, output.cordons)
+			case <-ctx.Done():
+				t.Fatal("enrichment did not complete")
+			}
+		})
+	}
 }

@@ -298,7 +298,8 @@ Unknown fields are omitted, while known false values remain present. Missing
 Node references or an inaccessible workload API do not prevent returning the
 available CAPI information. A pod-list failure can still return `is_cordon`;
 `is_draining` remains known false on uncordoned Nodes. Reads list Nodes and Pods
-once per workload cluster, with a five-second deadline per cluster. Collection
+once per workload cluster, with a five-second deadline per cluster. Reads for
+different clusters run in parallel while preserving response order. Collection
 field selection supports both fields, for example `?fields=name,is_cordon,is_draining`.
 
 ## HTTP API

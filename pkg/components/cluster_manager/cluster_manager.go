@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gofrs/uuid"
+	lop "github.com/samber/lo/parallel"
 
 	"capv-proxy/pkg/strategies"
 
@@ -101,9 +102,9 @@ func (c ClusterManager) GetClusters(ctx context.Context) ([]strategies.ClusterIn
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterListingFailed, err)
 	}
-	for i := range clusters {
+	lop.ForEach(clusters, func(_ strategies.ClusterInfo, i int) {
 		c.enrichCluster(ctx, &clusters[i])
-	}
+	})
 	return clusters, nil
 }
 

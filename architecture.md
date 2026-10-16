@@ -251,7 +251,9 @@ An accepted drain always leaves the Node cordoned unless another actor changes i
 No operation registry, annotations or background drain tasks are maintained.
 
 Read enrichment is best effort and lists Nodes and Pods once per cluster with a
-five-second deadline. `IsCordon` and `IsDraining` use optional booleans throughout
+five-second deadline. Collection enrichment runs in parallel across clusters
+using `lo/parallel`, with one state read per cluster and writes to distinct result
+indices to preserve response order without shared-map writes. `IsCordon` and `IsDraining` use optional booleans throughout
 the Strategies and HTTP DTOs. `IsDraining` means cordoned with at least one
 terminating pod, independently of which actor initiated the deletion. Node
 responses join this snapshot to Machines by `status.nodeRef.name`. Cluster

@@ -334,7 +334,7 @@ func (k ClusterHandler) GetAllNodes(c fuego.ContextNoBody) ([]ClusterNodeInfo, e
 		return nil, toHTTPError(err)
 	}
 
-	return toNodesInfo(nodes), nil
+	return selectCollectionFields(toNodesInfo(nodes), c.QueryParam("fields"))
 }
 
 func (k ClusterHandler) DeleteClusterNode(c fuego.ContextNoBody) (any, error) {

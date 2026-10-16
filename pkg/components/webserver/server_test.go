@@ -1123,3 +1123,29 @@ func TestUpdateClusterDescriptionHTTP(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAllNodesHTTPFields(t *testing.T) {
+	for name, tc := range map[string]struct {
+		query        string
+		expectedJSON string
+	}{
+		"selected fields":           {query: "?fields=name,version", expectedJSON: `[{"name":"control-plane-0","version":"v1.36.0"}]`},
+		"paused false is preserved": {query: "?fields=is_reconciliation_paused", expectedJSON: `[{"is_reconciliation_paused":false}]`},
+		"unknown field is ignored":  {query: "?fields=name,unknown", expectedJSON: `[{"name":"control-plane-0"}]`},
+		"only unknown fields":       {query: "?fields=unknown", expectedJSON: `[{}]`},
+		"wildcard": {query: "?fields=*", expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","$cluster":"00000000-0000-0000-0000-000000000000",` +
+			`"is_reconciliation_paused":false,"name":"control-plane-0","version":"v1.36.0"}]`},
+		"empty fields": {query: "?fields=", expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","$cluster":"00000000-0000-0000-0000-000000000000",` +
+			`"is_reconciliation_paused":false,"name":"control-plane-0","version":"v1.36.0"}]`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{
+				method: http.MethodGet, path: allNodesPath + tc.query,
+				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+					service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{{Name: controlPlaneNodeName, Version: k8sVersion}}, nil)
+				},
+				expectedStatus: http.StatusOK, expectedJSON: tc.expectedJSON,
+			})
+		})
+	}
+}

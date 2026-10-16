@@ -370,7 +370,12 @@ Return only the cluster name and the ready replica count:
 curl 'http://127.0.0.1:8080/kubernetes/clusters?fields=name,control_plane_status.ready_replicas'
 ```
 
-The nodes collection uses the same selection syntax.
+Both nodes collections (`/kubernetes/nodes` and
+`/kubernetes/clusters/{id}/nodes`) use the same selection syntax:
+
+```bash
+curl 'http://127.0.0.1:8080/kubernetes/nodes?fields=name,version'
+```
 
 List available Kubernetes versions before creating a cluster:
 

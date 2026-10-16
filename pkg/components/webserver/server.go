@@ -153,7 +153,9 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		noContentResponse(), notFoundResponse("Cluster or tag not found"), validationResponse(),
 	)
 
-	fuego.Get(apiRouter, "/nodes", clusterHandler.GetAllNodes)
+	fuego.Get(apiRouter, "/nodes", clusterHandler.GetAllNodes,
+		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
+	)
 	fuego.Get(apiRouter, "/nodes/{id}", clusterHandler.GetNode, notFoundResponse("Node not found"))
 	fuego.Get(apiRouter, "/tags", clusterHandler.GetAllTags)
 	fuego.Get(apiRouter, "/versions-available", versionsHandler.GetAvailableVersion)

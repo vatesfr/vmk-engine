@@ -213,7 +213,7 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
 | `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
-| `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies; informer cache UUID indexes |
+| `pkg/components/management_kubernetes_client/` | Kubernetes implementations of resource Strategies; informer cache UUID  |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `pkg/uuids/` | Pure UUID v5 utilities: namespace constants and `ClusterID`/`NodeID` helpers |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
@@ -233,7 +233,7 @@ Strategies allow Kubernetes clients or test implementations to be injected
 without changing the component.
 
 Cluster creation defaults are provided by the
-`ForGettingClusterCreationDefaults` Strategy. The `kubernetes_clients.ConfigMapClient`
+`ForGettingClusterCreationDefaults` Strategy. The `management_kubernetes_client.ConfigMapClient`
 implements this contract and reads `cluster-defaults` in the configured namespace
 on every call. The ConfigMap and the keys documented in the README are required;
 missing keys or decoding errors are propagated instead of being replaced by values built

@@ -765,7 +765,7 @@ cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
 pkg/components/version_manager/ available Kubernetes releases and validation
-pkg/components/kubernetes_clients/ Kubernetes Strategy implementations
+pkg/components/management_kubernetes_client/ Kubernetes Strategy implementations
 pkg/strategies/             shared contracts and cross-contract models
 charts/go-capi-client/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use

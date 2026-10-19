@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/components/cluster_manager"
-	"capv-proxy/pkg/components/kubernetes_clients"
+	"capv-proxy/pkg/components/management_kubernetes_client"
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver"
 
@@ -116,7 +116,7 @@ func run(opts options) error {
 	if err != nil {
 		return err
 	}
-	if err := kubernetes_clients.RegisterIndexes(ctx, informerCache); err != nil {
+	if err := management_kubernetes_client.RegisterIndexes(ctx, informerCache); err != nil {
 		return fmt.Errorf("register UUID indexers: %w", err)
 	}
 	go func() {
@@ -128,10 +128,10 @@ func run(opts options) error {
 		return fmt.Errorf("informer cache failed to sync")
 	}
 
-	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, informerCache, opts.namespace)
-	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
-	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, informerCache, opts.namespace)
-	k8sConfigMapClient := kubernetes_clients.NewConfigMapClient(k8sClient, opts.namespace)
+	k8sClusterClient := management_kubernetes_client.NewClusterClient(k8sClient, informerCache, opts.namespace)
+	k8sSecretClient := management_kubernetes_client.NewSecretClient(k8sClient, opts.namespace)
+	k8sMachineClient := management_kubernetes_client.NewMachineClient(k8sClient, informerCache, opts.namespace)
+	k8sConfigMapClient := management_kubernetes_client.NewConfigMapClient(k8sClient, opts.namespace)
 	versionManager := versionmanager.NewVersionManager()
 	clusterManager := cluster_manager.NewClusterManager(
 		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,

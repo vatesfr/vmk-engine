@@ -1,4 +1,4 @@
-package kubernetes_clients
+package management_kubernetes_client
 
 import (
 	"context"

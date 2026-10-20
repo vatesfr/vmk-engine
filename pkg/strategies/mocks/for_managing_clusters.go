@@ -175,18 +175,18 @@ func (mr *MockForManagingClustersMockRecorder) GetClusterConfig(ctx, name any) *
 }
 
 // GetClusterNodesInfo mocks base method.
-func (m *MockForManagingClusters) GetClusterNodesInfo(ctx context.Context, name string) ([]strategies.ClusterNodeInfo, error) {
+func (m *MockForManagingClusters) GetClusterNodesInfo(ctx context.Context, id uuid.UUID) ([]strategies.ClusterNodeInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterNodesInfo", ctx, name)
+	ret := m.ctrl.Call(m, "GetClusterNodesInfo", ctx, id)
 	ret0, _ := ret[0].([]strategies.ClusterNodeInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterNodesInfo indicates an expected call of GetClusterNodesInfo.
-func (mr *MockForManagingClustersMockRecorder) GetClusterNodesInfo(ctx, name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterNodesInfo(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterNodesInfo", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterNodesInfo), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterNodesInfo", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterNodesInfo), ctx, id)
 }
 
 // GetClusterTag mocks base method.
@@ -234,6 +234,21 @@ func (mr *MockForManagingClustersMockRecorder) GetClusters(ctx any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusters", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusters), ctx)
 }
 
+// GetNodeByUUID mocks base method.
+func (m *MockForManagingClusters) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterNodeInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeByUUID", ctx, id)
+	ret0, _ := ret[0].(strategies.ClusterNodeInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNodeByUUID indicates an expected call of GetNodeByUUID.
+func (mr *MockForManagingClustersMockRecorder) GetNodeByUUID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeByUUID", reflect.TypeOf((*MockForManagingClusters)(nil).GetNodeByUUID), ctx, id)
+}
+
 // SetClusterNodePaused mocks base method.
 func (m *MockForManagingClusters) SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
 	m.ctrl.T.Helper()
@@ -260,21 +275,6 @@ func (m *MockForManagingClusters) SetClusterPaused(ctx context.Context, name str
 func (mr *MockForManagingClustersMockRecorder) SetClusterPaused(ctx, name, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterPaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterPaused), ctx, name, paused)
-}
-
-// GetNodeByUUID mocks base method.
-func (m *MockForManagingClusters) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterNodeInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNodeByUUID", ctx, id)
-	ret0, _ := ret[0].(strategies.ClusterNodeInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetNodeByUUID indicates an expected call of GetNodeByUUID.
-func (mr *MockForManagingClustersMockRecorder) GetNodeByUUID(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeByUUID", reflect.TypeOf((*MockForManagingClusters)(nil).GetNodeByUUID), ctx, id)
 }
 
 // SetClusterTag mocks base method.

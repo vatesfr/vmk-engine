@@ -17,7 +17,7 @@ type ForManagingClusters interface {
 	GetClusters(ctx context.Context) ([]ClusterInfo, error)
 	GetCluster(ctx context.Context, name string) (ClusterInfo, error)
 	GetClusterByUUID(ctx context.Context, id uuid.UUID) (ClusterInfo, error)
-	GetClusterNodesInfo(ctx context.Context, name string) ([]ClusterNodeInfo, error)
+	GetClusterNodesInfo(ctx context.Context, id uuid.UUID) ([]ClusterNodeInfo, error)
 	GetClusterConfig(ctx context.Context, name string) (string, error)
 	DeleteCluster(ctx context.Context, name string) error
 	DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error

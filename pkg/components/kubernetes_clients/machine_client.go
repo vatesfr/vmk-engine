@@ -39,9 +39,9 @@ func NewMachineClient(kubernetesClient client.Client, informerCache cache.Cache,
 	return MachineClient{kubernetesClient, informerCache, namespace}
 }
 
-func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName string) ([]strategies.ClusterNodeInfo, error) {
-	if clusterName == "" {
-		return nil, strategies.ErrClusterNameRequired
+func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterID uuid.UUID) ([]strategies.ClusterNodeInfo, error) {
+	if clusterID == uuid.Nil {
+		return nil, strategies.ErrClusterIDRequired
 	}
 	if m.namespace == "" {
 		return nil, strategies.ErrClusterNamespaceRequired
@@ -52,9 +52,9 @@ func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName str
 		ctx,
 		machines,
 		client.InNamespace(m.namespace),
-		client.MatchingLabels{capiv1.ClusterNameLabel: clusterName},
+		client.MatchingFields{uuids.ClusterUUIDIndexKey: clusterID.String()},
 	); err != nil {
-		return nil, fmt.Errorf("list Machines for cluster %s/%s: %w", m.namespace, clusterName, err)
+		return nil, fmt.Errorf("list Machines for cluster %s/%s: %w", m.namespace, clusterID, err)
 	}
 
 	result := lo.Map(machines.Items, func(machine capiv1.Machine, _ int) strategies.ClusterNodeInfo {

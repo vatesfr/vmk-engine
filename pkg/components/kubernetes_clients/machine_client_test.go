@@ -60,7 +60,7 @@ func machineWithStatus(name, namespace, cluster string, controlPlane bool, condi
 type testMachineParams struct {
 	objects         []client.Object
 	namespace       string
-	clusterName     string
+	clusterID       uuid.UUID
 	want            []strategies.ClusterNodeInfo
 	wantErrContains string
 }
@@ -75,29 +75,29 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 				machineWithStatus("control-plane-a", testNamespace, clusterName, true, metav1.ConditionTrue,
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: controlPlaneIP}),
 			},
-			namespace:   testNamespace,
-			clusterName: clusterName,
+			namespace: testNamespace,
+			clusterID: uuids.ClusterID(clusterName),
 			want: []strategies.ClusterNodeInfo{
 				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
 				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
 		},
 		"empty cluster returns no machine": {
-			objects:     nil,
-			namespace:   testNamespace,
-			clusterName: clusterName,
-			want:        []strategies.ClusterNodeInfo{},
+			objects:   nil,
+			namespace: testNamespace,
+			clusterID: uuids.ClusterID(clusterName),
+			want:      []strategies.ClusterNodeInfo{},
 		},
 		caseEmptyName: {
 			objects:         nil,
 			namespace:       testNamespace,
-			clusterName:     "",
-			wantErrContains: errClusterName,
+			clusterID:       uuid.Nil,
+			wantErrContains: "cluster ID is required",
 		},
 		caseEmptyNamespace: {
 			objects:         nil,
 			namespace:       "",
-			clusterName:     clusterName,
+			clusterID:       uuids.ClusterID(clusterName),
 			wantErrContains: errClusterNamespace,
 		},
 		"not ready condition maps to NotReady": {
@@ -105,8 +105,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 				machineWithStatus(workerRole, testNamespace, clusterName, false, metav1.ConditionFalse,
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP}),
 			},
-			namespace:   testNamespace,
-			clusterName: clusterName,
+			namespace: testNamespace,
+			clusterID: uuids.ClusterID(clusterName),
 			want: []strategies.ClusterNodeInfo{
 				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
@@ -115,8 +115,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			objects: []client.Object{
 				machineWithStatus(workerRole, testNamespace, clusterName, false, metav1.ConditionUnknown),
 			},
-			namespace:   testNamespace,
-			clusterName: clusterName,
+			namespace: testNamespace,
+			clusterID: uuids.ClusterID(clusterName),
 			want: []strategies.ClusterNodeInfo{
 				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterName},
 			},
@@ -128,14 +128,14 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			t.Parallel()
 
 			machineClient := NewMachineClient(nil, newFakeCache(t, tc.objects...), tc.namespace)
-			nodes, err := machineClient.GetMachinesByCluster(t.Context(), tc.clusterName)
+			nodes, err := machineClient.GetMachinesByCluster(t.Context(), tc.clusterID)
 
 			if tc.wantErrContains != "" {
 				assert.Nil(t, nodes)
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrContains)
-				if tc.clusterName == "" {
-					assert.ErrorIs(t, err, strategies.ErrClusterNameRequired)
+				if tc.clusterID == uuid.Nil {
+					assert.ErrorIs(t, err, strategies.ErrClusterIDRequired)
 				} else {
 					assert.ErrorIs(t, err, strategies.ErrClusterNamespaceRequired)
 				}
@@ -151,12 +151,12 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
 		machineClient := NewMachineClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
 
 		assert.Nil(t, nodes)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errTest)
-		assert.Contains(t, err.Error(), "list Machines for cluster "+testNamespace+"/"+clusterName)
+		assert.Contains(t, err.Error(), "list Machines for cluster "+testNamespace+"/"+uuids.ClusterID(clusterName).String())
 	})
 
 	t.Run("node name and phase", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Status.Phase = "Provisioning"
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -180,7 +180,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Spec.ProviderID = xok8scommon.GetProviderID(uuid.Nil, &xosdk.VM{ID: vmID})
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -193,7 +193,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Spec.ProviderID = "aws:///us-east-1a/i-1234567890abcdef0"
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -247,7 +247,7 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 			machine := machineWithStatus(workerRole, testNamespace, clusterName, false, "", tc.addresses...)
 			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
+			nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
 			assert.Equal(t, tc.want, nodes[0].Endpoint)

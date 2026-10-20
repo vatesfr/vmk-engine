@@ -20,6 +20,9 @@ func RegisterIndexes(ctx context.Context, c cache.Cache) error {
 	if err := c.IndexField(ctx, &capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer); err != nil {
 		return fmt.Errorf("register machine UUID index: %w", err)
 	}
+	if err := c.IndexField(ctx, &capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer); err != nil {
+		return fmt.Errorf("register machine cluster UUID index: %w", err)
+	}
 	return nil
 }
 
@@ -39,4 +42,11 @@ func machineUUIDIndexer(obj client.Object) []string {
 		name = machine.Status.NodeRef.Name
 	}
 	return []string{uuids.NodeID(clusterName, name).String()}
+}
+
+// machineClusterUUIDIndexer computes the UUID v5 of the cluster a Machine
+// belongs to. It uses the cluster name label, consistent with machineUUIDIndexer.
+func machineClusterUUIDIndexer(obj client.Object) []string {
+	machine := obj.(*capiv1.Machine)
+	return []string{uuids.ClusterID(machine.Labels[capiv1.ClusterNameLabel]).String()}
 }

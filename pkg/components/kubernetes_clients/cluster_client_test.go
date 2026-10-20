@@ -324,6 +324,7 @@ func newFakeClientWithUUIDIndex(t *testing.T, objects ...client.Object) client.C
 		WithObjects(objects...).
 		WithIndex(&capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer).
 		WithIndex(&capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer).
+		WithIndex(&capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer).
 		Build()
 }
 

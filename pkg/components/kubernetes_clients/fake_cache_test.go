@@ -40,8 +40,9 @@ func (clientAsCache) IndexField(_ context.Context, _ client.Object, _ string, _ 
 	return nil
 }
 
-// newFakeCache returns a cache.Cache backed by a fake client pre-populated with objects.
+// newFakeCache returns a cache.Cache backed by a fake client with the UUID
+// field indexes registered, pre-populated with objects.
 func newFakeCache(t *testing.T, objects ...client.Object) cache.Cache {
 	t.Helper()
-	return clientAsCache{newFakeClient(t, objects...)}
+	return clientAsCache{newFakeClientWithUUIDIndex(t, objects...)}
 }

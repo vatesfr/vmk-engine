@@ -322,25 +322,40 @@ func TestGetCluster(t *testing.T) {
 }
 
 func TestGetClusterNodesInfo(t *testing.T) {
+	clusterID := uuids.ClusterID(clusterName)
+	clusterInfo := strategies.ClusterInfo{ID: clusterID, Name: clusterName}
+
 	t.Run("success", func(t *testing.T) {
-		_, _, clusterMachines, clusterManager := newTestClusterManager(t)
+		clusterResources, _, clusterMachines, clusterManager := newTestClusterManager(t)
 		expected := []strategies.ClusterNodeInfo{
 			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP},
 			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
 		}
-		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterName).Return(expected, nil)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterID).Return(clusterInfo, nil)
+		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterID).Return(expected, nil)
 
-		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterName)
+		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterID)
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, nodes)
 	})
 
-	t.Run("error", func(t *testing.T) {
-		_, _, clusterMachines, clusterManager := newTestClusterManager(t)
-		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterName).Return(nil, errTest)
+	t.Run("cluster not found", func(t *testing.T) {
+		clusterResources, _, _, clusterManager := newTestClusterManager(t)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterID).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 
-		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterName)
+		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterID)
+
+		assert.Nil(t, nodes)
+		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		clusterResources, _, clusterMachines, clusterManager := newTestClusterManager(t)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterID).Return(clusterInfo, nil)
+		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterID).Return(nil, errTest)
+
+		nodes, err := clusterManager.GetClusterNodesInfo(t.Context(), clusterID)
 
 		assert.Nil(t, nodes)
 		assert.ErrorIs(t, err, errTest)
@@ -396,10 +411,6 @@ func TestClusterNameRequired(t *testing.T) {
 	testCases := map[string]func(cluster_manager.ClusterManager) error{
 		"get cluster": func(manager cluster_manager.ClusterManager) error {
 			_, err := manager.GetCluster(t.Context(), "")
-			return err
-		},
-		"get cluster nodes": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetClusterNodesInfo(t.Context(), "")
 			return err
 		},
 		"get cluster config": func(manager cluster_manager.ClusterManager) error {

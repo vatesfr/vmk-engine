@@ -117,11 +117,13 @@ func (c ClusterManager) GetClusterByUUID(ctx context.Context, id uuid.UUID) (str
 	return cluster, nil
 }
 
-func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, name string) ([]strategies.ClusterNodeInfo, error) {
-	if err := validateClusterName(name); err != nil {
-		return nil, err
+func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, id uuid.UUID) ([]strategies.ClusterNodeInfo, error) {
+	// Ensure the cluster exists, so an unknown UUID is reported as not found
+	// rather than as an empty node list.
+	if _, err := c.clusterResources.GetByUUID(ctx, id); err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
 	}
-	nodes, err := c.clusterMachines.GetMachinesByCluster(ctx, name)
+	nodes, err := c.clusterMachines.GetMachinesByCluster(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
 	}

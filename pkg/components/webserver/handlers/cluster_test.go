@@ -226,9 +226,9 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetClusterNodesInfo(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusterNodesInfo(gomock.Any(), uuids.ClusterID(clusterName)).Return(testCase.serviceResult, testCase.serviceError)
 
-			ctx := newContextWithClusterID().SetQueryParam("fields", "*")
+			ctx := newContextWithClusterUUID().SetQueryParam("fields", "*")
 			result, err := handler.GetClusterNodesInfo(ctx)
 
 			assert.Equal(t, testCase.expected, result)

@@ -10,7 +10,7 @@ import (
 type ForManagingClusterMachines interface {
 	GetMachineByUUID(ctx context.Context, id uuid.UUID) (ClusterNodeInfo, error)
 	SetMachinePaused(ctx context.Context, clusterName, machineName string, paused bool) error
-	GetMachinesByCluster(ctx context.Context, clusterName string) ([]ClusterNodeInfo, error)
+	GetMachinesByCluster(ctx context.Context, clusterID uuid.UUID) ([]ClusterNodeInfo, error)
 	GetAllMachines(ctx context.Context) ([]ClusterNodeInfo, error)
 	DeleteMachine(ctx context.Context, clusterName, machineName string) error
 }

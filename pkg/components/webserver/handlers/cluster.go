@@ -156,8 +156,11 @@ func (k ClusterHandler) GetNode(c fuego.ContextNoBody) (ClusterNodeInfo, error) 
 
 func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
 	fields := c.QueryParam("fields")
-
-	nodes, err := k.clusterService.GetClusterNodesInfo(c.Context(), c.PathParam("id"))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	nodes, err := k.clusterService.GetClusterNodesInfo(c.Context(), id)
 	if err != nil {
 		return nil, toHTTPError(err)
 	}

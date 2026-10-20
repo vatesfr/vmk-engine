@@ -6,6 +6,10 @@ import "github.com/gofrs/uuid"
 // UUID field indexes on the informer cache.
 const UUIDIndexKey = "uuid"
 
+// ClusterUUIDIndexKey is the field index key used to look up Machines by the
+// UUID of the cluster they belong to.
+const ClusterUUIDIndexKey = "clusterUUID"
+
 // RootNamespace is the UUID v5 root for all CAPI-proxy resource identifiers.
 // It is derived deterministically from the application's DNS name so no
 // constant needs to be stored or configured.

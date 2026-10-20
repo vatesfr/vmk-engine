@@ -48,7 +48,6 @@ const (
 	getClusterPath                 = "/kubernetes/clusters/cluster-1"
 	allNodesPath                   = "/kubernetes/nodes"
 	allTagsPath                    = "/kubernetes/tags"
-	clusterNodesPath               = "/kubernetes/clusters/cluster-1/nodes"
 	clusterConfigPath              = "/kubernetes/clusters/cluster-1/config"
 	clusterTagsPath                = "/kubernetes/clusters/cluster-1/tags"
 	clusterTagPath                 = "/kubernetes/clusters/cluster-1/tags/environment"
@@ -109,6 +108,7 @@ var (
 	errTest              = errors.New("test error")
 	clusterUUID          = uuids.ClusterID(clusterName)
 	getClusterByUUIDPath = "/kubernetes/clusters/" + clusterUUID.String()
+	clusterNodesPath     = getClusterByUUIDPath + "/nodes"
 	getNodeByUUIDPath    = "/kubernetes/nodes/" + uuids.NodeID(clusterName, controlPlaneNodeName).String()
 )
 
@@ -295,7 +295,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterNodesPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name:          controlPlaneNodeName,
 					ParentCluster: clusterName,
 					Role:          controlPlaneNodeRole,
@@ -311,7 +311,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterNodesPath + "?fields=*",
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
 					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
 				}}, nil)
@@ -323,7 +323,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterNodesPath + "?fields=name,status",
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
 					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
 				}}, nil)
@@ -824,7 +824,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 					nodes := []strategies.ClusterNodeInfo{{Name: "node-1", NodeName: "worker-01", MachineID: &nodeID}}
 					if path == clusterNodesPath {
-						service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return(nodes, nil)
+						service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return(nodes, nil)
 					} else {
 						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
 					}
@@ -1062,7 +1062,7 @@ func TestReconciliationPausedFieldSelection(t *testing.T) {
 			method: http.MethodGet, path: clusterNodesPath + "?fields=is_reconciliation_paused", expectedStatus: http.StatusOK,
 			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":` + value + `}]`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{Name: "node-1", Paused: paused}}, nil)
+				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{Name: "node-1", Paused: paused}}, nil)
 			},
 		})
 	}

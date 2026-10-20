@@ -182,8 +182,8 @@ func TestClusterInitializationResponse(t *testing.T) {
 				IsControlPlaneInitialized:   testCase.isControlPlaneInitialized,
 				IsInfrastructureProvisioned: testCase.isInfrastructureProvisioned,
 			}
-			service.EXPECT().GetCluster(gomock.Any(), clusterID).Return(info, nil)
-			result, err := handler.GetCluster(newContextWithClusterID())
+			service.EXPECT().GetClusterByUUID(gomock.Any(), clusterUUID).Return(info, nil)
+			result, err := handler.GetCluster(newContextWithClusterUUID())
 			require.NoError(t, err)
 			assert.Equal(t, testCase.isControlPlaneInitialized, result.IsControlPlaneInitialized)
 			assert.Equal(t, testCase.isInfrastructureProvisioned, result.IsInfrastructureProvisioned)

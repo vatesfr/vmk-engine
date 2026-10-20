@@ -1100,10 +1100,10 @@ func TestUpdateClusterDescriptionHTTP(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			executeHTTPTestCase(t, httpTestCase{
-				method: http.MethodPut, path: getClusterPath + "/description", body: tc.body, expectedStatus: tc.status,
+				method: http.MethodPut, path: getClusterByUUIDPath + "/description", body: tc.body, expectedStatus: tc.status,
 				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 					if tc.call {
-						service.EXPECT().SetClusterDescription(ctx, clusterName, tc.description).Return(tc.err)
+						service.EXPECT().SetClusterDescription(ctx, clusterUUID, tc.description).Return(tc.err)
 					}
 				},
 			})

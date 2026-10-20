@@ -1343,7 +1343,7 @@ func TestSetDescriptionPersistence(t *testing.T) {
 			kube := newFakeClient(t, original)
 			resource := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
 			for _, description := range []string{"Équipe \"Backend\" 🚀\nTest", "updated", "updated", "", ""} {
-				require.NoError(t, resource.SetDescription(t.Context(), clusterName, description))
+				require.NoError(t, resource.SetDescription(t.Context(), clusterUUID, description))
 				stored := &capiv1.Cluster{}
 				require.NoError(t, kube.Get(t.Context(), types.NamespacedName{Name: clusterName, Namespace: testNamespace}, stored))
 				require.Equal(t, description, stored.Annotations[clusterDescriptionAnnotation])
@@ -1369,7 +1369,7 @@ func TestSetDescriptionPersistence(t *testing.T) {
 func TestSetDescriptionErrors(t *testing.T) {
 	kube := newFakeClient(t)
 	resource := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
-	require.ErrorIs(t, resource.SetDescription(t.Context(), clusterName, "new"), strategies.ErrClusterNotFound)
+	require.ErrorIs(t, resource.SetDescription(t.Context(), clusterUUID, "new"), strategies.ErrClusterNotFound)
 	for _, tc := range []struct{ patchErr, wantErr error }{
 		{apierrors.NewConflict(schema.GroupResource{Resource: "clusters"}, clusterName, errTest), strategies.ErrClusterDescriptionUpdateConflict},
 		{apierrors.NewNotFound(schema.GroupResource{Resource: "clusters"}, clusterName), strategies.ErrClusterNotFound},
@@ -1378,12 +1378,13 @@ func TestSetDescriptionErrors(t *testing.T) {
 		t.Run(tc.wantErr.Error(), func(t *testing.T) {
 			kube := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
 				WithObjects(&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}).
+				WithIndex(&capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer).
 				WithInterceptorFuncs(interceptor.Funcs{
 					Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
 						return tc.patchErr
 					},
 				}).Build()
-			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetDescription(t.Context(), clusterName, "new"), tc.wantErr)
+			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetDescription(t.Context(), clusterUUID, "new"), tc.wantErr)
 		})
 	}
 }

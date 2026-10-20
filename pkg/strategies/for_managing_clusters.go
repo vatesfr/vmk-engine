@@ -8,7 +8,7 @@ import (
 
 //go:generate go run -mod=mod go.uber.org/mock/mockgen -source=for_managing_clusters.go -destination=mocks/for_managing_clusters.go -package=mocks
 type ForManagingClusters interface {
-	SetClusterDescription(ctx context.Context, name, description string) error
+	SetClusterDescription(ctx context.Context, id uuid.UUID, description string) error
 	SetWorkerReplicas(ctx context.Context, clusterID uuid.UUID, replicas int32) error
 	SetControlPlaneReplicas(ctx context.Context, clusterID uuid.UUID, replicas int32) error
 	SetClusterPaused(ctx context.Context, id uuid.UUID, paused bool) error

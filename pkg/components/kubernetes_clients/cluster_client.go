@@ -733,8 +733,8 @@ func pausePatchError(err, notFound error) error {
 }
 
 // SetDescription patches only the description annotation, preserving other metadata.
-func (c ClusterClient) SetDescription(ctx context.Context, name, description string) error {
-	cluster, err := c.getClusterResource(ctx, name)
+func (c ClusterClient) SetDescription(ctx context.Context, id uuid.UUID, description string) error {
+	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
 	if err != nil {
 		return err
 	}

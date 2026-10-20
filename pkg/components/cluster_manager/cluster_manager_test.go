@@ -681,23 +681,25 @@ func TestSetPaused(t *testing.T) {
 
 func TestSetClusterDescription(t *testing.T) {
 	for _, tc := range []struct {
-		name, description    string
+		testName             string
+		id                   uuid.UUID
+		description          string
 		resourceErr, wantErr error
 	}{
-		{name: clusterName, description: "Équipe 🚀\nBackend"},
-		{name: clusterName},
-		{name: clusterName, description: strings.Repeat("🚀", strategies.MaxClusterDescriptionLength)},
-		{name: clusterName, description: strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), wantErr: strategies.ErrClusterDescriptionTooLong},
-		{wantErr: strategies.ErrClusterNameRequired},
-		{name: clusterName, resourceErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
-		{name: clusterName, resourceErr: strategies.ErrClusterDescriptionUpdateConflict, wantErr: strategies.ErrClusterDescriptionUpdateConflict},
+		{testName: "unicode description", id: clusterUUID, description: "Équipe 🚀\nBackend"},
+		{testName: "empty description", id: clusterUUID},
+		{testName: "max length description", id: clusterUUID, description: strings.Repeat("🚀", strategies.MaxClusterDescriptionLength)},
+		{testName: "description too long", id: clusterUUID, description: strings.Repeat("é", strategies.MaxClusterDescriptionLength+1), wantErr: strategies.ErrClusterDescriptionTooLong},
+		{testName: "missing cluster ID", wantErr: strategies.ErrClusterIDRequired},
+		{testName: "cluster not found", id: clusterUUID, resourceErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
+		{testName: "update conflict", id: clusterUUID, resourceErr: strategies.ErrClusterDescriptionUpdateConflict, wantErr: strategies.ErrClusterDescriptionUpdateConflict},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.testName, func(t *testing.T) {
 			resources, _, _, manager := newTestClusterManager(t)
 			if tc.wantErr == nil || tc.resourceErr != nil {
-				resources.EXPECT().SetDescription(t.Context(), tc.name, tc.description).Return(tc.resourceErr)
+				resources.EXPECT().SetDescription(t.Context(), tc.id, tc.description).Return(tc.resourceErr)
 			}
-			err := manager.SetClusterDescription(t.Context(), tc.name, tc.description)
+			err := manager.SetClusterDescription(t.Context(), tc.id, tc.description)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {

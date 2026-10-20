@@ -55,7 +55,7 @@ type ClusterConfigResponse struct {
 type ClusterInfo struct {
 	Paused                      *bool             `json:"is_reconciliation_paused,omitempty" description:"Cluster API reconciliation paused via spec.paused. VMs and workloads continue running"`
 	IsAvailable                 *bool             `json:"is_available,omitempty"`
-	ID                          *uuid.UUID        `json:"id"`
+	ID                          *uuid.UUID        `json:"id,omitempty"`
 	IsControlPlaneInitialized   *bool             `json:"is_control_plane_initialized,omitempty" description:"Control plane initialization milestone; stays true once reached. Omitted if unreported"`
 	IsInfrastructureProvisioned *bool             `json:"is_infrastructure_provisioned,omitempty" description:"Infrastructure provisioning milestone; stays true once reached. Omitted if unreported"`
 	Name                        string            `json:"name,omitempty"`
@@ -420,9 +420,13 @@ func toHTTPErrorOrNil(err error) error {
 }
 
 func (k ClusterHandler) SetClusterDescription(c fuego.ContextWithBody[ClusterDescriptionParams]) (any, error) {
+	id, err := uuids.Parse(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
 	params, err := c.Body()
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
-	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterDescription(c.Context(), c.PathParam("id"), *params.Description))
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterDescription(c.Context(), id, *params.Description))
 }

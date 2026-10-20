@@ -235,17 +235,17 @@ func (mr *MockForManagingClustersMockRecorder) GetNodeByUUID(ctx, id any) *gomoc
 }
 
 // SetClusterDescription mocks base method.
-func (m *MockForManagingClusters) SetClusterDescription(ctx context.Context, name, description string) error {
+func (m *MockForManagingClusters) SetClusterDescription(ctx context.Context, id uuid.UUID, description string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetClusterDescription", ctx, name, description)
+	ret := m.ctrl.Call(m, "SetClusterDescription", ctx, id, description)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetClusterDescription indicates an expected call of SetClusterDescription.
-func (mr *MockForManagingClustersMockRecorder) SetClusterDescription(ctx, name, description any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetClusterDescription(ctx, id, description any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterDescription", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterDescription), ctx, name, description)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterDescription", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterDescription), ctx, id, description)
 }
 
 // SetClusterNodePaused mocks base method.

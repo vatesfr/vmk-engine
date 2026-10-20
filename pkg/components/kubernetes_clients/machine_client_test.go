@@ -25,18 +25,21 @@ import (
 )
 
 const (
-	resolvedNodeName  = "node-name"
-	deleteMachineName = "machine"
-	otherNamespace    = "other-namespace"
-	otherClusterName  = "other-cluster"
-	controlPlaneRole  = "control-plane"
-	readyStatus       = "Ready"
-	notReadyStatus    = "NotReady"
-	controlPlaneIP    = "10.0.0.1"
-	workerIP          = "10.0.0.2"
-	externalIP        = "1.1.1.1"
-	hostname          = "host.example"
+	resolvedNodeName     = "node-name"
+	deleteMachineName    = "machine"
+	duplicateMachineName = "duplicate-machine"
+	otherNamespace       = "other-namespace"
+	otherClusterName     = "other-cluster"
+	controlPlaneRole     = "control-plane"
+	readyStatus          = "Ready"
+	notReadyStatus       = "NotReady"
+	controlPlaneIP       = "10.0.0.1"
+	workerIP             = "10.0.0.2"
+	externalIP           = "1.1.1.1"
+	hostname             = "host.example"
 )
+
+var deleteMachineUUID = uuids.NodeID(clusterName, deleteMachineName)
 
 func machineWithStatus(name, namespace, cluster string, controlPlane bool, conditionStatus metav1.ConditionStatus, addresses ...capiv1.MachineAddress) *capiv1.Machine {
 	labels := map[string]string{capiv1.ClusterNameLabel: cluster}
@@ -346,17 +349,20 @@ func nodeEndpoint(ip string) string { return "https://" + ip + ":10250" }
 
 func TestMachineClientDeleteMachine(t *testing.T) {
 	for name, tc := range map[string]struct {
-		namespace, cluster, machine, owner string
-		wantErr                            error
+		namespace string
+		clusterID uuid.UUID
+		machineID uuid.UUID
+		owner     string
+		wantErr   error
 	}{
-		"deletes matching machine":        {testNamespace, clusterName, deleteMachineName, clusterName, nil},
-		"other cluster is protected":      {testNamespace, clusterName, deleteMachineName, "other-cluster", strategies.ErrNodeNotFound},
-		"unassigned machine is protected": {testNamespace, clusterName, deleteMachineName, "", strategies.ErrNodeNotFound},
-		"missing machine":                 {testNamespace, clusterName, "missing", clusterName, strategies.ErrNodeNotFound},
-		"other namespace is protected":    {otherNamespace, clusterName, deleteMachineName, clusterName, strategies.ErrNodeNotFound},
-		"cluster required":                {testNamespace, "", deleteMachineName, clusterName, strategies.ErrClusterNameRequired},
-		"machine required":                {testNamespace, clusterName, "", clusterName, strategies.ErrNodeNameRequired},
-		"namespace required":              {"", clusterName, deleteMachineName, clusterName, strategies.ErrClusterNamespaceRequired},
+		"deletes matching machine":        {testNamespace, clusterUUID, deleteMachineUUID, clusterName, nil},
+		"other cluster is protected":      {testNamespace, clusterUUID, deleteMachineUUID, otherClusterName, strategies.ErrNodeNotFound},
+		"unassigned machine is protected": {testNamespace, clusterUUID, deleteMachineUUID, "", strategies.ErrNodeNotFound},
+		"missing machine":                 {testNamespace, clusterUUID, uuids.NodeID(clusterName, "missing"), clusterName, strategies.ErrNodeNotFound},
+		"other namespace is protected":    {otherNamespace, clusterUUID, deleteMachineUUID, clusterName, strategies.ErrNodeNotFound},
+		"cluster ID required":             {testNamespace, uuid.Nil, deleteMachineUUID, clusterName, strategies.ErrClusterIDRequired},
+		"machine ID required":             {testNamespace, clusterUUID, uuid.Nil, clusterName, strategies.ErrNodeIDRequired},
+		"namespace required":              {"", clusterUUID, deleteMachineUUID, clusterName, strategies.ErrClusterNamespaceRequired},
 	} {
 		t.Run(name, func(t *testing.T) {
 			// The label deliberately matches the requested cluster, even when the
@@ -364,7 +370,7 @@ func TestMachineClientDeleteMachine(t *testing.T) {
 			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 			machine.Spec.ClusterName = tc.owner
 			kube := newFakeClient(t, machine)
-			err := NewMachineClient(kube, clientAsCache{kube}, tc.namespace).DeleteMachine(t.Context(), tc.cluster, tc.machine)
+			err := NewMachineClient(kube, clientAsCache{kube}, tc.namespace).DeleteMachine(t.Context(), tc.clusterID, tc.machineID)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{}))
@@ -397,8 +403,9 @@ func TestMachineClientDeleteErrorsAndPreconditions(t *testing.T) {
 					if tc.getErr != nil {
 						return tc.getErr
 					}
+					labels := map[string]string{capiv1.ClusterNameLabel: clusterName}
 					machine := obj.(*capiv1.Machine)
-					machine.ObjectMeta = metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace, UID: "original-uid", ResourceVersion: "123"}
+					machine.ObjectMeta = metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace, UID: "original-uid", ResourceVersion: "123", Labels: labels}
 					machine.Spec.ClusterName = clusterName
 					return nil
 				},
@@ -413,8 +420,8 @@ func TestMachineClientDeleteErrorsAndPreconditions(t *testing.T) {
 					assert.Equal(t, "123", *options.Preconditions.ResourceVersion)
 					return tc.deleteErr
 				},
-			})
-			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, deleteMachineName)
+			}, machineWithStatus(deleteMachineName, testNamespace, clusterName, false, ""))
+			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterUUID, deleteMachineUUID)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {
@@ -430,22 +437,22 @@ func TestMachineClientDeleteRetainsFinalizers(t *testing.T) {
 	machine.Spec.ClusterName = clusterName
 	machine.Finalizers = []string{"cluster.x-k8s.io/machine"}
 	kube := newFakeClient(t, machine)
-	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, machine.Name))
+	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterUUID, uuids.NodeID(clusterName, machine.Name)))
 	remaining := &capiv1.Machine{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), remaining))
 	assert.False(t, remaining.DeletionTimestamp.IsZero())
 	assert.Equal(t, machine.Finalizers, remaining.Finalizers)
 }
 
-func TestDeleteMachineUsesResourceName(t *testing.T) {
+func TestDeleteMachineUsesUUID(t *testing.T) {
 	for name, tc := range map[string]struct {
-		requested string
+		requested uuid.UUID
 		duplicate bool
 		wantErr   error
 	}{
-		"resource name deletes machine":             {requested: deleteMachineName},
-		"node name is not a resource alias":         {requested: resolvedNodeName, wantErr: strategies.ErrNodeNotFound},
-		"shared node name does not change identity": {requested: deleteMachineName, duplicate: true},
+		"node ref UUID deletes machine":         {requested: uuids.NodeID(clusterName, resolvedNodeName)},
+		"machine resource name is not an alias": {requested: deleteMachineUUID, wantErr: strategies.ErrNodeNotFound},
+		"duplicate node ID is ambiguous":        {requested: uuids.NodeID(clusterName, resolvedNodeName), duplicate: true, wantErr: strategies.ErrNodeAmbiguous},
 	} {
 		t.Run(name, func(t *testing.T) {
 			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
@@ -454,15 +461,16 @@ func TestDeleteMachineUsesResourceName(t *testing.T) {
 			objects := []client.Object{machine}
 			other := machine.DeepCopy()
 			other.Name = "other-machine"
-			other.Spec.ClusterName = "other-cluster"
+			other.Spec.ClusterName = otherClusterName
+			other.Labels[capiv1.ClusterNameLabel] = otherClusterName
 			objects = append(objects, other)
 			if tc.duplicate {
 				duplicate := machine.DeepCopy()
-				duplicate.Name = "duplicate-machine"
+				duplicate.Name = duplicateMachineName
 				objects = append(objects, duplicate)
 			}
 			kube := newFakeClient(t, objects...)
-			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, tc.requested)
+			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterUUID, tc.requested)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 				assert.True(t, apierrors.IsNotFound(kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{})))
@@ -478,23 +486,40 @@ func TestDeleteMachineUsesResourceName(t *testing.T) {
 func TestPauseMachineWithoutAnnotations(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 	kube := newFakeClient(t, machine)
-	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true))
+	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, deleteMachineUUID, true))
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.Contains(t, machine.Annotations, capiv1.PausedAnnotation)
 }
 
+func TestPauseRejectsAmbiguousNodeID(t *testing.T) {
+	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+	machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "shared-node"}
+	duplicate := machine.DeepCopy()
+	duplicate.Name = duplicateMachineName
+	kube := newFakeClient(t, machine, duplicate)
+
+	err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, uuids.NodeID(clusterName, "shared-node"), true)
+
+	require.ErrorIs(t, err, strategies.ErrNodeAmbiguous)
+	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
+	assert.NotContains(t, machine.Annotations, capiv1.PausedAnnotation)
+}
+
 func TestPauseRejectsConcurrentMachineReassignment(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
-	kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(machine).WithInterceptorFuncs(interceptor.Funcs{
-		Patch: func(ctx context.Context, underlying client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-			current := &capiv1.Machine{}
-			require.NoError(t, underlying.Get(ctx, client.ObjectKeyFromObject(obj), current))
-			current.Spec.ClusterName = otherClusterName
-			require.NoError(t, underlying.Update(ctx, current))
-			return underlying.Patch(ctx, obj, patch, opts...)
-		},
-	}).Build()
-	err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true)
+	kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(machine).
+		WithIndex(&capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer).
+		WithIndex(&capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Patch: func(ctx context.Context, underlying client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				current := &capiv1.Machine{}
+				require.NoError(t, underlying.Get(ctx, client.ObjectKeyFromObject(obj), current))
+				current.Spec.ClusterName = otherClusterName
+				require.NoError(t, underlying.Update(ctx, current))
+				return underlying.Patch(ctx, obj, patch, opts...)
+			},
+		}).Build()
+	err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, deleteMachineUUID, true)
 	require.ErrorIs(t, err, strategies.ErrPauseUpdateConflict)
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.Equal(t, otherClusterName, machine.Spec.ClusterName)
@@ -505,7 +530,7 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue,
 			capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP})
-		fc := newFakeClientWithUUIDIndex(t, machine)
+		fc := newFakeClient(t, machine)
 		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
 
 		id := uuids.NodeID(clusterName, "machine-name")
@@ -520,7 +545,7 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 	t.Run("node ref name takes precedence", func(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
 		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
-		fc := newFakeClientWithUUIDIndex(t, machine)
+		fc := newFakeClient(t, machine)
 		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
 
 		id := uuids.NodeID(clusterName, "node-name")
@@ -532,8 +557,22 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 		assert.Equal(t, id, node.ID)
 	})
 
+	t.Run("duplicate node ID is ambiguous", func(t *testing.T) {
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
+		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
+		duplicate := machine.DeepCopy()
+		duplicate.Name = duplicateMachineName
+		fc := newFakeClient(t, machine, duplicate)
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "node-name"))
+
+		assert.Empty(t, node)
+		require.ErrorIs(t, err, strategies.ErrNodeAmbiguous)
+	})
+
 	t.Run("not found", func(t *testing.T) {
-		fc := newFakeClientWithUUIDIndex(t)
+		fc := newFakeClient(t)
 		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
 
 		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "missing"))

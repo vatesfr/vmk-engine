@@ -45,12 +45,9 @@ const (
 	clusterConfig                  = "apiVersion: v1\nkind: Config"
 	pingPath                       = "/ping"
 	clustersPath                   = "/kubernetes/clusters"
-	getClusterPath                 = "/kubernetes/clusters/cluster-1"
+	getClusterPathInvalid          = "/kubernetes/clusters/cluster-1"
 	allNodesPath                   = "/kubernetes/nodes"
 	allTagsPath                    = "/kubernetes/tags"
-	clusterConfigPath              = "/kubernetes/clusters/cluster-1/config"
-	clusterTagsPath                = "/kubernetes/clusters/cluster-1/tags"
-	clusterTagPath                 = "/kubernetes/clusters/cluster-1/tags/environment"
 	contentTypeHeader              = "Content-Type"
 	acceptHeader                   = "Accept"
 	applicationJSON                = "application/json"
@@ -107,9 +104,14 @@ const (
 var (
 	errTest              = errors.New("test error")
 	clusterUUID          = uuids.ClusterID(clusterName)
+	node1UUID            = uuids.NodeID(clusterName, "node-1")
 	getClusterByUUIDPath = "/kubernetes/clusters/" + clusterUUID.String()
 	clusterNodesPath     = getClusterByUUIDPath + "/nodes"
 	getNodeByUUIDPath    = "/kubernetes/nodes/" + uuids.NodeID(clusterName, controlPlaneNodeName).String()
+
+	clusterConfigPath = getClusterByUUIDPath + "/config"
+	clusterTagsPath   = getClusterByUUIDPath + "/tags"
+	clusterTagPath    = getClusterByUUIDPath + "/tags/environment"
 )
 
 type httpTestCase struct {
@@ -232,7 +234,7 @@ func TestHTTPRoutes(t *testing.T) {
 		},
 		"get cluster with invalid UUID": {
 			method:         http.MethodGet,
-			path:           getClusterPath,
+			path:           getClusterPathInvalid,
 			expectedStatus: http.StatusBadRequest,
 			expectedTitle:  "Invalid UUID",
 			expectedDetail: "path parameter 'id' must be a valid UUID",
@@ -337,7 +339,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterConfigPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterConfig(ctx, clusterName).Return(clusterConfig, nil)
+				service.EXPECT().GetClusterConfig(ctx, clusterUUID).Return(clusterConfig, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `{"kubeconfig":"apiVersion: v1\nkind: Config"}`,
@@ -392,17 +394,17 @@ func TestHTTPRoutes(t *testing.T) {
 		},
 		"delete cluster": {
 			method: http.MethodDelete,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteCluster(ctx, clusterName).Return(nil)
+				service.EXPECT().DeleteCluster(ctx, clusterUUID).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
 		"delete missing cluster": {
 			method: http.MethodDelete,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteCluster(ctx, clusterName).Return(strategies.ErrClusterNotFound)
+				service.EXPECT().DeleteCluster(ctx, clusterUUID).Return(strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedTitle:  clusterNotFoundTitle,
@@ -441,7 +443,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagsPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTags(ctx, clusterName).Return(map[string]string{environmentTag: productionValue}, nil)
+				service.EXPECT().GetClusterTags(ctx, clusterUUID).Return(map[string]string{environmentTag: productionValue}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `{"result":{"environment":"production"}}`,
@@ -450,7 +452,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return(productionValue, nil)
+				service.EXPECT().GetClusterTag(ctx, clusterUUID, environmentTag).Return(productionValue, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `"production"`,
@@ -460,7 +462,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, productionValue).Return(nil)
+				service.EXPECT().SetClusterTag(ctx, clusterUUID, environmentTag, productionValue).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
@@ -468,7 +470,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodDelete,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteClusterTag(ctx, clusterName, environmentTag).Return(nil)
+				service.EXPECT().DeleteClusterTag(ctx, clusterUUID, environmentTag).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 		},
@@ -476,7 +478,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return("", strategies.ErrClusterTagNotFound)
+				service.EXPECT().GetClusterTag(ctx, clusterUUID, environmentTag).Return("", strategies.ErrClusterTagNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedTitle:  "Cluster tag not found",
@@ -487,7 +489,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"invalid value"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, "invalid value").Return(fmt.Errorf("update: %w", strategies.ErrInvalidClusterTagValue))
+				service.EXPECT().SetClusterTag(ctx, clusterUUID, environmentTag, "invalid value").Return(fmt.Errorf("update: %w", strategies.ErrInvalidClusterTagValue))
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedTitle:  "Invalid cluster parameters",
@@ -506,7 +508,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterTag(ctx, clusterName, environmentTag).Return("", strategies.ErrInvalidClusterTagName)
+				service.EXPECT().GetClusterTag(ctx, clusterUUID, environmentTag).Return("", strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
@@ -514,7 +516,7 @@ func TestHTTPRoutes(t *testing.T) {
 			method: http.MethodDelete,
 			path:   clusterTagPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().DeleteClusterTag(ctx, clusterName, environmentTag).Return(strategies.ErrInvalidClusterTagName)
+				service.EXPECT().DeleteClusterTag(ctx, clusterUUID, environmentTag).Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
@@ -523,7 +525,7 @@ func TestHTTPRoutes(t *testing.T) {
 			path:   clusterTagPath,
 			body:   `{"value":"production"}`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, productionValue).Return(strategies.ErrInvalidClusterTagName)
+				service.EXPECT().SetClusterTag(ctx, clusterUUID, environmentTag, productionValue).Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
@@ -566,7 +568,7 @@ func TestHTTPRoutes(t *testing.T) {
 		},
 		"method not allowed": {
 			method:         http.MethodPatch,
-			path:           getClusterPath,
+			path:           getClusterByUUIDPath,
 			expectedStatus: http.StatusMethodNotAllowed,
 		},
 	}
@@ -796,13 +798,13 @@ func TestDeleteClusterNodeHTTP(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			executeHTTPTestCase(t, httpTestCase{
-				method: http.MethodDelete, path: getClusterPath + "/nodes/node-1",
+				method: http.MethodDelete, path: getClusterByUUIDPath + "/nodes/" + node1UUID.String(),
 				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 					var err error
 					if tc.err != nil {
 						err = fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, tc.err)
 					}
-					service.EXPECT().DeleteClusterNode(ctx, clusterName, "node-1").Return(err)
+					service.EXPECT().DeleteClusterNode(ctx, clusterUUID, node1UUID).Return(err)
 				},
 				expectedStatus: tc.status, expectedTitle: tc.title,
 				expectedDetail: func() string {
@@ -844,7 +846,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 func TestNodeDeletionOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
 	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
-	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeName}")
+	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeID}")
 	require.NotNil(t, route)
 	require.NotNil(t, route.Delete)
 	for _, status := range []int{http.StatusNoContent, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity} {
@@ -852,7 +854,7 @@ func TestNodeDeletionOpenAPI(t *testing.T) {
 	}
 	assert.Empty(t, route.Delete.Responses.Status(http.StatusNoContent).Value.Content)
 	assert.Nil(t, route.Delete.RequestBody)
-	for _, parameter := range []string{"id", "nodeName"} {
+	for _, parameter := range []string{"id", "nodeID"} {
 		ref := route.Delete.Parameters.GetByInAndName("path", parameter)
 		require.NotNil(t, ref)
 		assert.True(t, ref.Required)
@@ -917,12 +919,12 @@ func TestScalingHTTP(t *testing.T) {
 		} {
 			t.Run(target+"/"+tc.name, func(t *testing.T) {
 				executeHTTPTestCase(t, httpTestCase{
-					method: http.MethodPut, path: clustersPath + "/demo/" + target + "/replicas", body: `{"replicas":3}`, expectedStatus: tc.status,
+					method: http.MethodPut, path: clustersPath + "/" + clusterUUID.String() + "/" + target + "/replicas", body: `{"replicas":3}`, expectedStatus: tc.status,
 					setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 						if target == "workers" {
-							service.EXPECT().SetWorkerReplicas(ctx, "demo", int32(3)).Return(tc.err)
+							service.EXPECT().SetWorkerReplicas(ctx, clusterUUID, int32(3)).Return(tc.err)
 						} else {
-							service.EXPECT().SetControlPlaneReplicas(ctx, "demo", int32(3)).Return(tc.err)
+							service.EXPECT().SetControlPlaneReplicas(ctx, clusterUUID, int32(3)).Return(tc.err)
 						}
 					},
 				})
@@ -945,9 +947,9 @@ func TestPauseHTTP(t *testing.T) {
 				{strategies.ErrNodeNameRequired, http.StatusUnprocessableEntity},
 				{errTest, http.StatusInternalServerError},
 			} {
-				path, method := getClusterPath+"/reconciliation/resume", http.MethodPost
+				path, method := getClusterByUUIDPath+"/reconciliation/resume", http.MethodPost
 				if node {
-					path = getClusterPath + "/nodes/node-1/reconciliation/resume"
+					path = getClusterByUUIDPath + "/nodes/" + node1UUID.String() + "/reconciliation/resume"
 				}
 				if paused {
 					path = strings.TrimSuffix(path, "/reconciliation/resume") + "/reconciliation/pause"
@@ -958,9 +960,9 @@ func TestPauseHTTP(t *testing.T) {
 						method: method, path: path, expectedStatus: tc.status,
 						setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 							if node {
-								service.EXPECT().SetClusterNodePaused(ctx, clusterName, "node-1", paused).Return(tc.err)
+								service.EXPECT().SetClusterNodePaused(ctx, clusterUUID, node1UUID, paused).Return(tc.err)
 							} else {
-								service.EXPECT().SetClusterPaused(ctx, clusterName, paused).Return(tc.err)
+								service.EXPECT().SetClusterPaused(ctx, clusterUUID, paused).Return(tc.err)
 							}
 						},
 					})

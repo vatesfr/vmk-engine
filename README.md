@@ -195,13 +195,17 @@ Pause controls CAPI reconciliation; it does not stop VMs or running workloads.
 The namespace is the one configured for the server.
 
 ```sh
-# Pause and resume a cluster.
-curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/reconciliation/pause
-curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/reconciliation/resume
+# Replace these placeholders with the `id` values from the cluster and node responses.
+CLUSTER_ID="<cluster-uuid>"
+NODE_ID="<node-uuid>"
 
-# Pause and resume a Machine using its CAPI metadata.name (not its Node name or VM UUID).
-curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abc/reconciliation/pause
-curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abc/reconciliation/resume
+# Pause and resume a cluster.
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/${CLUSTER_ID}/reconciliation/pause"
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/${CLUSTER_ID}/reconciliation/resume"
+
+# Pause and resume a Machine using its node UUID (`id`), not its name or VM UUID.
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/${CLUSTER_ID}/nodes/${NODE_ID}/reconciliation/pause"
+curl --request POST "http://127.0.0.1:8080/kubernetes/clusters/${CLUSTER_ID}/nodes/${NODE_ID}/reconciliation/resume"
 ```
 
 These endpoints take no body and return `204 No Content` after the requested
@@ -237,11 +241,11 @@ Base URL: `http://localhost:8080`.
 | `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
 | `PUT` | `/kubernetes/clusters/{id}/workers/replicas` | Sets the desired worker count | Working |
 | `PUT` | `/kubernetes/clusters/{id}/control-plane/replicas` | Sets the desired control-plane count | Working |
-| `DELETE` | `/kubernetes/clusters/{id}/nodes/{name}` | Requests deletion of a node belonging to the cluster | Working |
+| `DELETE` | `/kubernetes/clusters/{id}/nodes/{nodeID}` | Requests deletion of a node by UUID belonging to the cluster | Working |
 | `POST` | `/kubernetes/clusters/{id}/reconciliation/pause` | Pauses cluster reconciliation | Idempotent, returns `204` |
 | `POST` | `/kubernetes/clusters/{id}/reconciliation/resume` | Resumes cluster reconciliation | Idempotent, returns `204` |
-| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/pause` | Pauses a CAPI Machine | Idempotent, returns `204` |
-| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/resume` | Removes a CAPI Machine pause | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/pause` | Pauses a CAPI Machine by UUID | Idempotent, returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/resume` | Removes a CAPI Machine pause by UUID | Idempotent, returns `204` |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
 | `GET` | `/kubernetes/nodes` | Returns all CAPI Machines in the namespace | Working |
@@ -434,7 +438,8 @@ The client enforces the constraints specific to Kubernetes labels. Tags are also
 included in cluster creation, detail, and list responses.
 
 `GET /kubernetes/tags` returns all tags grouped by cluster name in the
-configured namespace, including clusters without tags:
+configured namespace, including clusters without tags. These response keys are
+cluster names; item routes still use cluster UUIDs:
 
 ```json
 {"result":{"demo":{"environment":"production"},"no-tags":{}}}
@@ -445,21 +450,22 @@ When there are no clusters, the response is `{"result":{}}`.
 View a cluster and its nodes:
 
 ```bash
-curl http://127.0.0.1:8080/kubernetes/clusters/demo
-curl http://127.0.0.1:8080/kubernetes/clusters/demo/nodes
+curl "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>"
+curl "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/nodes"
 ```
 
-The `name` field always contains the CAPI resource name, the stable identifier
-used by the delete endpoint. The optional `node_name` field contains
+The `id` fields contain the UUIDs used to address clusters and nodes in API
+routes. The `name` field contains the CAPI resource name and is descriptive; it
+is not used to address deletion requests. The optional `node_name` field contains
 `status.nodeRef.name`, the registered Kubernetes Node name; it is omitted until
-the Node reference is available. `name` remains the resource identifier before
-and after registration; `node_name` is descriptive and is not used for deletion.
+the Node reference is available. `node_name` is also descriptive and is not used
+for deletion.
 
-Delete a node using its `name` from the nodes response:
+Delete a node using the cluster and node UUIDs from their `id` fields:
 
 ```bash
 curl --request DELETE \
-  http://127.0.0.1:8080/kubernetes/clusters/demo/nodes/demo-worker-abcde
+  "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/nodes/<node-uuid>"
 ```
 
 A successful request returns `204 No Content` after Kubernetes accepts deletion.
@@ -467,7 +473,7 @@ CAPI controllers perform cleanup asynchronously, including their usual drain
 and infrastructure cleanup; the endpoint does not bypass finalizers. The
 configured namespace and the Machine's `spec.clusterName` restrict the target.
 A missing cluster, missing node, or node belonging to another cluster
-returns `404`; an empty cluster or node name at the service boundary returns
+returns `404`; an empty cluster or node UUID at the service boundary returns
 `422`; a concurrent change detected by deletion preconditions returns `409`
 (the client can retry); unexpected Kubernetes errors return `500`.
 
@@ -481,7 +487,7 @@ Set the number of workers:
 
 ```bash
 curl --request PUT \
-  http://127.0.0.1:8080/kubernetes/clusters/demo/workers/replicas \
+  "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/workers/replicas" \
   --header 'Content-Type: application/json' \
   --data '{"replicas":3}'
 ```
@@ -490,7 +496,7 @@ Set the number of control-plane machines independently:
 
 ```bash
 curl --request PUT \
-  http://127.0.0.1:8080/kubernetes/clusters/demo/control-plane/replicas \
+  "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/control-plane/replicas" \
   --header 'Content-Type: application/json' \
   --data '{"replicas":3}'
 ```
@@ -504,9 +510,10 @@ A successful call returns `204 No Content` once Kubernetes confirms the desired
 count was written, including when that count was already set. CAPI reconciles
 machines asynchronously and performs its normal drain and cleanup on scale-down.
 The service changes only `spec.replicas`; it does not select individual machines
-for deletion. Use `GET /kubernetes/clusters/demo` and
-`GET /kubernetes/clusters/demo/nodes` to follow progress. Cluster status, including
-`desired_replicas`, may temporarily lag behind the accepted request.
+for deletion. Use `GET /kubernetes/clusters/<cluster-uuid>` and
+`GET /kubernetes/clusters/<cluster-uuid>/nodes` to follow progress. Cluster
+status, including `desired_replicas`, may temporarily lag behind the accepted
+request.
 
 This first version supports clusters without `spec.topology`, with exactly one
 worker MachineDeployment and a KubeadmControlPlane. Workers are discovered in the
@@ -558,11 +565,12 @@ Orchestra VM without exposing provider strings in the API response.
 Retrieve its kubeconfig:
 
 ```bash
-curl http://127.0.0.1:8080/kubernetes/clusters/demo/config
+curl "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/config"
 ```
 
-The service looks for the `demo-kubeconfig` `Secret` in the configured
-namespace and returns the value stored under its `value` key in a JSON object:
+The service resolves the cluster UUID to its CAPI resource name, then looks for
+the corresponding `<cluster-name>-kubeconfig` `Secret` in the configured
+namespace. It returns the value stored under the `value` key in a JSON object:
 
 ```json
 {"kubeconfig":"apiVersion: v1\nkind: Config"}
@@ -571,7 +579,7 @@ namespace and returns the value stored under its `value` key in a JSON object:
 Delete the cluster:
 
 ```bash
-curl --request DELETE http://127.0.0.1:8080/kubernetes/clusters/demo
+curl --request DELETE "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>"
 ```
 
 Successful cluster and tag deletions, as well as tag creation and updates, return

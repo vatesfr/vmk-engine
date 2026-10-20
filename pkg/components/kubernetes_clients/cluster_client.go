@@ -114,39 +114,54 @@ func (c ClusterClient) Get(ctx context.Context, name string) (strategies.Cluster
 }
 
 func (c ClusterClient) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
-	list := &capiv1.ClusterList{}
-	if err := c.informerCache.List(ctx, list,
-		client.InNamespace(c.namespace),
-		client.MatchingFields{uuids.UUIDIndexKey: id.String()},
-	); err != nil {
-		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
+	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	if err != nil {
+		return strategies.ClusterInfo{}, err
 	}
-	if len(list.Items) == 0 {
-		return strategies.ClusterInfo{}, fmt.Errorf("%w: %s", strategies.ErrClusterNotFound, id.String())
-	}
-	return toInfo(&list.Items[0]), nil
+	return toInfo(cluster), nil
 }
 
-func (c ClusterClient) Delete(ctx context.Context, name string) error {
-	if name == "" {
-		return strategies.ErrClusterNameRequired
+func getClusterFromCacheByUUID(ctx context.Context, informerCache cache.Cache, namespace string, id uuid.UUID) (*capiv1.Cluster, error) {
+	if id == uuid.Nil {
+		return nil, strategies.ErrClusterIDRequired
 	}
-	if c.namespace == "" {
-		return strategies.ErrClusterNamespaceRequired
+	if namespace == "" {
+		return nil, strategies.ErrClusterNamespaceRequired
 	}
+	list := &capiv1.ClusterList{}
+	if err := informerCache.List(ctx, list,
+		client.InNamespace(namespace),
+		client.MatchingFields{uuids.UUIDIndexKey: id.String()},
+	); err != nil {
+		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
+	}
+	if len(list.Items) == 0 {
+		return nil, fmt.Errorf("%w: %s", strategies.ErrClusterNotFound, id.String())
+	}
+	if len(list.Items) > 1 {
+		return nil, fmt.Errorf("%w: %d Clusters found for UUID %s", strategies.ErrClusterAmbiguous, len(list.Items), id)
+	}
+	return &list.Items[0], nil
+}
 
-	cluster := &capiv1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: c.namespace,
-		},
+func (c ClusterClient) getClusterResourceByUUID(ctx context.Context, id uuid.UUID) (*capiv1.Cluster, error) {
+	clusterFromCache, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	if err != nil {
+		return nil, err
 	}
+	return c.getClusterResource(ctx, clusterFromCache.Name)
+}
 
+func (c ClusterClient) Delete(ctx context.Context, id uuid.UUID) error {
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := c.kubernetesClient.Delete(ctx, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
 		}
-		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, name, err)
+		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, cluster.Name, err)
 	}
 
 	// A partial creation may still be paused. Unpause only after
@@ -155,13 +170,13 @@ func (c ClusterClient) Delete(ctx context.Context, name string) error {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("read deleting Cluster %s: %w", name, err)
+		return fmt.Errorf("read deleting Cluster %s: %w", cluster.Name, err)
 	}
 	if ptr.Deref(cluster.Spec.Paused, false) && !cluster.DeletionTimestamp.IsZero() {
 		before := cluster.DeepCopy()
 		cluster.Spec.Paused = nil
 		if err := c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(before)); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("unpause deleting Cluster %s: %w", name, err)
+			return fmt.Errorf("unpause deleting Cluster %s: %w", cluster.Name, err)
 		}
 	}
 
@@ -184,19 +199,19 @@ func (c ClusterClient) GetAllTags(ctx context.Context) (map[string]map[string]st
 	return tags, nil
 }
 
-func (c ClusterClient) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
-	cluster, err := c.getClusterFromCache(ctx, clusterName)
+func (c ClusterClient) GetTags(ctx context.Context, id uuid.UUID) (map[string]string, error) {
+	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
 	if err != nil {
 		return nil, err
 	}
 	return clusterTagsFromLabels(cluster.Labels), nil
 }
 
-func (c ClusterClient) GetTag(ctx context.Context, clusterName, tag string) (string, error) {
+func (c ClusterClient) GetTag(ctx context.Context, id uuid.UUID, tag string) (string, error) {
 	if err := validateClusterTag(tag, ""); err != nil {
 		return "", err
 	}
-	cluster, err := c.getClusterFromCache(ctx, clusterName)
+	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
 	if err != nil {
 		return "", err
 	}
@@ -207,21 +222,21 @@ func (c ClusterClient) GetTag(ctx context.Context, clusterName, tag string) (str
 	return value, nil
 }
 
-func (c ClusterClient) SetTag(ctx context.Context, clusterName, tag, value string) error {
+func (c ClusterClient) SetTag(ctx context.Context, id uuid.UUID, tag, value string) error {
 	if err := validateClusterTag(tag, value); err != nil {
 		return err
 	}
-	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
+	return c.updateClusterTags(ctx, id, func(labels map[string]string) error {
 		labels[clusterTagLabelPrefix+tag] = value
 		return nil
 	})
 }
 
-func (c ClusterClient) DeleteTag(ctx context.Context, clusterName, tag string) error {
+func (c ClusterClient) DeleteTag(ctx context.Context, id uuid.UUID, tag string) error {
 	if err := validateClusterTag(tag, ""); err != nil {
 		return err
 	}
-	return c.updateClusterTags(ctx, clusterName, func(labels map[string]string) error {
+	return c.updateClusterTags(ctx, id, func(labels map[string]string) error {
 		labelName := clusterTagLabelPrefix + tag
 		if _, found := labels[labelName]; !found {
 			return strategies.ErrClusterTagNotFound
@@ -328,8 +343,8 @@ func clusterTagsFromLabels(labels map[string]string) map[string]string {
 	return tags
 }
 
-func (c ClusterClient) updateClusterTags(ctx context.Context, clusterName string, update func(map[string]string) error) error {
-	cluster, err := c.getClusterResource(ctx, clusterName)
+func (c ClusterClient) updateClusterTags(ctx context.Context, id uuid.UUID, update func(map[string]string) error) error {
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -341,24 +356,6 @@ func (c ClusterClient) updateClusterTags(ctx context.Context, clusterName string
 		return err
 	}
 	return c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(original))
-}
-
-// getClusterFromCache reads a Cluster from the informer cache (read-only operations).
-func (c ClusterClient) getClusterFromCache(ctx context.Context, name string) (*capiv1.Cluster, error) {
-	if name == "" {
-		return nil, strategies.ErrClusterNameRequired
-	}
-	if c.namespace == "" {
-		return nil, strategies.ErrClusterNamespaceRequired
-	}
-	cluster := &capiv1.Cluster{}
-	if err := c.informerCache.Get(ctx, client.ObjectKey{Namespace: c.namespace, Name: name}, cluster); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
-		}
-		return nil, err
-	}
-	return cluster, nil
 }
 
 // getClusterResource reads a Cluster via the direct API client, needed before
@@ -570,11 +567,11 @@ func scalingConflict(reason string) error {
 	return fmt.Errorf("%w: %s", strategies.ErrClusterScalingConflict, reason)
 }
 
-func (c ClusterClient) scalingCluster(ctx context.Context, name string, replicas int32) (*capiv1.Cluster, error) {
+func (c ClusterClient) scalingCluster(ctx context.Context, id uuid.UUID, replicas int32) (*capiv1.Cluster, error) {
 	if replicas < 1 {
 		return nil, strategies.ErrInvalidReplicas
 	}
-	cluster, err := c.getClusterResource(ctx, name)
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -612,8 +609,8 @@ func validateScalingObject(obj client.Object, cluster *capiv1.Cluster) error {
 }
 
 // SetPaused changes only the Cluster spec pause field.
-func (c ClusterClient) SetPaused(ctx context.Context, name string, paused bool) error {
-	cluster, err := c.getClusterResource(ctx, name)
+func (c ClusterClient) SetPaused(ctx context.Context, id uuid.UUID, paused bool) error {
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -631,8 +628,8 @@ func (c ClusterClient) SetPaused(ctx context.Context, name string, paused bool) 
 	return nil
 }
 
-func (c ClusterClient) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
-	cluster, err := c.scalingCluster(ctx, name, replicas)
+func (c ClusterClient) SetWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
+	cluster, err := c.scalingCluster(ctx, id, replicas)
 	if err != nil {
 		return err
 	}
@@ -667,8 +664,8 @@ func (c ClusterClient) SetWorkerReplicas(ctx context.Context, name string, repli
 	return c.patchReplicas(ctx, deployment, before)
 }
 
-func (c ClusterClient) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
-	cluster, err := c.scalingCluster(ctx, name, replicas)
+func (c ClusterClient) SetControlPlaneReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
+	cluster, err := c.scalingCluster(ctx, id, replicas)
 	if err != nil {
 		return err
 	}

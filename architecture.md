@@ -129,13 +129,20 @@ controller-runtime `cache.Cache`:
   cache, which is kept current by Kubernetes watch events. UUID-based lookups
   (`GetByUUID`, `GetMachineByUUID`) use custom UUID v5 field indexes registered
   in `pkg/components/kubernetes_clients/indexers.go` before the cache starts.
-- **Writes** (`Create`, `Delete`, `SetTag`, `DeleteTag`) go through the direct
-  `client.Client`, which always contacts the Kubernetes API. Tag mutations read
-  a fresh resource version via the direct client before patching to avoid
-  resource-version conflicts.
+- **Writes** (`Create`, `Delete`, scaling, pause, `SetTag`, `DeleteTag`) go
+  through the direct `client.Client`, which always contacts the Kubernetes API.
+  Cluster mutations first resolve the UUID through the informer cache, then
+  fetch the current resource by its Kubernetes name. Tag mutations read a fresh
+  resource version via the direct client before patching to avoid conflicts.
 
 Both clients hold a cache for reads and a direct client for mutations, including
 node deletion, replica changes, and reconciliation pause updates.
+`SecretClient` uses the direct Kubernetes client to read the kubeconfig Secret.
+For config requests, `ClusterManager` resolves the cluster UUID through
+`ForManagingClusterResources.GetByUUID` and passes the resulting Kubernetes
+resource name to `ForGettingClusterConfig`. Cluster and node API operations use
+UUIDs for addressing; Kubernetes resource names remain internal lookup keys and
+descriptive response fields.
 
 The Configurator registers the UUID field indexes, starts the cache goroutine,
 and blocks on `WaitForCacheSync` before serving requests, so the initial list is
@@ -159,6 +166,16 @@ For `GET /kubernetes/nodes/{id}` (node UUID):
 2. `ClusterManager` delegates to `ForManagingClusterMachines.GetMachineByUUID`.
 3. `MachineClient` issues `cache.List` with a UUID field index filter.
 4. The result is converted to a `ClusterNodeInfo` Strategy model and serialized.
+
+For `GET /kubernetes/clusters/{id}/config` (cluster UUID):
+
+1. The handler parses the UUID and calls `ForManagingClusters.GetClusterConfig`.
+2. `ClusterManager` resolves the cluster with
+  `ForManagingClusterResources.GetByUUID`.
+3. `ClusterManager` passes the resolved Kubernetes resource name to
+  `ForGettingClusterConfig.Get`.
+4. `SecretClient` reads the `<cluster-name>-kubeconfig` Secret through the
+  direct Kubernetes client.
 
 `ClusterManager` also requires `ForManagingVersions`, implemented by `VersionManager`,
 to reject unavailable versions before fetching defaults or creating resources.
@@ -269,18 +286,20 @@ See README for configuration keys and image prerequisites.
 
 ### Node deletion
 
-`DELETE /kubernetes/clusters/{id}/nodes/{nodeName}` invokes
-`ForManagingClusters.DeleteClusterNode`. `ClusterManager` validates the names
-and checks that the Cluster exists, then delegates to
-`ForManagingClusterMachines.DeleteMachine`. `MachineClient` gets the Machine by
-resource name in the configured namespace, checks `spec.clusterName`, and requests deletion with
+`DELETE /kubernetes/clusters/{id}/nodes/{nodeID}` invokes
+`ForManagingClusters.DeleteClusterNode`. The route takes the cluster UUID and
+node UUID. `ClusterManager` checks that the Cluster exists, then delegates to
+`ForManagingClusterMachines.DeleteMachine`. `MachineClient` resolves the Machine
+through the UUID and cluster UUID cache indexes in the configured namespace,
+checks its current identity using `spec.clusterName`, and requests deletion with
 UID and resource-version preconditions to protect against concurrent replacement
 or reassignment. The HTTP boundary returns 204 without waiting for finalizers.
 Replica counts are unchanged. HTTP routes, parameters, responses, and application
-errors use node terminology. Node responses expose `name` (the stable resource
-name), optional `node_name` (the registered Node name from `status.nodeRef.name`),
-and `node_id` (the provider VM UUID). The Node name is descriptive and is not
-used to address deletion requests.
+errors use node terminology. Node responses expose `id` (the stable UUID used to
+address the node), `name` (the stable Kubernetes resource name), optional
+`node_name` (the registered Node name from `status.nodeRef.name`), and `node_id`
+(the provider VM UUID). The `name` and `node_name` fields are descriptive and are
+not used to address deletion requests.
 
 ## Replica updates
 
@@ -313,13 +332,16 @@ on KubeadmControlPlanes in addition to their existing create permission.
 ## Pause and resume CAPI reconciliation
 
 `POST` on `/kubernetes/clusters/{id}/reconciliation/pause` and
-`/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/pause` pauses reconciliation.
+`/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/pause` pauses reconciliation.
 `POST` on `/kubernetes/clusters/{id}/reconciliation/resume` and
-`/kubernetes/clusters/{id}/nodes/{nodeName}/reconciliation/resume` resumes it. These routes invoke the pause setters through
-ClusterHandler and ClusterManager. ClusterClient patches only `spec.paused`;
-MachineClient patches only `cluster.x-k8s.io/paused`, after checking membership
-with `spec.clusterName`. Patches include an optimistic resourceVersion lock;
-conflicts are exposed as HTTP 409. The configured namespace scopes both operations.
+`/kubernetes/clusters/{id}/nodes/{nodeID}/reconciliation/resume` resumes it. The
+cluster and node path parameters are UUIDs. These routes invoke the pause setters
+through ClusterHandler and ClusterManager. ClusterClient resolves the cluster
+UUID before patching only `spec.paused`; MachineClient resolves the node through
+the UUID cache indexes and patches only `cluster.x-k8s.io/paused`, after checking
+membership with `spec.clusterName`. Patches include an optimistic resourceVersion
+lock; conflicts are exposed as HTTP 409. The configured namespace scopes both
+operations.
 
 The `Paused` field in the shared models and `is_reconciliation_paused` in HTTP DTOs report each resource's
 configured pause independently. Resuming a cluster does not remove individual

@@ -116,7 +116,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		noContentResponse(), notFoundResponse("Cluster not found"), validationResponse(),
 	)
 
-	fuego.Delete(clusterRouter, "/{id}/nodes/{nodeName}", clusterHandler.DeleteClusterNode,
+	fuego.Delete(clusterRouter, "/{id}/nodes/{nodeID}", clusterHandler.DeleteClusterNode,
 		fuego.OptionAddResponse(http.StatusConflict, "Node changed during deletion", fuego.Response{Type: fuego.HTTPError{}}),
 		fuego.OptionDefaultStatusCode(http.StatusNoContent),
 		noContentResponse(), notFoundResponse("Cluster or node not found"), validationResponse(),
@@ -128,10 +128,10 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	fuego.Post(clusterRouter, "/{id}/reconciliation/resume", clusterHandler.ResumeCluster,
 		pauseRouteOptions("Resume cluster reconciliation")...,
 	)
-	fuego.Post(clusterRouter, "/{id}/nodes/{nodeName}/reconciliation/pause", clusterHandler.PauseClusterNode,
-		pauseRouteOptions("Pause Machine reconciliation by CAPI Machine name")...,
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeID}/reconciliation/pause", clusterHandler.PauseClusterNode,
+		pauseRouteOptions("Pause Machine reconciliation by node UUID")...,
 	)
-	fuego.Post(clusterRouter, "/{id}/nodes/{nodeName}/reconciliation/resume", clusterHandler.ResumeClusterNode,
+	fuego.Post(clusterRouter, "/{id}/nodes/{nodeID}/reconciliation/resume", clusterHandler.ResumeClusterNode,
 		pauseRouteOptions("Remove the Machine pause annotation; the parent cluster may remain paused")...,
 	)
 

@@ -39,8 +39,8 @@ func NewClusterManager(
 }
 
 func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.CreateClusterParams) (strategies.ClusterInfo, error) {
-	if err := validateClusterName(params.Name); err != nil {
-		return strategies.ClusterInfo{}, err
+	if params.Name == "" {
+		return strategies.ClusterInfo{}, strategies.ErrClusterNameRequired
 	}
 	if errs := validation.IsDNS1123Label(params.Name); len(errs) > 0 {
 		return strategies.ClusterInfo{}, fmt.Errorf("%w %q: %v", strategies.ErrInvalidClusterName, params.Name, errs)
@@ -98,17 +98,6 @@ func (c ClusterManager) GetClusters(ctx context.Context) ([]strategies.ClusterIn
 	return clusters, nil
 }
 
-func (c ClusterManager) GetCluster(ctx context.Context, name string) (strategies.ClusterInfo, error) {
-	if err := validateClusterName(name); err != nil {
-		return strategies.ClusterInfo{}, err
-	}
-	cluster, err := c.clusterResources.Get(ctx, name)
-	if err != nil {
-		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
-	}
-	return cluster, nil
-}
-
 func (c ClusterManager) GetClusterByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
 	cluster, err := c.clusterResources.GetByUUID(ctx, id)
 	if err != nil {
@@ -146,22 +135,26 @@ func (c ClusterManager) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strate
 	return node, nil
 }
 
-func (c ClusterManager) GetClusterConfig(ctx context.Context, name string) (string, error) {
-	if err := validateClusterName(name); err != nil {
+func (c ClusterManager) GetClusterConfig(ctx context.Context, id uuid.UUID) (string, error) {
+	if err := validateClusterUUID(id); err != nil {
 		return "", err
 	}
-	config, err := c.clusterConfigs.Get(ctx, name)
+	cluster, err := c.clusterResources.GetByUUID(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
+	}
+	config, err := c.clusterConfigs.Get(ctx, cluster.Name)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", strategies.ErrClusterConfigRetrievalFailed, err)
 	}
 	return config, nil
 }
 
-func (c ClusterManager) DeleteCluster(ctx context.Context, name string) error {
-	if err := validateClusterName(name); err != nil {
+func (c ClusterManager) DeleteCluster(ctx context.Context, id uuid.UUID) error {
+	if err := validateClusterUUID(id); err != nil {
 		return err
 	}
-	if err := c.clusterResources.Delete(ctx, name); err != nil {
+	if err := c.clusterResources.Delete(ctx, id); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrClusterDeletionFailed, err)
 	}
 	return nil
@@ -175,80 +168,82 @@ func (m ClusterManager) GetAllTags(ctx context.Context) (map[string]map[string]s
 	return tags, nil
 }
 
-func (m ClusterManager) GetClusterTags(ctx context.Context, clusterName string) (map[string]string, error) {
-	tags, err := m.clusterResources.GetTags(ctx, clusterName)
+func (m ClusterManager) GetClusterTags(ctx context.Context, clusterID uuid.UUID) (map[string]string, error) {
+	tags, err := m.clusterResources.GetTags(ctx, clusterID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, err)
 	}
 	return tags, nil
 }
 
-func (m ClusterManager) GetClusterTag(ctx context.Context, clusterName, tag string) (string, error) {
-	value, err := m.clusterResources.GetTag(ctx, clusterName, tag)
+func (m ClusterManager) GetClusterTag(ctx context.Context, clusterID uuid.UUID, tag string) (string, error) {
+	value, err := m.clusterResources.GetTag(ctx, clusterID, tag)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", strategies.ErrClusterTagsRetrievalFailed, err)
 	}
 	return value, nil
 }
 
-func (m ClusterManager) SetClusterTag(ctx context.Context, clusterName, tag, value string) error {
-	if err := m.clusterResources.SetTag(ctx, clusterName, tag, value); err != nil {
+func (m ClusterManager) SetClusterTag(ctx context.Context, clusterID uuid.UUID, tag, value string) error {
+	if err := m.clusterResources.SetTag(ctx, clusterID, tag, value); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrClusterTagUpdateFailed, err)
 	}
 	return nil
 }
 
-func (m ClusterManager) DeleteClusterTag(ctx context.Context, clusterName, tag string) error {
-	if err := m.clusterResources.DeleteTag(ctx, clusterName, tag); err != nil {
+func (m ClusterManager) DeleteClusterTag(ctx context.Context, clusterID uuid.UUID, tag string) error {
+	if err := m.clusterResources.DeleteTag(ctx, clusterID, tag); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrClusterTagDeletionFailed, err)
 	}
 	return nil
 }
 
-func validateClusterName(name string) error {
-	if name == "" {
-		return strategies.ErrClusterNameRequired
+func validateClusterUUID(id uuid.UUID) error {
+	if id == uuid.Nil {
+		return strategies.ErrClusterIDRequired
 	}
 	return nil
 }
 
-func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error {
-	if err := validateClusterName(clusterName); err != nil {
+func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterID uuid.UUID, nodeID uuid.UUID) error {
+	if err := validateClusterUUID(clusterID); err != nil {
 		return err
 	}
-	if nodeName == "" {
-		return strategies.ErrNodeNameRequired
+	if nodeID == uuid.Nil {
+		return strategies.ErrNodeIDRequired
 	}
-	if _, err := c.clusterResources.Get(ctx, clusterName); err != nil {
+	// Ensure the cluster exists, so an unknown UUID is reported as not found
+	// rather than as an empty node list.
+	if _, err := c.clusterResources.GetByUUID(ctx, clusterID); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
 	}
-	if err := c.clusterMachines.DeleteMachine(ctx, clusterName, nodeName); err != nil {
+	if err := c.clusterMachines.DeleteMachine(ctx, clusterID, nodeID); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
 	}
 	return nil
 }
 
-func (c ClusterManager) SetClusterPaused(ctx context.Context, name string, paused bool) error {
-	if err := validateClusterName(name); err != nil {
+func (c ClusterManager) SetClusterPaused(ctx context.Context, id uuid.UUID, paused bool) error {
+	if err := validateClusterUUID(id); err != nil {
 		return err
 	}
-	if err := c.clusterResources.SetPaused(ctx, name, paused); err != nil {
+	if err := c.clusterResources.SetPaused(ctx, id, paused); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
 	}
 	return nil
 }
 
-func (c ClusterManager) SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
-	if err := validateClusterName(clusterName); err != nil {
+func (c ClusterManager) SetClusterNodePaused(ctx context.Context, clusterID, nodeID uuid.UUID, paused bool) error {
+	if err := validateClusterUUID(clusterID); err != nil {
 		return err
 	}
-	if machineName == "" {
-		return strategies.ErrNodeNameRequired
+	if nodeID == uuid.Nil {
+		return strategies.ErrNodeIDRequired
 	}
-	if _, err := c.clusterResources.Get(ctx, clusterName); err != nil {
+	if _, err := c.clusterResources.GetByUUID(ctx, clusterID); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
 	}
-	if err := c.clusterMachines.SetMachinePaused(ctx, clusterName, machineName, paused); err != nil {
+	if err := c.clusterMachines.SetMachinePaused(ctx, clusterID, nodeID, paused); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
 	}
 	return nil

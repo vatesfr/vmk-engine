@@ -43,17 +43,17 @@ func (m *MockForManagingClusterMachines) EXPECT() *MockForManagingClusterMachine
 }
 
 // DeleteMachine mocks base method.
-func (m *MockForManagingClusterMachines) DeleteMachine(ctx context.Context, clusterName, machineName string) error {
+func (m *MockForManagingClusterMachines) DeleteMachine(ctx context.Context, clusterID, machineID uuid.UUID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteMachine", ctx, clusterName, machineName)
+	ret := m.ctrl.Call(m, "DeleteMachine", ctx, clusterID, machineID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteMachine indicates an expected call of DeleteMachine.
-func (mr *MockForManagingClusterMachinesMockRecorder) DeleteMachine(ctx, clusterName, machineName any) *gomock.Call {
+func (mr *MockForManagingClusterMachinesMockRecorder) DeleteMachine(ctx, clusterID, machineID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMachine", reflect.TypeOf((*MockForManagingClusterMachines)(nil).DeleteMachine), ctx, clusterName, machineName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMachine", reflect.TypeOf((*MockForManagingClusterMachines)(nil).DeleteMachine), ctx, clusterID, machineID)
 }
 
 // GetAllMachines mocks base method.
@@ -102,15 +102,15 @@ func (mr *MockForManagingClusterMachinesMockRecorder) GetMachinesByCluster(ctx, 
 }
 
 // SetMachinePaused mocks base method.
-func (m *MockForManagingClusterMachines) SetMachinePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+func (m *MockForManagingClusterMachines) SetMachinePaused(ctx context.Context, clusterID, machineID uuid.UUID, paused bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetMachinePaused", ctx, clusterName, machineName, paused)
+	ret := m.ctrl.Call(m, "SetMachinePaused", ctx, clusterID, machineID, paused)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetMachinePaused indicates an expected call of SetMachinePaused.
-func (mr *MockForManagingClusterMachinesMockRecorder) SetMachinePaused(ctx, clusterName, machineName, paused any) *gomock.Call {
+func (mr *MockForManagingClusterMachinesMockRecorder) SetMachinePaused(ctx, clusterID, machineID, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMachinePaused", reflect.TypeOf((*MockForManagingClusterMachines)(nil).SetMachinePaused), ctx, clusterName, machineName, paused)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMachinePaused", reflect.TypeOf((*MockForManagingClusterMachines)(nil).SetMachinePaused), ctx, clusterID, machineID, paused)
 }

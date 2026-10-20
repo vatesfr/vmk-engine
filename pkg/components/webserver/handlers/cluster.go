@@ -169,7 +169,11 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 }
 
 func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (ClusterConfigResponse, error) {
-	config, err := k.clusterService.GetClusterConfig(c.Context(), c.PathParam("id"))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return ClusterConfigResponse{}, toHTTPError(err)
+	}
+	config, err := k.clusterService.GetClusterConfig(c.Context(), id)
 	if err != nil {
 		return ClusterConfigResponse{}, toHTTPError(err)
 	}
@@ -241,7 +245,11 @@ func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
 }
 
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (any, error) {
-	if err := k.clusterService.DeleteCluster(c.Context(), c.PathParam("id")); err != nil {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.DeleteCluster(c.Context(), id); err != nil {
 		return nil, toHTTPError(err)
 	}
 
@@ -257,7 +265,11 @@ func (k ClusterHandler) GetAllTags(c fuego.ContextNoBody) (AllClusterTagsRespons
 }
 
 func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {
-	tags, err := k.clusterService.GetClusterTags(c.Context(), c.PathParam("id"))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return ClusterTagsResponse{}, toHTTPError(err)
+	}
+	tags, err := k.clusterService.GetClusterTags(c.Context(), id)
 	if err != nil {
 		return ClusterTagsResponse{}, toHTTPError(err)
 	}
@@ -265,7 +277,11 @@ func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsRespon
 }
 
 func (k ClusterHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
-	value, err := k.clusterService.GetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return "", toHTTPError(err)
+	}
+	value, err := k.clusterService.GetClusterTag(c.Context(), id, c.PathParam("tag"))
 	if err != nil {
 		return "", toHTTPError(err)
 	}
@@ -278,7 +294,11 @@ func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[Cluster
 		return nil, toHTTPError(err)
 	}
 
-	if err := k.clusterService.SetClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag"), createParams.Value); err != nil {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.SetClusterTag(c.Context(), id, c.PathParam("tag"), createParams.Value); err != nil {
 		return nil, toHTTPError(err)
 	}
 
@@ -286,7 +306,11 @@ func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[Cluster
 }
 
 func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (any, error) {
-	if err := k.clusterService.DeleteClusterTag(c.Context(), c.PathParam("id"), c.PathParam("tag")); err != nil {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.DeleteClusterTag(c.Context(), id, c.PathParam("tag")); err != nil {
 		return nil, toHTTPError(err)
 	}
 
@@ -303,7 +327,11 @@ func (k ClusterHandler) GetAllNodes(c fuego.ContextNoBody) ([]ClusterNodeInfo, e
 }
 
 func (k ClusterHandler) DeleteClusterNode(c fuego.ContextNoBody) (any, error) {
-	if err := k.clusterService.DeleteClusterNode(c.Context(), c.PathParam("id"), c.PathParam("nodeName")); err != nil {
+	clusterID, nodeID, err := parseClusterNodeIDs(c.PathParam("id"), c.PathParam("nodeID"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.DeleteClusterNode(c.Context(), clusterID, nodeID); err != nil {
 		return nil, toHTTPError(err)
 	}
 	return nil, nil
@@ -314,7 +342,11 @@ func (k ClusterHandler) SetWorkerReplicas(c fuego.ContextWithBody[ClusterReplica
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
-	if err := k.clusterService.SetWorkerReplicas(c.Context(), c.PathParam("id"), *params.Replicas); err != nil {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.SetWorkerReplicas(c.Context(), id, *params.Replicas); err != nil {
 		return nil, toHTTPError(err)
 	}
 	return nil, nil
@@ -325,26 +357,58 @@ func (k ClusterHandler) SetControlPlaneReplicas(c fuego.ContextWithBody[ClusterR
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
-	if err := k.clusterService.SetControlPlaneReplicas(c.Context(), c.PathParam("id"), *params.Replicas); err != nil {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	if err := k.clusterService.SetControlPlaneReplicas(c.Context(), id, *params.Replicas); err != nil {
 		return nil, toHTTPError(err)
 	}
 	return nil, nil
 }
 
 func (k ClusterHandler) PauseCluster(c fuego.ContextNoBody) (any, error) {
-	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), c.PathParam("id"), true))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), id, true))
 }
 
 func (k ClusterHandler) ResumeCluster(c fuego.ContextNoBody) (any, error) {
-	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), c.PathParam("id"), false))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterPaused(c.Context(), id, false))
 }
 
 func (k ClusterHandler) PauseClusterNode(c fuego.ContextNoBody) (any, error) {
-	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), c.PathParam("id"), c.PathParam("nodeName"), true))
+	clusterID, nodeID, err := parseClusterNodeIDs(c.PathParam("id"), c.PathParam("nodeID"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), clusterID, nodeID, true))
 }
 
 func (k ClusterHandler) ResumeClusterNode(c fuego.ContextNoBody) (any, error) {
-	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), c.PathParam("id"), c.PathParam("nodeName"), false))
+	clusterID, nodeID, err := parseClusterNodeIDs(c.PathParam("id"), c.PathParam("nodeID"))
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterNodePaused(c.Context(), clusterID, nodeID, false))
+}
+
+func parseClusterNodeIDs(clusterIDValue, nodeIDValue string) (uuid.UUID, uuid.UUID, error) {
+	clusterID, err := uuid.FromString(clusterIDValue)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	nodeID, err := uuid.FromString(nodeIDValue)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	return clusterID, nodeID, nil
 }
 
 func toHTTPErrorOrNil(err error) error {

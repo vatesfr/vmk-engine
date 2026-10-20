@@ -3,6 +3,7 @@ package cluster_manager_test
 import (
 	"testing"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -15,17 +16,17 @@ func TestSetReplicas(t *testing.T) {
 	for _, controlPlane := range []bool{false, true} {
 		for _, tc := range []struct {
 			name              string
-			cluster           string
+			cluster           uuid.UUID
 			replicas          int32
 			resourceErr, want error
 		}{
-			{name: "sets target", cluster: clusterName, replicas: 3},
-			{name: "missing name", replicas: 3, want: strategies.ErrClusterNameRequired},
-			{name: "zero", cluster: clusterName, want: strategies.ErrInvalidReplicas},
-			{name: "negative", cluster: clusterName, replicas: -1, want: strategies.ErrInvalidReplicas},
-			{name: "conflict", cluster: clusterName, replicas: 3, resourceErr: strategies.ErrClusterScalingConflict, want: strategies.ErrClusterScalingConflict},
-			{name: "not found", cluster: clusterName, replicas: 3, resourceErr: strategies.ErrClusterNotFound, want: strategies.ErrClusterNotFound},
-			{name: "technical error", cluster: clusterName, replicas: 3, resourceErr: errTest, want: errTest},
+			{name: "sets target", cluster: clusterUUID, replicas: 3},
+			{name: "missing name", replicas: 3, want: strategies.ErrClusterIDRequired},
+			{name: "zero", cluster: clusterUUID, want: strategies.ErrInvalidReplicas},
+			{name: "negative", cluster: clusterUUID, replicas: -1, want: strategies.ErrInvalidReplicas},
+			{name: "conflict", cluster: clusterUUID, replicas: 3, resourceErr: strategies.ErrClusterScalingConflict, want: strategies.ErrClusterScalingConflict},
+			{name: "not found", cluster: clusterUUID, replicas: 3, resourceErr: strategies.ErrClusterNotFound, want: strategies.ErrClusterNotFound},
+			{name: "technical error", cluster: clusterUUID, replicas: 3, resourceErr: errTest, want: errTest},
 		} {
 			target := "workers"
 			if controlPlane {
@@ -33,7 +34,7 @@ func TestSetReplicas(t *testing.T) {
 			}
 			t.Run(target+"/"+tc.name, func(t *testing.T) {
 				resources := mocks.NewMockForManagingClusterResources(gomock.NewController(t))
-				if tc.cluster != "" && tc.replicas > 0 {
+				if tc.cluster != uuid.Nil && tc.replicas > 0 {
 					if controlPlane {
 						resources.EXPECT().SetControlPlaneReplicas(t.Context(), tc.cluster, tc.replicas).Return(tc.resourceErr)
 					} else {

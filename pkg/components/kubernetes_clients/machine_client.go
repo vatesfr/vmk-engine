@@ -99,7 +99,43 @@ func (m MachineClient) GetMachineByUUID(ctx context.Context, id uuid.UUID) (stra
 	if len(list.Items) == 0 {
 		return strategies.ClusterNodeInfo{}, strategies.ErrNodeNotFound
 	}
+	if len(list.Items) > 1 {
+		return strategies.ClusterNodeInfo{}, fmt.Errorf("%w: %d Machines found for UUID %s", strategies.ErrNodeAmbiguous, len(list.Items), id)
+	}
 	return toClusterNodeInfo(&list.Items[0]), nil
+}
+
+func (m MachineClient) validateMachineMutationInput(clusterID, machineID uuid.UUID) error {
+	if clusterID == uuid.Nil {
+		return strategies.ErrClusterIDRequired
+	}
+	if machineID == uuid.Nil {
+		return strategies.ErrNodeIDRequired
+	}
+	if m.namespace == "" {
+		return strategies.ErrClusterNamespaceRequired
+	}
+	return nil
+}
+
+func (m MachineClient) getMachineByUUIDInCluster(ctx context.Context, clusterID, machineID uuid.UUID) (*capiv1.Machine, error) {
+	machines := &capiv1.MachineList{}
+	if err := m.informerCache.List(ctx, machines,
+		client.InNamespace(m.namespace),
+		client.MatchingFields{
+			uuids.UUIDIndexKey:        machineID.String(),
+			uuids.ClusterUUIDIndexKey: clusterID.String(),
+		},
+	); err != nil {
+		return nil, fmt.Errorf("list Machines by UUID %s in cluster %s: %w", machineID, clusterID, err)
+	}
+	if len(machines.Items) == 0 {
+		return nil, strategies.ErrNodeNotFound
+	}
+	if len(machines.Items) > 1 {
+		return nil, fmt.Errorf("%w: %d Machines found for UUID %s in cluster %s", strategies.ErrNodeAmbiguous, len(machines.Items), machineID, clusterID)
+	}
+	return &machines.Items[0], nil
 }
 
 func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
@@ -171,28 +207,27 @@ func machineEndpoint(addresses capiv1.MachineAddresses) string {
 	return ""
 }
 
-// DeleteMachine requests deletion by the CAPI resource name.
+// DeleteMachine requests deletion by the node UUID.
 // Membership is checked using spec.clusterName rather than mutable labels.
-func (m MachineClient) DeleteMachine(ctx context.Context, clusterName, machineName string) error {
-	if clusterName == "" {
-		return strategies.ErrClusterNameRequired
-	}
-	if machineName == "" {
-		return strategies.ErrNodeNameRequired
-	}
-	if m.namespace == "" {
-		return strategies.ErrClusterNamespaceRequired
+func (m MachineClient) DeleteMachine(ctx context.Context, clusterID, machineID uuid.UUID) error {
+	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
+		return err
 	}
 
-	machine := &capiv1.Machine{}
-	key := client.ObjectKey{Namespace: m.namespace, Name: machineName}
+	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
+	if err != nil {
+		return err
+	}
+
+	key := client.ObjectKeyFromObject(machine)
 	if err := m.kubernetesClient.Get(ctx, key, machine); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
 		}
 		return fmt.Errorf("get Machine %s: %w", key, err)
 	}
-	if machine.Spec.ClusterName != clusterName {
+	node := toClusterNodeInfo(machine)
+	if node.ID != machineID || node.ParentCluster != clusterID {
 		return strategies.ErrNodeNotFound
 	}
 
@@ -213,25 +248,24 @@ func (m MachineClient) DeleteMachine(ctx context.Context, clusterName, machineNa
 
 // SetMachinePaused changes only the Machine pause annotation. Membership is
 // checked against spec.clusterName, and the patch guards against reassignment.
-func (m MachineClient) SetMachinePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
-	if clusterName == "" {
-		return strategies.ErrClusterNameRequired
+func (m MachineClient) SetMachinePaused(ctx context.Context, clusterID, machineID uuid.UUID, paused bool) error {
+	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
+		return err
 	}
-	if machineName == "" {
-		return strategies.ErrNodeNameRequired
+	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
+	if err != nil {
+		return err
 	}
-	if m.namespace == "" {
-		return strategies.ErrClusterNamespaceRequired
-	}
-	machine := &capiv1.Machine{}
-	key := client.ObjectKey{Namespace: m.namespace, Name: machineName}
+
+	key := client.ObjectKeyFromObject(machine)
 	if err := m.kubernetesClient.Get(ctx, key, machine); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrNodeNotFound, err)
 		}
 		return fmt.Errorf("get Machine %s: %w", key, err)
 	}
-	if machine.Spec.ClusterName != clusterName {
+	node := toClusterNodeInfo(machine)
+	if node.ID != machineID || node.ParentCluster != clusterID {
 		return strategies.ErrNodeNotFound
 	}
 	value, present := machine.Annotations[capiv1.PausedAnnotation]

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -56,6 +57,8 @@ var (
 		EndpointSubnet: 24,
 		LoadBalancer:   "test-lb",
 	}
+	clusterUUID    = uuids.ClusterID(clusterName)
+	deleteNodeUUID = uuids.NodeID(clusterName, deleteNodeName)
 )
 
 func TestCreateCluster(t *testing.T) {
@@ -290,9 +293,9 @@ func TestGetCluster(t *testing.T) {
 			Phase:                provisionedPhase,
 			ControlPlaneEndpoint: controlPlaneIP,
 		}
-		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(expected, nil)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(expected, nil)
 
-		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
+		cluster, err := clusterManager.GetClusterByUUID(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 		assert.Equal(t, expected, cluster)
@@ -300,9 +303,9 @@ func TestGetCluster(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, errTest)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{}, errTest)
 
-		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
+		cluster, err := clusterManager.GetClusterByUUID(t.Context(), clusterUUID)
 
 		assert.Empty(t, cluster)
 		assert.ErrorIs(t, err, errTest)
@@ -311,9 +314,9 @@ func TestGetCluster(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 
-		cluster, err := clusterManager.GetCluster(t.Context(), clusterName)
+		cluster, err := clusterManager.GetClusterByUUID(t.Context(), clusterUUID)
 
 		assert.Empty(t, cluster)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
@@ -365,20 +368,22 @@ func TestGetClusterNodesInfo(t *testing.T) {
 
 func TestGetClusterConfig(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		_, clusterConfigs, _, clusterManager := newTestClusterManager(t)
+		clusterResources, clusterConfigs, _, clusterManager := newTestClusterManager(t)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{Name: clusterName}, nil)
 		clusterConfigs.EXPECT().Get(t.Context(), clusterName).Return(clusterConfig, nil)
 
-		config, err := clusterManager.GetClusterConfig(t.Context(), clusterName)
+		config, err := clusterManager.GetClusterConfig(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 		assert.Equal(t, clusterConfig, config)
 	})
 
 	t.Run("error", func(t *testing.T) {
-		_, clusterConfigs, _, clusterManager := newTestClusterManager(t)
+		clusterResources, clusterConfigs, _, clusterManager := newTestClusterManager(t)
+		clusterResources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{Name: clusterName}, nil)
 		clusterConfigs.EXPECT().Get(t.Context(), clusterName).Return("", errTest)
 
-		config, err := clusterManager.GetClusterConfig(t.Context(), clusterName)
+		config, err := clusterManager.GetClusterConfig(t.Context(), clusterUUID)
 
 		assert.Empty(t, config)
 		assert.ErrorIs(t, err, errTest)
@@ -389,18 +394,18 @@ func TestGetClusterConfig(t *testing.T) {
 func TestDeleteCluster(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Delete(t.Context(), clusterName).Return(nil)
+		clusterResources.EXPECT().Delete(t.Context(), clusterUUID).Return(nil)
 
-		err := clusterManager.DeleteCluster(t.Context(), clusterName)
+		err := clusterManager.DeleteCluster(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 	})
 
 	t.Run("error", func(t *testing.T) {
 		clusterResources, _, _, clusterManager := newTestClusterManager(t)
-		clusterResources.EXPECT().Delete(t.Context(), clusterName).Return(errTest)
+		clusterResources.EXPECT().Delete(t.Context(), clusterUUID).Return(errTest)
 
-		err := clusterManager.DeleteCluster(t.Context(), clusterName)
+		err := clusterManager.DeleteCluster(t.Context(), clusterUUID)
 
 		assert.ErrorIs(t, err, errTest)
 		assert.ErrorIs(t, err, strategies.ErrClusterDeletionFailed)
@@ -410,25 +415,27 @@ func TestDeleteCluster(t *testing.T) {
 func TestClusterNameRequired(t *testing.T) {
 	testCases := map[string]func(cluster_manager.ClusterManager) error{
 		"get cluster": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetCluster(t.Context(), "")
+			_, err := manager.GetClusterByUUID(t.Context(), uuid.Nil)
 			return err
 		},
 		"get cluster config": func(manager cluster_manager.ClusterManager) error {
-			_, err := manager.GetClusterConfig(t.Context(), "")
+			_, err := manager.GetClusterConfig(t.Context(), uuid.Nil)
 			return err
 		},
 		"delete cluster": func(manager cluster_manager.ClusterManager) error {
-			return manager.DeleteCluster(t.Context(), "")
+			return manager.DeleteCluster(t.Context(), uuid.Nil)
 		},
 	}
 
 	for name, run := range testCases {
 		t.Run(name, func(t *testing.T) {
-			_, _, _, clusterManager := newTestClusterManager(t)
-
+			clusterResources, _, _, clusterManager := newTestClusterManager(t)
+			if name == "get cluster" {
+				clusterResources.EXPECT().GetByUUID(gomock.Any(), uuid.Nil).Return(strategies.ClusterInfo{}, strategies.ErrClusterIDRequired)
+			}
 			err := run(clusterManager)
 
-			assert.ErrorIs(t, err, strategies.ErrClusterNameRequired)
+			assert.ErrorIs(t, err, strategies.ErrClusterIDRequired)
 		})
 	}
 }
@@ -574,23 +581,23 @@ func TestCreateClusterDescription(t *testing.T) {
 
 func TestDeleteClusterNode(t *testing.T) {
 	for name, tc := range map[string]struct {
-		cluster, node              string
+		cluster, node              uuid.UUID
 		getErr, deleteErr, wantErr error
 	}{
-		"success":                   {cluster: clusterName, node: deleteNodeName},
-		"cluster required":          {node: deleteNodeName, wantErr: strategies.ErrClusterNameRequired},
-		"node required":             {cluster: clusterName, wantErr: strategies.ErrNodeNameRequired},
-		"missing cluster":           {cluster: clusterName, node: deleteNodeName, getErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
-		"cluster retrieval failure": {cluster: clusterName, node: deleteNodeName, getErr: errTest, wantErr: errTest},
-		"missing node":              {cluster: clusterName, node: deleteNodeName, deleteErr: strategies.ErrNodeNotFound, wantErr: strategies.ErrNodeNotFound},
-		"deletion failure":          {cluster: clusterName, node: deleteNodeName, deleteErr: errTest, wantErr: errTest},
+		"success":                   {cluster: clusterUUID, node: deleteNodeUUID},
+		"cluster required":          {node: deleteNodeUUID, wantErr: strategies.ErrClusterIDRequired},
+		"node required":             {cluster: clusterUUID, wantErr: strategies.ErrNodeIDRequired},
+		"missing cluster":           {cluster: clusterUUID, node: deleteNodeUUID, getErr: strategies.ErrClusterNotFound, wantErr: strategies.ErrClusterNotFound},
+		"cluster retrieval failure": {cluster: clusterUUID, node: deleteNodeUUID, getErr: errTest, wantErr: errTest},
+		"missing node":              {cluster: clusterUUID, node: deleteNodeUUID, deleteErr: strategies.ErrNodeNotFound, wantErr: strategies.ErrNodeNotFound},
+		"deletion failure":          {cluster: clusterUUID, node: deleteNodeUUID, deleteErr: errTest, wantErr: errTest},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			resources := mocks.NewMockForManagingClusterResources(ctrl)
 			nodes := mocks.NewMockForManagingClusterMachines(ctrl)
-			if tc.cluster != "" && tc.node != "" {
-				get := resources.EXPECT().Get(t.Context(), tc.cluster).Return(strategies.ClusterInfo{}, tc.getErr)
+			if tc.cluster != uuid.Nil && tc.node != uuid.Nil {
+				get := resources.EXPECT().GetByUUID(t.Context(), tc.cluster).Return(strategies.ClusterInfo{}, tc.getErr)
 				if tc.getErr == nil {
 					nodes.EXPECT().DeleteMachine(t.Context(), tc.cluster, tc.node).After(get).Return(tc.deleteErr)
 				}
@@ -678,23 +685,23 @@ func TestSetPaused(t *testing.T) {
 		resources := mocks.NewMockForManagingClusterResources(ctrl)
 		machines := mocks.NewMockForManagingClusterMachines(ctrl)
 		manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil)
-		resources.EXPECT().SetPaused(t.Context(), clusterName, paused).Return(nil)
-		require.NoError(t, manager.SetClusterPaused(t.Context(), clusterName, paused))
+		resources.EXPECT().SetPaused(t.Context(), clusterUUID, paused).Return(nil)
+		require.NoError(t, manager.SetClusterPaused(t.Context(), clusterUUID, paused))
 		gomock.InOrder(
-			resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, nil),
-			machines.EXPECT().SetMachinePaused(t.Context(), clusterName, deleteNodeName, paused).Return(nil),
+			resources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{}, nil),
+			machines.EXPECT().SetMachinePaused(t.Context(), clusterUUID, deleteNodeUUID, paused).Return(nil),
 		)
-		require.NoError(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused))
-		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), "", paused), strategies.ErrClusterNameRequired)
-		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), "", deleteNodeName, paused), strategies.ErrClusterNameRequired)
-		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, "", paused), strategies.ErrNodeNameRequired)
-		resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
-		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused), strategies.ErrClusterNotFound)
-		resources.EXPECT().SetPaused(t.Context(), clusterName, paused).Return(strategies.ErrPauseUpdateConflict)
-		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), clusterName, paused), strategies.ErrPauseUpdateConflict)
-		resources.EXPECT().Get(t.Context(), clusterName).Return(strategies.ClusterInfo{}, nil)
-		machines.EXPECT().SetMachinePaused(t.Context(), clusterName, deleteNodeName, paused).Return(strategies.ErrPauseUpdateConflict)
-		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterName, deleteNodeName, paused), strategies.ErrPauseUpdateConflict)
+		require.NoError(t, manager.SetClusterNodePaused(t.Context(), clusterUUID, deleteNodeUUID, paused))
+		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), uuid.Nil, paused), strategies.ErrClusterIDRequired)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), uuid.Nil, deleteNodeUUID, paused), strategies.ErrClusterIDRequired)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterUUID, uuid.Nil, paused), strategies.ErrNodeIDRequired)
+		resources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterUUID, deleteNodeUUID, paused), strategies.ErrClusterNotFound)
+		resources.EXPECT().SetPaused(t.Context(), clusterUUID, paused).Return(strategies.ErrPauseUpdateConflict)
+		require.ErrorIs(t, manager.SetClusterPaused(t.Context(), clusterUUID, paused), strategies.ErrPauseUpdateConflict)
+		resources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{}, nil)
+		machines.EXPECT().SetMachinePaused(t.Context(), clusterUUID, deleteNodeUUID, paused).Return(strategies.ErrPauseUpdateConflict)
+		require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterUUID, deleteNodeUUID, paused), strategies.ErrPauseUpdateConflict)
 	}
 }
 

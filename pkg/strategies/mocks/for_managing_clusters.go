@@ -58,45 +58,45 @@ func (mr *MockForManagingClustersMockRecorder) CreateCluster(ctx, params any) *g
 }
 
 // DeleteCluster mocks base method.
-func (m *MockForManagingClusters) DeleteCluster(ctx context.Context, name string) error {
+func (m *MockForManagingClusters) DeleteCluster(ctx context.Context, id uuid.UUID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteCluster", ctx, name)
+	ret := m.ctrl.Call(m, "DeleteCluster", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteCluster indicates an expected call of DeleteCluster.
-func (mr *MockForManagingClustersMockRecorder) DeleteCluster(ctx, name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) DeleteCluster(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCluster", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteCluster), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCluster", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteCluster), ctx, id)
 }
 
 // DeleteClusterNode mocks base method.
-func (m *MockForManagingClusters) DeleteClusterNode(ctx context.Context, clusterName, nodeName string) error {
+func (m *MockForManagingClusters) DeleteClusterNode(ctx context.Context, clusterID, nodeID uuid.UUID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteClusterNode", ctx, clusterName, nodeName)
+	ret := m.ctrl.Call(m, "DeleteClusterNode", ctx, clusterID, nodeID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteClusterNode indicates an expected call of DeleteClusterNode.
-func (mr *MockForManagingClustersMockRecorder) DeleteClusterNode(ctx, clusterName, nodeName any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) DeleteClusterNode(ctx, clusterID, nodeID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterNode", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterNode), ctx, clusterName, nodeName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterNode", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterNode), ctx, clusterID, nodeID)
 }
 
 // DeleteClusterTag mocks base method.
-func (m *MockForManagingClusters) DeleteClusterTag(ctx context.Context, clusterID, tag string) error {
+func (m *MockForManagingClusters) DeleteClusterTag(ctx context.Context, id uuid.UUID, tag string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteClusterTag", ctx, clusterID, tag)
+	ret := m.ctrl.Call(m, "DeleteClusterTag", ctx, id, tag)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteClusterTag indicates an expected call of DeleteClusterTag.
-func (mr *MockForManagingClustersMockRecorder) DeleteClusterTag(ctx, clusterID, tag any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) DeleteClusterTag(ctx, id, tag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterTag), ctx, clusterID, tag)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).DeleteClusterTag), ctx, id, tag)
 }
 
 // GetAllNodes mocks base method.
@@ -129,21 +129,6 @@ func (mr *MockForManagingClustersMockRecorder) GetAllTags(ctx any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllTags", reflect.TypeOf((*MockForManagingClusters)(nil).GetAllTags), ctx)
 }
 
-// GetCluster mocks base method.
-func (m *MockForManagingClusters) GetCluster(ctx context.Context, name string) (strategies.ClusterInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCluster", ctx, name)
-	ret0, _ := ret[0].(strategies.ClusterInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetCluster indicates an expected call of GetCluster.
-func (mr *MockForManagingClustersMockRecorder) GetCluster(ctx, name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockForManagingClusters)(nil).GetCluster), ctx, name)
-}
-
 // GetClusterByUUID mocks base method.
 func (m *MockForManagingClusters) GetClusterByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
@@ -160,18 +145,18 @@ func (mr *MockForManagingClustersMockRecorder) GetClusterByUUID(ctx, id any) *go
 }
 
 // GetClusterConfig mocks base method.
-func (m *MockForManagingClusters) GetClusterConfig(ctx context.Context, name string) (string, error) {
+func (m *MockForManagingClusters) GetClusterConfig(ctx context.Context, id uuid.UUID) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterConfig", ctx, name)
+	ret := m.ctrl.Call(m, "GetClusterConfig", ctx, id)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterConfig indicates an expected call of GetClusterConfig.
-func (mr *MockForManagingClustersMockRecorder) GetClusterConfig(ctx, name any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterConfig(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterConfig", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterConfig), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterConfig", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterConfig), ctx, id)
 }
 
 // GetClusterNodesInfo mocks base method.
@@ -190,33 +175,33 @@ func (mr *MockForManagingClustersMockRecorder) GetClusterNodesInfo(ctx, id any) 
 }
 
 // GetClusterTag mocks base method.
-func (m *MockForManagingClusters) GetClusterTag(ctx context.Context, clusterID, tag string) (string, error) {
+func (m *MockForManagingClusters) GetClusterTag(ctx context.Context, id uuid.UUID, tag string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterTag", ctx, clusterID, tag)
+	ret := m.ctrl.Call(m, "GetClusterTag", ctx, id, tag)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterTag indicates an expected call of GetClusterTag.
-func (mr *MockForManagingClustersMockRecorder) GetClusterTag(ctx, clusterID, tag any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterTag(ctx, id, tag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterTag), ctx, clusterID, tag)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterTag), ctx, id, tag)
 }
 
 // GetClusterTags mocks base method.
-func (m *MockForManagingClusters) GetClusterTags(ctx context.Context, clusterID string) (map[string]string, error) {
+func (m *MockForManagingClusters) GetClusterTags(ctx context.Context, id uuid.UUID) (map[string]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterTags", ctx, clusterID)
+	ret := m.ctrl.Call(m, "GetClusterTags", ctx, id)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterTags indicates an expected call of GetClusterTags.
-func (mr *MockForManagingClustersMockRecorder) GetClusterTags(ctx, clusterID any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) GetClusterTags(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterTags", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterTags), ctx, clusterID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterTags", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterTags), ctx, id)
 }
 
 // GetClusters mocks base method.
@@ -264,71 +249,71 @@ func (mr *MockForManagingClustersMockRecorder) SetClusterDescription(ctx, name, 
 }
 
 // SetClusterNodePaused mocks base method.
-func (m *MockForManagingClusters) SetClusterNodePaused(ctx context.Context, clusterName, machineName string, paused bool) error {
+func (m *MockForManagingClusters) SetClusterNodePaused(ctx context.Context, clusterID, nodeID uuid.UUID, paused bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetClusterNodePaused", ctx, clusterName, machineName, paused)
+	ret := m.ctrl.Call(m, "SetClusterNodePaused", ctx, clusterID, nodeID, paused)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetClusterNodePaused indicates an expected call of SetClusterNodePaused.
-func (mr *MockForManagingClustersMockRecorder) SetClusterNodePaused(ctx, clusterName, machineName, paused any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetClusterNodePaused(ctx, clusterID, nodeID, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterNodePaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterNodePaused), ctx, clusterName, machineName, paused)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterNodePaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterNodePaused), ctx, clusterID, nodeID, paused)
 }
 
 // SetClusterPaused mocks base method.
-func (m *MockForManagingClusters) SetClusterPaused(ctx context.Context, name string, paused bool) error {
+func (m *MockForManagingClusters) SetClusterPaused(ctx context.Context, id uuid.UUID, paused bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetClusterPaused", ctx, name, paused)
+	ret := m.ctrl.Call(m, "SetClusterPaused", ctx, id, paused)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetClusterPaused indicates an expected call of SetClusterPaused.
-func (mr *MockForManagingClustersMockRecorder) SetClusterPaused(ctx, name, paused any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetClusterPaused(ctx, id, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterPaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterPaused), ctx, name, paused)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterPaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterPaused), ctx, id, paused)
 }
 
 // SetClusterTag mocks base method.
-func (m *MockForManagingClusters) SetClusterTag(ctx context.Context, clusterID, tag, value string) error {
+func (m *MockForManagingClusters) SetClusterTag(ctx context.Context, id uuid.UUID, tag, value string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetClusterTag", ctx, clusterID, tag, value)
+	ret := m.ctrl.Call(m, "SetClusterTag", ctx, id, tag, value)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetClusterTag indicates an expected call of SetClusterTag.
-func (mr *MockForManagingClustersMockRecorder) SetClusterTag(ctx, clusterID, tag, value any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetClusterTag(ctx, id, tag, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterTag), ctx, clusterID, tag, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterTag", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterTag), ctx, id, tag, value)
 }
 
 // SetControlPlaneReplicas mocks base method.
-func (m *MockForManagingClusters) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
+func (m *MockForManagingClusters) SetControlPlaneReplicas(ctx context.Context, clusterID uuid.UUID, replicas int32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, name, replicas)
+	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, clusterID, replicas)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetControlPlaneReplicas indicates an expected call of SetControlPlaneReplicas.
-func (mr *MockForManagingClustersMockRecorder) SetControlPlaneReplicas(ctx, name, replicas any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetControlPlaneReplicas(ctx, clusterID, replicas any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetControlPlaneReplicas), ctx, name, replicas)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetControlPlaneReplicas), ctx, clusterID, replicas)
 }
 
 // SetWorkerReplicas mocks base method.
-func (m *MockForManagingClusters) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
+func (m *MockForManagingClusters) SetWorkerReplicas(ctx context.Context, clusterID uuid.UUID, replicas int32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, name, replicas)
+	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, clusterID, replicas)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetWorkerReplicas indicates an expected call of SetWorkerReplicas.
-func (mr *MockForManagingClustersMockRecorder) SetWorkerReplicas(ctx, name, replicas any) *gomock.Call {
+func (mr *MockForManagingClustersMockRecorder) SetWorkerReplicas(ctx, clusterID, replicas any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetWorkerReplicas), ctx, name, replicas)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusters)(nil).SetWorkerReplicas), ctx, clusterID, replicas)
 }

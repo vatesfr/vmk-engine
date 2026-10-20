@@ -53,21 +53,21 @@ func TestClusterManagerTags(t *testing.T) {
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
 	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil)
 
-	resources.EXPECT().GetTags(t.Context(), "cluster").Return(map[string]string{ownerTag: platformValue}, nil)
-	tags, err := manager.GetClusterTags(t.Context(), "cluster")
+	resources.EXPECT().GetTags(t.Context(), clusterUUID).Return(map[string]string{ownerTag: platformValue}, nil)
+	tags, err := manager.GetClusterTags(t.Context(), clusterUUID)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{ownerTag: platformValue}, tags)
 
-	resources.EXPECT().GetTag(t.Context(), "cluster", ownerTag).Return(platformValue, nil)
-	value, err := manager.GetClusterTag(t.Context(), "cluster", ownerTag)
+	resources.EXPECT().GetTag(t.Context(), clusterUUID, ownerTag).Return(platformValue, nil)
+	value, err := manager.GetClusterTag(t.Context(), clusterUUID, ownerTag)
 	require.NoError(t, err)
 	assert.Equal(t, platformValue, value)
 
-	resources.EXPECT().SetTag(t.Context(), "cluster", ownerTag, "compute").Return(nil)
-	require.NoError(t, manager.SetClusterTag(t.Context(), "cluster", ownerTag, "compute"))
+	resources.EXPECT().SetTag(t.Context(), clusterUUID, ownerTag, "compute").Return(nil)
+	require.NoError(t, manager.SetClusterTag(t.Context(), clusterUUID, ownerTag, "compute"))
 
-	resources.EXPECT().DeleteTag(t.Context(), "cluster", ownerTag).Return(nil)
-	require.NoError(t, manager.DeleteClusterTag(t.Context(), "cluster", ownerTag))
+	resources.EXPECT().DeleteTag(t.Context(), clusterUUID, ownerTag).Return(nil)
+	require.NoError(t, manager.DeleteClusterTag(t.Context(), clusterUUID, ownerTag))
 }
 
 func TestClusterManagerTagsWrapsResourceErrors(t *testing.T) {
@@ -76,8 +76,8 @@ func TestClusterManagerTagsWrapsResourceErrors(t *testing.T) {
 	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil)
 	errTest := errors.New("test error")
 
-	resources.EXPECT().SetTag(t.Context(), "cluster", ownerTag, platformValue).Return(errTest)
-	err := manager.SetClusterTag(t.Context(), "cluster", ownerTag, platformValue)
+	resources.EXPECT().SetTag(t.Context(), clusterUUID, ownerTag, platformValue).Return(errTest)
+	err := manager.SetClusterTag(t.Context(), clusterUUID, ownerTag, platformValue)
 	assert.ErrorIs(t, err, errTest)
 	assert.ErrorIs(t, err, strategies.ErrClusterTagUpdateFailed)
 }

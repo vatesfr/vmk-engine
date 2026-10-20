@@ -118,7 +118,6 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetCluster(t *testing.T) {
-	clusterUUID := uuids.ClusterID(clusterName)
 	expectedServiceResult := strategies.ClusterInfo{
 		ID: clusterUUID, Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 	}
@@ -257,9 +256,9 @@ func TestGetClusterConfig(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetClusterConfig(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusterConfig(gomock.Any(), clusterUUID).Return(testCase.serviceResult, testCase.serviceError)
 
-			result, err := handler.GetClusterConfig(newContextWithClusterID())
+			result, err := handler.GetClusterConfig(newContextWithClusterUUID())
 
 			assert.Equal(t, testCase.expected, result)
 			assertHandlerError(t, err, testCase.serviceError)
@@ -353,18 +352,18 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 func TestClusterNotFoundApplicationErrors(t *testing.T) {
 	testCases := map[string]func(*mocks.MockForManagingClusters, handlers.ClusterHandler) error{
 		"get cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().GetClusterByUUID(gomock.Any(), uuids.ClusterID(clusterName)).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			service.EXPECT().GetClusterByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			_, err := handler.GetCluster(newContextWithClusterUUID())
 			return err
 		},
 		"get config": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().GetClusterConfig(gomock.Any(), clusterName).Return("", strategies.ErrClusterNotFound)
-			_, err := handler.GetClusterConfig(newContextWithClusterID())
+			service.EXPECT().GetClusterConfig(gomock.Any(), clusterUUID).Return("", strategies.ErrClusterNotFound)
+			_, err := handler.GetClusterConfig(newContextWithClusterUUID())
 			return err
 		},
 		"delete cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().DeleteCluster(gomock.Any(), clusterName).Return(strategies.ErrClusterNotFound)
-			_, err := handler.DeleteCluster(newContextWithClusterID())
+			service.EXPECT().DeleteCluster(gomock.Any(), clusterUUID).Return(strategies.ErrClusterNotFound)
+			_, err := handler.DeleteCluster(newContextWithClusterUUID())
 			return err
 		},
 	}
@@ -393,9 +392,9 @@ func TestDeleteCluster(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().DeleteCluster(gomock.Any(), clusterName).Return(testCase.serviceError)
+			service.EXPECT().DeleteCluster(gomock.Any(), clusterUUID).Return(testCase.serviceError)
 
-			result, err := handler.DeleteCluster(newContextWithClusterID())
+			result, err := handler.DeleteCluster(newContextWithClusterUUID())
 
 			assert.Nil(t, result)
 			assertHandlerError(t, err, testCase.serviceError)
@@ -409,21 +408,15 @@ func newClusterHandler(t *testing.T) (*mocks.MockForManagingClusters, handlers.C
 	return service, handlers.NewClusterHandler(service)
 }
 
-func newContextWithClusterID() *fuego.MockContext[any, any] {
-	ctx := fuego.NewMockContextNoBody()
-	ctx.PathParams["id"] = clusterName
-	return ctx
-}
-
 func newContextWithClusterUUID() *fuego.MockContext[any, any] {
 	ctx := fuego.NewMockContextNoBody()
-	ctx.PathParams["id"] = uuids.ClusterID(clusterName).String()
+	ctx.PathParams["id"] = clusterUUID.String()
 	return ctx
 }
 
 func newContextWithNodeUUID() *fuego.MockContext[any, any] {
 	ctx := fuego.NewMockContextNoBody()
-	ctx.PathParams["id"] = uuids.NodeID(clusterName, nodeName).String()
+	ctx.PathParams["id"] = nodeUUID.String()
 	return ctx
 }
 
@@ -446,7 +439,6 @@ func errorStatusCode(t *testing.T, err error) int {
 }
 
 func TestGetNode(t *testing.T) {
-	nodeUUID := uuids.NodeID(clusterName, nodeName)
 	testCases := map[string]struct {
 		serviceResult strategies.ClusterNodeInfo
 		serviceError  error

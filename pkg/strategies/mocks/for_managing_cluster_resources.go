@@ -58,46 +58,31 @@ func (mr *MockForManagingClusterResourcesMockRecorder) Create(ctx, params any) *
 }
 
 // Delete mocks base method.
-func (m *MockForManagingClusterResources) Delete(ctx context.Context, name string) error {
+func (m *MockForManagingClusterResources) Delete(ctx context.Context, id uuid.UUID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, name)
+	ret := m.ctrl.Call(m, "Delete", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockForManagingClusterResourcesMockRecorder) Delete(ctx, name any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockForManagingClusterResources)(nil).Delete), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockForManagingClusterResources)(nil).Delete), ctx, id)
 }
 
 // DeleteTag mocks base method.
-func (m *MockForManagingClusterResources) DeleteTag(ctx context.Context, clusterName, tag string) error {
+func (m *MockForManagingClusterResources) DeleteTag(ctx context.Context, id uuid.UUID, tag string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTag", ctx, clusterName, tag)
+	ret := m.ctrl.Call(m, "DeleteTag", ctx, id, tag)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTag indicates an expected call of DeleteTag.
-func (mr *MockForManagingClusterResourcesMockRecorder) DeleteTag(ctx, clusterName, tag any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) DeleteTag(ctx, id, tag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).DeleteTag), ctx, clusterName, tag)
-}
-
-// Get mocks base method.
-func (m *MockForManagingClusterResources) Get(ctx context.Context, name string) (strategies.ClusterInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, name)
-	ret0, _ := ret[0].(strategies.ClusterInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockForManagingClusterResourcesMockRecorder) Get(ctx, name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockForManagingClusterResources)(nil).Get), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).DeleteTag), ctx, id, tag)
 }
 
 // GetAllTags mocks base method.
@@ -131,33 +116,33 @@ func (mr *MockForManagingClusterResourcesMockRecorder) GetByUUID(ctx, id any) *g
 }
 
 // GetTag mocks base method.
-func (m *MockForManagingClusterResources) GetTag(ctx context.Context, clusterName, tag string) (string, error) {
+func (m *MockForManagingClusterResources) GetTag(ctx context.Context, id uuid.UUID, tag string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTag", ctx, clusterName, tag)
+	ret := m.ctrl.Call(m, "GetTag", ctx, id, tag)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTag indicates an expected call of GetTag.
-func (mr *MockForManagingClusterResourcesMockRecorder) GetTag(ctx, clusterName, tag any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) GetTag(ctx, id, tag any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetTag), ctx, clusterName, tag)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetTag), ctx, id, tag)
 }
 
 // GetTags mocks base method.
-func (m *MockForManagingClusterResources) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
+func (m *MockForManagingClusterResources) GetTags(ctx context.Context, id uuid.UUID) (map[string]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTags", ctx, clusterName)
+	ret := m.ctrl.Call(m, "GetTags", ctx, id)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTags indicates an expected call of GetTags.
-func (mr *MockForManagingClusterResourcesMockRecorder) GetTags(ctx, clusterName any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) GetTags(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTags", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetTags), ctx, clusterName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTags", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetTags), ctx, id)
 }
 
 // List mocks base method.
@@ -176,17 +161,17 @@ func (mr *MockForManagingClusterResourcesMockRecorder) List(ctx any) *gomock.Cal
 }
 
 // SetControlPlaneReplicas mocks base method.
-func (m *MockForManagingClusterResources) SetControlPlaneReplicas(ctx context.Context, name string, replicas int32) error {
+func (m *MockForManagingClusterResources) SetControlPlaneReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, name, replicas)
+	ret := m.ctrl.Call(m, "SetControlPlaneReplicas", ctx, id, replicas)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetControlPlaneReplicas indicates an expected call of SetControlPlaneReplicas.
-func (mr *MockForManagingClusterResourcesMockRecorder) SetControlPlaneReplicas(ctx, name, replicas any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) SetControlPlaneReplicas(ctx, id, replicas any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetControlPlaneReplicas), ctx, name, replicas)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetControlPlaneReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetControlPlaneReplicas), ctx, id, replicas)
 }
 
 // SetDescription mocks base method.
@@ -204,43 +189,43 @@ func (mr *MockForManagingClusterResourcesMockRecorder) SetDescription(ctx, name,
 }
 
 // SetPaused mocks base method.
-func (m *MockForManagingClusterResources) SetPaused(ctx context.Context, name string, paused bool) error {
+func (m *MockForManagingClusterResources) SetPaused(ctx context.Context, id uuid.UUID, paused bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetPaused", ctx, name, paused)
+	ret := m.ctrl.Call(m, "SetPaused", ctx, id, paused)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetPaused indicates an expected call of SetPaused.
-func (mr *MockForManagingClusterResourcesMockRecorder) SetPaused(ctx, name, paused any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) SetPaused(ctx, id, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPaused", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetPaused), ctx, name, paused)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPaused", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetPaused), ctx, id, paused)
 }
 
 // SetTag mocks base method.
-func (m *MockForManagingClusterResources) SetTag(ctx context.Context, clusterName, tag, value string) error {
+func (m *MockForManagingClusterResources) SetTag(ctx context.Context, id uuid.UUID, tag, value string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTag", ctx, clusterName, tag, value)
+	ret := m.ctrl.Call(m, "SetTag", ctx, id, tag, value)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetTag indicates an expected call of SetTag.
-func (mr *MockForManagingClusterResourcesMockRecorder) SetTag(ctx, clusterName, tag, value any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) SetTag(ctx, id, tag, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetTag), ctx, clusterName, tag, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTag", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetTag), ctx, id, tag, value)
 }
 
 // SetWorkerReplicas mocks base method.
-func (m *MockForManagingClusterResources) SetWorkerReplicas(ctx context.Context, name string, replicas int32) error {
+func (m *MockForManagingClusterResources) SetWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, name, replicas)
+	ret := m.ctrl.Call(m, "SetWorkerReplicas", ctx, id, replicas)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetWorkerReplicas indicates an expected call of SetWorkerReplicas.
-func (mr *MockForManagingClusterResourcesMockRecorder) SetWorkerReplicas(ctx, name, replicas any) *gomock.Call {
+func (mr *MockForManagingClusterResourcesMockRecorder) SetWorkerReplicas(ctx, id, replicas any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetWorkerReplicas), ctx, name, replicas)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWorkerReplicas", reflect.TypeOf((*MockForManagingClusterResources)(nil).SetWorkerReplicas), ctx, id, replicas)
 }

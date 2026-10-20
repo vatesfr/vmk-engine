@@ -534,6 +534,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 	// Desired counts are known before controllers report their observed status.
 	// Leave observed replica counts at zero while provisioning starts.
 	return strategies.ClusterInfo{
+		ID:                   uuids.ClusterID(p.Name),
 		Name:                 p.Name,
 		Description:          p.Description,
 		Phase:                "Creating",

@@ -1,6 +1,11 @@
 package uuids
 
-import "github.com/gofrs/uuid"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/gofrs/uuid"
+)
 
 // UUIDIndexKey is the field index key used when registering and querying the
 // UUID field indexes on the informer cache.
@@ -14,6 +19,20 @@ const ClusterUUIDIndexKey = "clusterUUID"
 // It is derived deterministically from the application's DNS name so no
 // constant needs to be stored or configured.
 var RootNamespace = uuid.NewV5(uuid.NamespaceDNS, "capv-proxy.vates.tech")
+
+// ErrInvalidFormat is returned when a UUID string cannot be parsed. The
+// gofrs/uuid sentinel is unexported, so Parse wraps it in this exported one
+// for callers to match with errors.Is.
+var ErrInvalidFormat = errors.New("invalid UUID format")
+
+// Parse parses a UUID string, returning an error matching ErrInvalidFormat.
+func Parse(value string) (uuid.UUID, error) {
+	id, err := uuid.FromString(value)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("%w: %s", ErrInvalidFormat, value)
+	}
+	return id, nil
+}
 
 // ClusterID returns the stable UUID v5 for a cluster identified by name.
 func ClusterID(clusterName string) uuid.UUID {

@@ -6,6 +6,7 @@ import (
 	"github.com/samber/lo"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 )
 
 type ClusterHandler struct {
@@ -131,7 +132,7 @@ func (k ClusterHandler) GetClusters(c fuego.ContextNoBody) ([]ClusterInfo, error
 }
 
 func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return ClusterInfo{}, toHTTPError(err)
 	}
@@ -143,7 +144,7 @@ func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
 }
 
 func (k ClusterHandler) GetNode(c fuego.ContextNoBody) (ClusterNodeInfo, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return ClusterNodeInfo{}, toHTTPError(err)
 	}
@@ -156,7 +157,7 @@ func (k ClusterHandler) GetNode(c fuego.ContextNoBody) (ClusterNodeInfo, error) 
 
 func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
 	fields := c.QueryParam("fields")
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -169,7 +170,7 @@ func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNod
 }
 
 func (k ClusterHandler) GetClusterConfig(c fuego.ContextNoBody) (ClusterConfigResponse, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return ClusterConfigResponse{}, toHTTPError(err)
 	}
@@ -245,7 +246,7 @@ func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
 }
 
 func (k ClusterHandler) DeleteCluster(c fuego.ContextNoBody) (any, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -265,7 +266,7 @@ func (k ClusterHandler) GetAllTags(c fuego.ContextNoBody) (AllClusterTagsRespons
 }
 
 func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsResponse, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return ClusterTagsResponse{}, toHTTPError(err)
 	}
@@ -277,7 +278,7 @@ func (k ClusterHandler) GetClusterTags(c fuego.ContextNoBody) (ClusterTagsRespon
 }
 
 func (k ClusterHandler) GetClusterTag(c fuego.ContextNoBody) (string, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return "", toHTTPError(err)
 	}
@@ -294,7 +295,7 @@ func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[Cluster
 		return nil, toHTTPError(err)
 	}
 
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -306,7 +307,7 @@ func (k ClusterHandler) CreateOrUpdateClusterTag(c fuego.ContextWithBody[Cluster
 }
 
 func (k ClusterHandler) DeleteClusterTag(c fuego.ContextNoBody) (any, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -342,7 +343,7 @@ func (k ClusterHandler) SetWorkerReplicas(c fuego.ContextWithBody[ClusterReplica
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -357,7 +358,7 @@ func (k ClusterHandler) SetControlPlaneReplicas(c fuego.ContextWithBody[ClusterR
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -368,7 +369,7 @@ func (k ClusterHandler) SetControlPlaneReplicas(c fuego.ContextWithBody[ClusterR
 }
 
 func (k ClusterHandler) PauseCluster(c fuego.ContextNoBody) (any, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -376,7 +377,7 @@ func (k ClusterHandler) PauseCluster(c fuego.ContextNoBody) (any, error) {
 }
 
 func (k ClusterHandler) ResumeCluster(c fuego.ContextNoBody) (any, error) {
-	id, err := uuid.FromString(c.PathParam("id"))
+	id, err := uuids.Parse(c.PathParam("id"))
 	if err != nil {
 		return nil, toHTTPError(err)
 	}
@@ -400,11 +401,11 @@ func (k ClusterHandler) ResumeClusterNode(c fuego.ContextNoBody) (any, error) {
 }
 
 func parseClusterNodeIDs(clusterIDValue, nodeIDValue string) (uuid.UUID, uuid.UUID, error) {
-	clusterID, err := uuid.FromString(clusterIDValue)
+	clusterID, err := uuids.Parse(clusterIDValue)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}
-	nodeID, err := uuid.FromString(nodeIDValue)
+	nodeID, err := uuids.Parse(nodeIDValue)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}

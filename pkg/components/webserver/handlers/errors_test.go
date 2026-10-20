@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 )
 
 func TestToHTTPErrorPreservesValidationDetails(t *testing.T) {
@@ -78,8 +79,9 @@ func TestReplicaAdmissionErrorKeepsTechnicalCausePrivate(t *testing.T) {
 }
 
 func TestToHTTPErrorInvalidUUID(t *testing.T) {
-	input, err := uuid.FromString("not-a-uuid")
+	input, err := uuids.Parse("not-a-uuid")
 	require.Error(t, err)
+	require.ErrorIs(t, err, uuids.ErrInvalidFormat)
 	assert.Equal(t, uuid.UUID{}, input)
 
 	result := toHTTPError(err)

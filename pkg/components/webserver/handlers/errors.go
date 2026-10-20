@@ -3,12 +3,12 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-fuego/fuego"
 	"github.com/go-playground/validator/v10"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 )
 
 // toHTTPError translates application errors at the HTTP boundary. Application
@@ -34,7 +34,7 @@ func toHTTPError(err error) error {
 		return problem
 	}
 
-	if strings.Contains(err.Error(), "uuid:") || strings.Contains(err.Error(), "invalid UUID") || strings.Contains(err.Error(), "incorrect UUID") {
+	if errors.Is(err, uuids.ErrInvalidFormat) {
 		return fuego.HTTPError{
 			Err:    err,
 			Status: http.StatusBadRequest,

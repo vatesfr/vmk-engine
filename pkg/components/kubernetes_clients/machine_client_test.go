@@ -150,6 +150,27 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		})
 	}
 
+	t.Run("spec cluster name controls indexes when label differs", func(t *testing.T) {
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
+		machine.Labels[capiv1.ClusterNameLabel] = otherClusterName
+		fc := newFakeClient(t, machine)
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
+		require.NoError(t, err)
+		require.Len(t, nodes, 1)
+		assert.Equal(t, uuids.NodeID(clusterName, machine.Name), nodes[0].ID)
+		assert.Equal(t, clusterUUID, nodes[0].ParentCluster)
+
+		node, err := machineClient.GetMachineByUUID(t.Context(), nodes[0].ID)
+		require.NoError(t, err)
+		assert.Equal(t, nodes[0].ID, node.ID)
+
+		otherNodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(otherClusterName))
+		require.NoError(t, err)
+		assert.Empty(t, otherNodes)
+	})
+
 	t.Run("kubernetes error", func(t *testing.T) {
 		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
 		machineClient := NewMachineClient(kubeClient, clientAsCache{kubeClient}, testNamespace)

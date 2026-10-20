@@ -36,7 +36,7 @@ func clusterUUIDIndexer(obj client.Object) []string {
 // over machine.Name.
 func machineUUIDIndexer(obj client.Object) []string {
 	machine := obj.(*capiv1.Machine)
-	clusterName := machine.Labels[capiv1.ClusterNameLabel]
+	clusterName := machine.Spec.ClusterName
 	name := machine.Name
 	if machine.Status.NodeRef.IsDefined() {
 		name = machine.Status.NodeRef.Name
@@ -45,8 +45,8 @@ func machineUUIDIndexer(obj client.Object) []string {
 }
 
 // machineClusterUUIDIndexer computes the UUID v5 of the cluster a Machine
-// belongs to. It uses the cluster name label, consistent with machineUUIDIndexer.
+// belongs to using spec.clusterName, consistent with machineUUIDIndexer.
 func machineClusterUUIDIndexer(obj client.Object) []string {
 	machine := obj.(*capiv1.Machine)
-	return []string{uuids.ClusterID(machine.Labels[capiv1.ClusterNameLabel]).String()}
+	return []string{uuids.ClusterID(machine.Spec.ClusterName).String()}
 }

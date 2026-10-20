@@ -89,6 +89,9 @@ func (m MachineClient) GetMachineByUUID(ctx context.Context, id uuid.UUID) (stra
 	if m.namespace == "" {
 		return strategies.ClusterNodeInfo{}, strategies.ErrClusterNamespaceRequired
 	}
+	if id == uuid.Nil {
+		return strategies.ClusterNodeInfo{}, strategies.ErrNodeIDRequired
+	}
 	list := &capiv1.MachineList{}
 	if err := m.informerCache.List(ctx, list,
 		client.InNamespace(m.namespace),

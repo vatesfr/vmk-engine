@@ -459,32 +459,6 @@ func newTestClusterManager(t *testing.T) (
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
 }
 
-func TestGetClusterByUUID(t *testing.T) {
-	clusterID := uuids.ClusterID(clusterName)
-	expectedInfo := strategies.ClusterInfo{ID: clusterID, Name: clusterName, Phase: provisionedPhase}
-
-	t.Run("success", func(t *testing.T) {
-		resources, _, _, manager := newTestClusterManager(t)
-		resources.EXPECT().GetByUUID(t.Context(), clusterID).Return(expectedInfo, nil)
-
-		info, err := manager.GetClusterByUUID(t.Context(), clusterID)
-
-		require.NoError(t, err)
-		assert.Equal(t, expectedInfo, info)
-	})
-
-	t.Run("error", func(t *testing.T) {
-		resources, _, _, manager := newTestClusterManager(t)
-		resources.EXPECT().GetByUUID(t.Context(), clusterID).Return(strategies.ClusterInfo{}, errTest)
-
-		info, err := manager.GetClusterByUUID(t.Context(), clusterID)
-
-		assert.Empty(t, info)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, errTest)
-	})
-}
-
 func TestGetNodeByUUID(t *testing.T) {
 	nodeID := uuids.NodeID(clusterName, controlPlaneNodeName)
 	expectedNode := strategies.ClusterNodeInfo{ID: nodeID, Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus}

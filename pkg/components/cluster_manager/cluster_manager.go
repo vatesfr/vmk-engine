@@ -213,7 +213,6 @@ func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterID uuid.UU
 		return strategies.ErrNodeIDRequired
 	}
 	// Ensure the cluster exists, so an unknown UUID is reported as not found
-	// rather than as an empty node list.
 	if _, err := c.clusterResources.GetByUUID(ctx, clusterID); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
 	}

@@ -14,6 +14,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	uuid "github.com/gofrs/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -112,6 +113,21 @@ func (m *MockForManagingClusterResources) GetAllTags(ctx context.Context) (map[s
 func (mr *MockForManagingClusterResourcesMockRecorder) GetAllTags(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllTags", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetAllTags), ctx)
+}
+
+// GetByUUID mocks base method.
+func (m *MockForManagingClusterResources) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUUID", ctx, id)
+	ret0, _ := ret[0].(strategies.ClusterInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUUID indicates an expected call of GetByUUID.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetByUUID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUUID", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetByUUID), ctx, id)
 }
 
 // GetTag mocks base method.

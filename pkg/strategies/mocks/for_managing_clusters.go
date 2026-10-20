@@ -14,6 +14,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	uuid "github.com/gofrs/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -143,6 +144,21 @@ func (mr *MockForManagingClustersMockRecorder) GetCluster(ctx, name any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockForManagingClusters)(nil).GetCluster), ctx, name)
 }
 
+// GetClusterByUUID mocks base method.
+func (m *MockForManagingClusters) GetClusterByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterByUUID", ctx, id)
+	ret0, _ := ret[0].(strategies.ClusterInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterByUUID indicates an expected call of GetClusterByUUID.
+func (mr *MockForManagingClustersMockRecorder) GetClusterByUUID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterByUUID", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterByUUID), ctx, id)
+}
+
 // GetClusterConfig mocks base method.
 func (m *MockForManagingClusters) GetClusterConfig(ctx context.Context, name string) (string, error) {
 	m.ctrl.T.Helper()
@@ -244,6 +260,21 @@ func (m *MockForManagingClusters) SetClusterPaused(ctx context.Context, name str
 func (mr *MockForManagingClustersMockRecorder) SetClusterPaused(ctx, name, paused any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClusterPaused", reflect.TypeOf((*MockForManagingClusters)(nil).SetClusterPaused), ctx, name, paused)
+}
+
+// GetNodeByUUID mocks base method.
+func (m *MockForManagingClusters) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterNodeInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeByUUID", ctx, id)
+	ret0, _ := ret[0].(strategies.ClusterNodeInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNodeByUUID indicates an expected call of GetNodeByUUID.
+func (mr *MockForManagingClustersMockRecorder) GetNodeByUUID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeByUUID", reflect.TypeOf((*MockForManagingClusters)(nil).GetNodeByUUID), ctx, id)
 }
 
 // SetClusterTag mocks base method.

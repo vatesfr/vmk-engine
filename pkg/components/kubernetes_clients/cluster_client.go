@@ -6,10 +6,13 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/gofrs/uuid"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -24,6 +27,7 @@ import (
 
 type ClusterClient struct {
 	kubernetesClient client.Client
+	informerCache    cache.Cache
 	namespace        string
 }
 
@@ -56,8 +60,8 @@ const clusterDescriptionAnnotation = "vmk.vates.tech/description"
 
 var _ strategies.ForManagingClusterResources = ClusterClient{}
 
-func NewClusterClient(kubernetesClient client.Client, namespace string) ClusterClient {
-	return ClusterClient{kubernetesClient, namespace}
+func NewClusterClient(kubernetesClient client.Client, informerCache cache.Cache, namespace string) ClusterClient {
+	return ClusterClient{kubernetesClient: kubernetesClient, informerCache: informerCache, namespace: namespace}
 }
 
 func (c ClusterClient) Create(ctx context.Context, params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
@@ -78,7 +82,7 @@ func (c ClusterClient) Create(ctx context.Context, params strategies.CreateClust
 
 func (c ClusterClient) List(ctx context.Context) ([]strategies.ClusterInfo, error) {
 	clusters := &capiv1.ClusterList{}
-	if err := c.kubernetesClient.List(
+	if err := c.informerCache.List(
 		ctx,
 		clusters,
 		client.InNamespace(c.namespace),
@@ -95,7 +99,7 @@ func (c ClusterClient) List(ctx context.Context) ([]strategies.ClusterInfo, erro
 
 func (c ClusterClient) Get(ctx context.Context, name string) (strategies.ClusterInfo, error) {
 	clusterResource := &capiv1.Cluster{}
-	if err := c.kubernetesClient.Get(
+	if err := c.informerCache.Get(
 		ctx,
 		client.ObjectKey{Namespace: c.namespace, Name: name},
 		clusterResource,
@@ -107,6 +111,20 @@ func (c ClusterClient) Get(ctx context.Context, name string) (strategies.Cluster
 	}
 
 	return toInfo(clusterResource), nil
+}
+
+func (c ClusterClient) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
+	list := &capiv1.ClusterList{}
+	if err := c.informerCache.List(ctx, list,
+		client.InNamespace(c.namespace),
+		client.MatchingFields{uuids.UUIDIndexKey: id.String()},
+	); err != nil {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
+	}
+	if len(list.Items) == 0 {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %s", strategies.ErrClusterNotFound, id.String())
+	}
+	return toInfo(&list.Items[0]), nil
 }
 
 func (c ClusterClient) Delete(ctx context.Context, name string) error {
@@ -154,7 +172,7 @@ func (c ClusterClient) Delete(ctx context.Context, name string) error {
 // Clusters without tags are included with an empty map.
 func (c ClusterClient) GetAllTags(ctx context.Context) (map[string]map[string]string, error) {
 	clusters := &capiv1.ClusterList{}
-	if err := c.kubernetesClient.List(ctx, clusters, client.InNamespace(c.namespace)); err != nil {
+	if err := c.informerCache.List(ctx, clusters, client.InNamespace(c.namespace)); err != nil {
 		return nil, err
 	}
 
@@ -167,7 +185,7 @@ func (c ClusterClient) GetAllTags(ctx context.Context) (map[string]map[string]st
 }
 
 func (c ClusterClient) GetTags(ctx context.Context, clusterName string) (map[string]string, error) {
-	cluster, err := c.getClusterResource(ctx, clusterName)
+	cluster, err := c.getClusterFromCache(ctx, clusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +196,7 @@ func (c ClusterClient) GetTag(ctx context.Context, clusterName, tag string) (str
 	if err := validateClusterTag(tag, ""); err != nil {
 		return "", err
 	}
-	cluster, err := c.getClusterResource(ctx, clusterName)
+	cluster, err := c.getClusterFromCache(ctx, clusterName)
 	if err != nil {
 		return "", err
 	}
@@ -222,6 +240,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 	info := strategies.ClusterInfo{
 		Paused:                      ptr.Deref(value.Spec.Paused, false),
 		IsAvailable:                 apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
+		ID:                          uuids.ClusterID(value.GetName()),
 		IsControlPlaneInitialized:   value.Status.Initialization.ControlPlaneInitialized,
 		IsInfrastructureProvisioned: value.Status.Initialization.InfrastructureProvisioned,
 		Name:                        value.GetName(),
@@ -324,6 +343,26 @@ func (c ClusterClient) updateClusterTags(ctx context.Context, clusterName string
 	return c.kubernetesClient.Patch(ctx, cluster, client.MergeFrom(original))
 }
 
+// getClusterFromCache reads a Cluster from the informer cache (read-only operations).
+func (c ClusterClient) getClusterFromCache(ctx context.Context, name string) (*capiv1.Cluster, error) {
+	if name == "" {
+		return nil, strategies.ErrClusterNameRequired
+	}
+	if c.namespace == "" {
+		return nil, strategies.ErrClusterNamespaceRequired
+	}
+	cluster := &capiv1.Cluster{}
+	if err := c.informerCache.Get(ctx, client.ObjectKey{Namespace: c.namespace, Name: name}, cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
+		}
+		return nil, err
+	}
+	return cluster, nil
+}
+
+// getClusterResource reads a Cluster via the direct API client, needed before
+// write operations (patch/update) where a fresh resourceVersion is required.
 func (c ClusterClient) getClusterResource(ctx context.Context, name string) (*capiv1.Cluster, error) {
 	if name == "" {
 		return nil, strategies.ErrClusterNameRequired

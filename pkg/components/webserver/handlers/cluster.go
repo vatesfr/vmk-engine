@@ -54,6 +54,7 @@ type ClusterConfigResponse struct {
 type ClusterInfo struct {
 	Paused                      *bool             `json:"is_reconciliation_paused,omitempty" description:"Cluster API reconciliation paused via spec.paused. VMs and workloads continue running"`
 	IsAvailable                 *bool             `json:"is_available,omitempty"`
+	ID                          uuid.UUID         `json:"id"`
 	IsControlPlaneInitialized   *bool             `json:"is_control_plane_initialized,omitempty" description:"Control plane initialization milestone; stays true once reached. Omitted if unreported"`
 	IsInfrastructureProvisioned *bool             `json:"is_infrastructure_provisioned,omitempty" description:"Infrastructure provisioning milestone; stays true once reached. Omitted if unreported"`
 	Name                        string            `json:"name,omitempty"`
@@ -97,13 +98,14 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 }
 
 type ClusterNodeInfo struct {
+	ID            uuid.UUID  `json:"id"`
 	Paused        *bool      `json:"is_reconciliation_paused,omitempty" description:"Machine CAPI reconciliation pause; independent of cluster pause. VMs and workloads keep running"`
 	Name          string     `json:"name,omitempty"`
 	NodeName      string     `json:"node_name,omitempty"`
 	Role          string     `json:"role,omitempty"`
 	Status        string     `json:"status,omitempty"`
 	Endpoint      string     `json:"endpoint,omitempty"`
-	NodeID        *uuid.UUID `json:"node_id,omitempty"`
+	MachineID     *uuid.UUID `json:"machine_id,omitempty"`
 	ParentCluster string     `json:"$cluster,omitempty"`
 }
 
@@ -129,11 +131,27 @@ func (k ClusterHandler) GetClusters(c fuego.ContextNoBody) ([]ClusterInfo, error
 }
 
 func (k ClusterHandler) GetCluster(c fuego.ContextNoBody) (ClusterInfo, error) {
-	cluster, err := k.clusterService.GetCluster(c.Context(), c.PathParam("id"))
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return ClusterInfo{}, toHTTPError(err)
+	}
+	cluster, err := k.clusterService.GetClusterByUUID(c.Context(), id)
 	if err != nil {
 		return ClusterInfo{}, toHTTPError(err)
 	}
 	return toClusterInfo(cluster), nil
+}
+
+func (k ClusterHandler) GetNode(c fuego.ContextNoBody) (ClusterNodeInfo, error) {
+	id, err := uuid.FromString(c.PathParam("id"))
+	if err != nil {
+		return ClusterNodeInfo{}, toHTTPError(err)
+	}
+	node, err := k.clusterService.GetNodeByUUID(c.Context(), id)
+	if err != nil {
+		return ClusterNodeInfo{}, toHTTPError(err)
+	}
+	return toNodeInfo(node), nil
 }
 
 func (k ClusterHandler) GetClusterNodesInfo(c fuego.ContextNoBody) ([]ClusterNodeInfo, error) {
@@ -186,6 +204,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		IsAvailable:                 &value.IsAvailable,
 		IsControlPlaneInitialized:   value.IsControlPlaneInitialized,
 		IsInfrastructureProvisioned: value.IsInfrastructureProvisioned,
+		ID:                          value.ID,
 		Paused:                      &value.Paused,
 		Name:                        value.Name,
 		Description:                 value.Description,
@@ -198,18 +217,23 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	}
 }
 
+func toNodeInfo(node strategies.ClusterNodeInfo) ClusterNodeInfo {
+	return ClusterNodeInfo{
+		ID:            node.ID,
+		NodeName:      node.NodeName,
+		Paused:        &node.Paused,
+		ParentCluster: node.ParentCluster,
+		Name:          node.Name,
+		Role:          node.Role,
+		Status:        node.Status,
+		Endpoint:      node.Endpoint,
+		MachineID:     node.MachineID,
+	}
+}
+
 func toNodesInfo(value []strategies.ClusterNodeInfo) []ClusterNodeInfo {
 	return lo.Map(value, func(node strategies.ClusterNodeInfo, _ int) ClusterNodeInfo {
-		return ClusterNodeInfo{
-			Name:          node.Name,
-			NodeName:      node.NodeName,
-			Role:          node.Role,
-			Status:        node.Status,
-			Endpoint:      node.Endpoint,
-			NodeID:        node.MachineID,
-			ParentCluster: node.ParentCluster,
-			Paused:        &node.Paused,
-		}
+		return toNodeInfo(node)
 	})
 }
 

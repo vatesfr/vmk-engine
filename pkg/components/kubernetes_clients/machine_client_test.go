@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -125,7 +126,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			machineClient := NewMachineClient(newFakeClient(t, tc.objects...), tc.namespace)
+			machineClient := NewMachineClient(nil, newFakeCache(t, tc.objects...), tc.namespace)
 			nodes, err := machineClient.GetMachinesByCluster(t.Context(), tc.clusterName)
 
 			if tc.wantErrContains != "" {
@@ -147,7 +148,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 	t.Run("kubernetes error", func(t *testing.T) {
 		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
-		machineClient := NewMachineClient(kubeClient, testNamespace)
+		machineClient := NewMachineClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -161,7 +162,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
 		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: resolvedNodeName}
 		machine.Status.Phase = "Provisioning"
-		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -176,7 +177,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		vmID := uuid.Must(uuid.NewV4())
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
 		machine.Spec.ProviderID = xok8scommon.GetProviderID(uuid.Nil, &xosdk.VM{ID: vmID})
-		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -189,7 +190,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	t.Run("non-xo provider id is ignored", func(t *testing.T) {
 		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
 		machine.Spec.ProviderID = "aws:///us-east-1a/i-1234567890abcdef0"
-		machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
+		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 
@@ -243,7 +244,7 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 			t.Parallel()
 
 			machine := machineWithStatus(workerRole, testNamespace, clusterName, false, "", tc.addresses...)
-			machineClient := NewMachineClient(newFakeClient(t, machine), testNamespace)
+			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterName)
 			require.NoError(t, err)
@@ -309,15 +310,15 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var kubeClient client.Client
+			var informerCache cache.Cache
 			if tc.namespace != "" {
 				if tc.listErr != nil {
-					kubeClient = newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, tc.listErr)})
+					informerCache = clientAsCache{newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, tc.listErr)})}
 				} else {
-					kubeClient = newFakeClient(t, tc.objects...)
+					informerCache = newFakeCache(t, tc.objects...)
 				}
 			}
-			machineClient := NewMachineClient(kubeClient, tc.namespace)
+			machineClient := NewMachineClient(nil, informerCache, tc.namespace)
 
 			nodes, err := machineClient.GetAllMachines(t.Context())
 
@@ -359,7 +360,7 @@ func TestMachineClientDeleteMachine(t *testing.T) {
 			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 			machine.Spec.ClusterName = tc.owner
 			kube := newFakeClient(t, machine)
-			err := NewMachineClient(kube, tc.namespace).DeleteMachine(t.Context(), tc.cluster, tc.machine)
+			err := NewMachineClient(kube, clientAsCache{kube}, tc.namespace).DeleteMachine(t.Context(), tc.cluster, tc.machine)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{}))
@@ -409,7 +410,7 @@ func TestMachineClientDeleteErrorsAndPreconditions(t *testing.T) {
 					return tc.deleteErr
 				},
 			})
-			err := NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, deleteMachineName)
+			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, deleteMachineName)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 			} else {
@@ -425,7 +426,7 @@ func TestMachineClientDeleteRetainsFinalizers(t *testing.T) {
 	machine.Spec.ClusterName = clusterName
 	machine.Finalizers = []string{"cluster.x-k8s.io/machine"}
 	kube := newFakeClient(t, machine)
-	require.NoError(t, NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, machine.Name))
+	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, machine.Name))
 	remaining := &capiv1.Machine{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), remaining))
 	assert.False(t, remaining.DeletionTimestamp.IsZero())
@@ -457,7 +458,7 @@ func TestDeleteMachineUsesResourceName(t *testing.T) {
 				objects = append(objects, duplicate)
 			}
 			kube := newFakeClient(t, objects...)
-			err := NewMachineClient(kube, testNamespace).DeleteMachine(t.Context(), clusterName, tc.requested)
+			err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).DeleteMachine(t.Context(), clusterName, tc.requested)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 				assert.True(t, apierrors.IsNotFound(kube.Get(t.Context(), client.ObjectKeyFromObject(machine), &capiv1.Machine{})))
@@ -473,7 +474,7 @@ func TestDeleteMachineUsesResourceName(t *testing.T) {
 func TestPauseMachineWithoutAnnotations(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 	kube := newFakeClient(t, machine)
-	require.NoError(t, NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true))
+	require.NoError(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true))
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.Contains(t, machine.Annotations, capiv1.PausedAnnotation)
 }
@@ -489,7 +490,7 @@ func TestPauseRejectsConcurrentMachineReassignment(t *testing.T) {
 			return underlying.Patch(ctx, obj, patch, opts...)
 		},
 	}).Build()
-	err := NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true)
+	err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true)
 	require.ErrorIs(t, err, strategies.ErrPauseUpdateConflict)
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.Equal(t, otherClusterName, machine.Spec.ClusterName)

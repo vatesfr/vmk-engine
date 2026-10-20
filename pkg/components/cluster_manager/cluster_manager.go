@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/gofrs/uuid"
+
 	"capv-proxy/pkg/strategies"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -107,6 +109,14 @@ func (c ClusterManager) GetCluster(ctx context.Context, name string) (strategies
 	return cluster, nil
 }
 
+func (c ClusterManager) GetClusterByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
+	cluster, err := c.clusterResources.GetByUUID(ctx, id)
+	if err != nil {
+		return strategies.ClusterInfo{}, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
+	}
+	return cluster, nil
+}
+
 func (c ClusterManager) GetClusterNodesInfo(ctx context.Context, name string) ([]strategies.ClusterNodeInfo, error) {
 	if err := validateClusterName(name); err != nil {
 		return nil, err
@@ -124,6 +134,14 @@ func (c ClusterManager) GetAllNodes(ctx context.Context) ([]strategies.ClusterNo
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterNodesRetrievalFailed, err)
 	}
 	return nodes, nil
+}
+
+func (c ClusterManager) GetNodeByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterNodeInfo, error) {
+	node, err := c.clusterMachines.GetMachineByUUID(ctx, id)
+	if err != nil {
+		return strategies.ClusterNodeInfo{}, err
+	}
+	return node, nil
 }
 
 func (c ClusterManager) GetClusterConfig(ctx context.Context, name string) (string, error) {

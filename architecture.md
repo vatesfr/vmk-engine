@@ -77,19 +77,25 @@ flowchart LR
     versionport -->|implemented by| versions[VersionManager — static catalog]
     port -->|implemented by| manager
     clusterport -->|implemented by| clusters[ClusterClient]
+    machinesport -->|implemented by| machines[MachineClient]
     configport -->|implemented by| secrets[SecretClient]
     defaultsport -->|implemented by| defaults[ConfigMapClient]
-    machinesport -->|implemented by| machines[MachineClient]
-    machines --> api
-    defaults --> api
-    clusters --> api[Kubernetes API]
+
+    clusters -->|reads via| cache[informer cache\ncache.Cache]
+    clusters -->|writes via| api[Kubernetes API]
+    machines -->|reads via| cache
+    cache -->|watch/list| api
+    machines -->|writes via| api
     secrets --> api
+    defaults --> api
 
     configurator[cmd/http_server/main.go\nConfigurator] -. creates and wires .-> http
     configurator -. creates and wires .-> manager
     configurator -. creates and wires .-> clusters
+    configurator -. creates and wires .-> machines
     configurator -. creates .-> secrets
     configurator -. creates and wires .-> versions
+    configurator -. creates\nRegisterIndexes\nStart\nWaitForCacheSync .-> cache
 ```
 
 The roles from Component + Strategy map to the code as follows:
@@ -104,26 +110,55 @@ The roles from Component + Strategy map to the code as follows:
 | Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
 | Strategy | `strategies.ForManagingVersions` | Used by the HTTP and cluster components; implemented by `VersionManager` |
 | Component | `versionmanager.VersionManager` | Owns the static release catalog and exact version availability checks |
-| Strategies | `ForManagingClusterResources`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
-| Strategies | `ClusterClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
-| Configurator | `run` and `newK8sClient` in `cmd/http_server/main.go` | Select Kubernetes configuration, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
+| Strategies | `ForManagingClusterResources`, `ForManagingClusterMachines`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
+| Strategies | `ClusterClient`, `MachineClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
+| Configurator | `run` in `cmd/http_server/main.go` | Select Kubernetes configuration, build the informer cache, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
 
 Go's implicit interface satisfaction lets `cluster_manager.ClusterManager`
 satisfy `ForManagingClusters` directly. The HTTP handler converts its validated
-DTOs to and from the transport-neutral Strategy models. `ClusterClient` and
-`SecretClient` likewise satisfy their Strategies directly, so no Adapter is
-needed in the current graph.
+DTOs to and from the transport-neutral Strategy models. `ClusterClient`,
+`MachineClient`, and `SecretClient` likewise satisfy their Strategies directly,
+so no Adapter is needed in the current graph.
+
+### Informer cache and read/write split
+
+`ClusterClient` and `MachineClient` separate reads from writes using a
+controller-runtime `cache.Cache`:
+
+- **Reads** (`List`, `Get`, UUID lookup, tag reads) go through the informer
+  cache, which is kept current by Kubernetes watch events. UUID-based lookups
+  (`GetByUUID`, `GetMachineByUUID`) use custom UUID v5 field indexes registered
+  in `pkg/components/kubernetes_clients/indexers.go` before the cache starts.
+- **Writes** (`Create`, `Delete`, `SetTag`, `DeleteTag`) go through the direct
+  `client.Client`, which always contacts the Kubernetes API. Tag mutations read
+  a fresh resource version via the direct client before patching to avoid
+  resource-version conflicts.
+
+Both clients hold a cache for reads and a direct client for mutations, including
+node deletion, replica changes, and reconciliation pause updates.
+
+The Configurator registers the UUID field indexes, starts the cache goroutine,
+and blocks on `WaitForCacheSync` before serving requests, so the initial list is
+complete before the first HTTP request arrives.
 
 ## Request flow
 
-For a typical request such as `GET /kubernetes/clusters/{id}`:
+For a typical request such as `GET /kubernetes/clusters/{id}` (UUID):
 
 1. Fuego matches the route and invokes `ClusterHandler.GetCluster`.
-2. The handler extracts the path parameter and calls `ForManagingClusters`.
-3. The injected cluster component receives the call directly.
-4. The component calls `ForManagingClusterResources`.
-5. `ClusterClient`, injected as that Strategy, queries Kubernetes and returns a Strategy model.
-6. The handler converts it into an HTTP response DTO and Fuego serializes it.
+2. The handler parses the UUID path parameter and calls `ForManagingClusters.GetClusterByUUID`.
+3. `ClusterManager` delegates to `ForManagingClusterResources.GetByUUID`.
+4. `ClusterClient` issues `cache.List` with a `MatchingFields{"uuid": id}` filter against the UUID field index.
+5. The informer cache resolves the index in O(1) and returns the matching `Cluster`.
+6. `ClusterClient` converts it to a `ClusterInfo` Strategy model (including a stable UUID v5 `id`).
+7. The handler converts it into an HTTP response DTO and Fuego serializes it.
+
+For `GET /kubernetes/nodes/{id}` (node UUID):
+
+1. The handler calls `ForManagingClusters.GetNodeByUUID`.
+2. `ClusterManager` delegates to `ForManagingClusterMachines.GetMachineByUUID`.
+3. `MachineClient` issues `cache.List` with a UUID field index filter.
+4. The result is converted to a `ClusterNodeInfo` Strategy model and serialized.
 
 `ClusterManager` also requires `ForManagingVersions`, implemented by `VersionManager`,
 to reject unavailable versions before fetching defaults or creating resources.
@@ -148,6 +183,7 @@ worker replica counts, requested Kubernetes version, control-plane IP, and VM na
 VM and bootstrap configuration, MachineDeployment identity, endpoint network
 settings, and load-balancer choice. It then sends the resulting
 `CreateClusterResourceParams` through `ForManagingClusterResources`.
+Creation writes go directly through the `client.Client`; the informer cache is not involved.
 
 The same dependency path is used for list, delete, and kubeconfig operations.
 `/ping` is self-contained in the HTTP component and does not use a Strategy.
@@ -160,8 +196,9 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
 | `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
-| `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies |
+| `pkg/components/kubernetes_clients/` | Kubernetes implementations of resource Strategies; informer cache UUID indexes |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
+| `pkg/uuids/` | Pure UUID v5 utilities: namespace constants and `ClusterID`/`NodeID` helpers |
 | `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Configuration and variability

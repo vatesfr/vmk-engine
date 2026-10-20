@@ -231,7 +231,7 @@ Base URL: `http://localhost:8080`.
 | --- | --- | --- | --- |
 | `GET` | `/ping` | Checks service health | Working |
 | `GET` | `/kubernetes/clusters` | Lists clusters, or selected cluster fields, in the namespace | Working |
-| `GET` | `/kubernetes/clusters/{id}` | Returns one cluster | Working |
+| `GET` | `/kubernetes/clusters/{id}` | Returns one cluster by UUID | Working |
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
@@ -251,6 +251,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/kubernetes/clusters/{id}/tags/{tag}` | Reads a tag | Working |
 | `PUT` | `/kubernetes/clusters/{id}/tags/{tag}` | Creates or updates a tag | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/tags/{tag}` | Deletes a tag | Working |
+| `GET` | `/kubernetes/nodes/{id}` | Returns one node by UUID | Working |
 
 ### Examples
 
@@ -535,10 +536,21 @@ The routes use the existing HTTP middleware; `AuthRequired` currently forwards
 requests without enforcing authentication. RBAC permissions must be upgraded
 along with the service (see Required RBAC permissions below).
 
-Each node entry includes a `node_id` field when the CAPI `Machine` exposes a
-Xen Orchestra `providerID` (for example `xenorchestra://<pool>/<vm-uuid>`). The
-server extracts the VM UUID and exposes it as `node_id`; if the
-provider ID is missing or not from Xen Orchestra, the field is omitted.
+Every cluster and node response includes a stable `id` field: a **UUID v5**
+derived deterministically from the resource name. The same cluster or node
+always produces the same UUID across process restarts, so clients can use `id`
+as a stable key. Use it to fetch a resource directly:
+
+```bash
+curl http://127.0.0.1:8080/kubernetes/clusters/<uuid>
+curl http://127.0.0.1:8080/kubernetes/nodes/<uuid>
+```
+
+Each node entry also includes a `machine_id` field when the CAPI `Machine`
+exposes a Xen Orchestra `providerID` (for example
+`xenorchestra://<pool>/<vm-uuid>`). The server extracts the VM UUID and exposes
+it as the machine identifier; if the provider ID is missing or not from Xen
+Orchestra, the field is omitted.
 
 This lets callers correlate a node with the corresponding Xen
 Orchestra VM without exposing provider strings in the API response.
@@ -650,13 +662,16 @@ The service uses the following minimum permissions in the target namespace:
 
 | API group | Resources | Verbs |
 | --- | --- | --- |
-| `cluster.x-k8s.io` | `clusters` | `get`, `list`, `create`, `delete`, `patch` |
-| `cluster.x-k8s.io` | `machines` | `get`, `list`, `delete`, `patch` |
+| `cluster.x-k8s.io` | `clusters` | `get`, `list`, `watch`, `create`, `delete`, `patch` |
+| `cluster.x-k8s.io` | `machines` | `get`, `list`, `watch`, `delete`, `patch` |
 | core group | `secrets`, `configmaps` | `get` |
 | `cluster.x-k8s.io` | `machinedeployments` | `create`, `get`, `list`, `patch` |
 | `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |
 | `controlplane.cluster.x-k8s.io` | `kubeadmcontrolplanes` | `create`, `get`, `patch` |
 | `bootstrap.cluster.x-k8s.io` | `kubeadmconfigtemplates` | `create` |
+
+`watch` is required on `clusters` and `machines` so the informer cache can
+receive Kubernetes watch events and stay current without polling.
 
 Secret access allows the service to read kubeconfigs. Treat the ServiceAccount
 and API access as sensitive.
@@ -705,20 +720,27 @@ HTTP component (Fuego routes and handlers)
     v  ForManagingClusters
 ClusterManager
     |
-    +-- ForManagingClusterResources --> ClusterClient --> CAPI Cluster resources
-    +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes Secrets
-    `-- ForManagingClusterMachines   --> MachineClient --> CAPI Machine resources
-    +-- ForGettingClusterCreationDefaults --> ConfigMapClient --> cluster-defaults
-    `-- ForManagingVersions         --> VersionManager (same instance)
+    +-- ForManagingClusterResources --> ClusterClient -+-> informer cache (reads, UUID index)
+    +-- ForManagingClusterMachines   --> MachineClient -+-> informer cache (reads, UUID index)
+    +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes API
+    `-- ForGettingClusterCreationDefaults --> ConfigMapClient --> Kubernetes API
+                                                       |
+                                          ClusterClient (writes only) --> Kubernetes API
 ```
 
-`cmd/http_server/main.go` is the Configurator: it creates the Kubernetes
-Strategies, injects them into `ClusterManager`, then injects `ClusterManager`
-and the shared `VersionManager` into the HTTP component. `ClusterManager`
-validates the requested version through `ForManagingVersions` before reading
-creation defaults. This follows Alistair Cockburn's **Component +
-Strategy** pattern. No Adapter is needed here because the Kubernetes clients
-directly satisfy the required interfaces.
+`cmd/http_server/main.go` is the Configurator: it builds the Kubernetes client
+and informer cache, registers UUID v5 field indexes, starts the cache goroutine,
+waits for the initial sync, then creates the Strategies and injects them into
+`ClusterManager` and `ClusterManager` into the HTTP component. This follows
+Alistair Cockburn's **Component + Strategy** pattern.
+
+`ClusterClient` holds both a direct `client.Client` (for writes: create, delete,
+tag mutations) and a `cache.Cache` (for all reads: list, get, UUID lookup, tag
+reads). `MachineClient` also holds a direct client for node deletion and pause mutations. The UUID-based lookup routes
+(`GET /kubernetes/clusters/{uuid}`, `GET /kubernetes/nodes/{id}`) resolve in O(1)
+through UUID v5 field indexes registered on the informer cache at startup.
+
+The shared `VersionManager` validates requested releases before creation defaults are read.
 
 See [architecture.md](architecture.md) for the pattern's mapping to the code,
 runtime request flow, dependency rules, and current architectural gaps.

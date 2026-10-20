@@ -46,4 +46,5 @@ var (
 	ErrClusterTagsRetrievalFailed             = errors.New("failed to get cluster tags")
 	ErrClusterTagUpdateFailed                 = errors.New("failed to update cluster tag")
 	ErrClusterTagDeletionFailed               = errors.New("failed to delete cluster tag")
+	ErrNodeNotFound                           = errors.New("node not found")
 )

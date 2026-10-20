@@ -147,6 +147,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	)
 
 	fuego.Get(apiRouter, "/nodes", clusterHandler.GetAllNodes)
+	fuego.Get(apiRouter, "/nodes/{id}", clusterHandler.GetNode, notFoundResponse("Node not found"))
 	fuego.Get(apiRouter, "/tags", clusterHandler.GetAllTags)
 	fuego.Get(apiRouter, "/versions-available", versionsHandler.GetAvailableVersion)
 

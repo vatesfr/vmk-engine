@@ -16,6 +16,7 @@ type ForManagingClusters interface {
 	CreateCluster(ctx context.Context, params CreateClusterParams) (ClusterInfo, error)
 	GetClusters(ctx context.Context) ([]ClusterInfo, error)
 	GetCluster(ctx context.Context, name string) (ClusterInfo, error)
+	GetClusterByUUID(ctx context.Context, id uuid.UUID) (ClusterInfo, error)
 	GetClusterNodesInfo(ctx context.Context, name string) ([]ClusterNodeInfo, error)
 	GetClusterConfig(ctx context.Context, name string) (string, error)
 	DeleteCluster(ctx context.Context, name string) error
@@ -26,9 +27,11 @@ type ForManagingClusters interface {
 	SetClusterTag(ctx context.Context, clusterID, tag, value string) error
 	DeleteClusterTag(ctx context.Context, clusterID, tag string) error
 	GetAllNodes(ctx context.Context) ([]ClusterNodeInfo, error)
+	GetNodeByUUID(ctx context.Context, id uuid.UUID) (ClusterNodeInfo, error)
 }
 
 type ClusterNodeInfo struct {
+	ID            uuid.UUID
 	Paused        bool
 	Name          string
 	NodeName      string

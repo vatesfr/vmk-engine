@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/components/cluster_manager"
@@ -98,14 +100,37 @@ func (o options) validate() error {
 }
 
 func run(opts options) error {
-	k8sClient, err := newK8sClient(opts.kubeClient, opts.kubeconfig)
+	ctx := context.Background()
+
+	restConfig, scheme, err := buildRestConfig(opts.kubeClient, opts.kubeconfig)
 	if err != nil {
 		return err
 	}
 
-	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, opts.namespace)
+	k8sClient, err := newK8sClient(restConfig, scheme)
+	if err != nil {
+		return err
+	}
+
+	informerCache, err := newInformerCache(restConfig, scheme)
+	if err != nil {
+		return err
+	}
+	if err := kubernetes_clients.RegisterIndexes(ctx, informerCache); err != nil {
+		return fmt.Errorf("register UUID indexers: %w", err)
+	}
+	go func() {
+		if err := informerCache.Start(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "informer cache stopped: %v\n", err)
+		}
+	}()
+	if !informerCache.WaitForCacheSync(ctx) {
+		return fmt.Errorf("informer cache failed to sync")
+	}
+
+	k8sClusterClient := kubernetes_clients.NewClusterClient(k8sClient, informerCache, opts.namespace)
 	k8sSecretClient := kubernetes_clients.NewSecretClient(k8sClient, opts.namespace)
-	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, opts.namespace)
+	k8sMachineClient := kubernetes_clients.NewMachineClient(k8sClient, informerCache, opts.namespace)
 	k8sConfigMapClient := kubernetes_clients.NewConfigMapClient(k8sClient, opts.namespace)
 	versionManager := versionmanager.NewVersionManager()
 	clusterManager := cluster_manager.NewClusterManager(
@@ -124,7 +149,7 @@ func run(opts options) error {
 	return nil
 }
 
-func newK8sClient(clientType, kubeconfig string) (client.Client, error) {
+func buildRestConfig(clientType, kubeconfig string) (*rest.Config, *runtime.Scheme, error) {
 	var (
 		config *rest.Config
 		err    error
@@ -135,21 +160,32 @@ func newK8sClient(clientType, kubeconfig string) (client.Client, error) {
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("build Kubernetes %s config: %w", clientType, err)
+		return nil, nil, fmt.Errorf("build Kubernetes %s config: %w", clientType, err)
 	}
 
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("register Kubernetes types: %w", err)
+		return nil, nil, fmt.Errorf("register Kubernetes types: %w", err)
 	}
 	if err := clusterv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("register Cluster API types: %w", err)
+		return nil, nil, fmt.Errorf("register Cluster API types: %w", err)
 	}
 
-	kubernetesClient, err := client.New(config, client.Options{Scheme: scheme})
+	return config, scheme, nil
+}
+
+func newK8sClient(config *rest.Config, scheme *runtime.Scheme) (client.Client, error) {
+	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("create Cluster API client: %w", err)
 	}
+	return k8sClient, nil
+}
 
-	return kubernetesClient, nil
+func newInformerCache(config *rest.Config, scheme *runtime.Scheme) (cache.Cache, error) {
+	informerCache, err := cache.New(config, cache.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("create informer cache: %w", err)
+	}
+	return informerCache, nil
 }

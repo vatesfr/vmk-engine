@@ -158,7 +158,7 @@ func TestProviderConfiguration(t *testing.T) {
 			p, _, scheme := newClusterCreationTestSetup(t)
 			p.Defaults = defaults
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
-			_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+			_, err = NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 			require.NoError(t, err)
 			machine := resource(xoGroup, xoMachineTemplateKind, testControlPlane, testCreationNamespace, nil)
 			require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
@@ -237,7 +237,7 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			p.Defaults = defaults
 			p.Version = "v1.36.2"
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
-			_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+			_, err = NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 			require.NoError(t, err)
 			for _, target := range []struct {
 				group, kind, name string

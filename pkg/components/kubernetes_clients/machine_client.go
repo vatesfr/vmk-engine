@@ -9,9 +9,11 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
@@ -27,13 +29,14 @@ const (
 
 type MachineClient struct {
 	kubernetesClient client.Client
+	informerCache    cache.Cache
 	namespace        string
 }
 
 var _ strategies.ForManagingClusterMachines = MachineClient{}
 
-func NewMachineClient(kubernetesClient client.Client, namespace string) MachineClient {
-	return MachineClient{kubernetesClient, namespace}
+func NewMachineClient(kubernetesClient client.Client, informerCache cache.Cache, namespace string) MachineClient {
+	return MachineClient{kubernetesClient, informerCache, namespace}
 }
 
 func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName string) ([]strategies.ClusterNodeInfo, error) {
@@ -45,7 +48,7 @@ func (m MachineClient) GetMachinesByCluster(ctx context.Context, clusterName str
 	}
 
 	machines := &capiv1.MachineList{}
-	if err := m.kubernetesClient.List(
+	if err := m.informerCache.List(
 		ctx,
 		machines,
 		client.InNamespace(m.namespace),
@@ -67,7 +70,7 @@ func (m MachineClient) GetAllMachines(ctx context.Context) ([]strategies.Cluster
 	}
 
 	machines := &capiv1.MachineList{}
-	if err := m.kubernetesClient.List(
+	if err := m.informerCache.List(
 		ctx,
 		machines,
 		client.InNamespace(m.namespace),
@@ -82,10 +85,32 @@ func (m MachineClient) GetAllMachines(ctx context.Context) ([]strategies.Cluster
 	return result, nil
 }
 
+func (m MachineClient) GetMachineByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterNodeInfo, error) {
+	if m.namespace == "" {
+		return strategies.ClusterNodeInfo{}, strategies.ErrClusterNamespaceRequired
+	}
+	list := &capiv1.MachineList{}
+	if err := m.informerCache.List(ctx, list,
+		client.InNamespace(m.namespace),
+		client.MatchingFields{uuids.UUIDIndexKey: id.String()},
+	); err != nil {
+		return strategies.ClusterNodeInfo{}, fmt.Errorf("list Machines by UUID: %w", err)
+	}
+	if len(list.Items) == 0 {
+		return strategies.ClusterNodeInfo{}, strategies.ErrNodeNotFound
+	}
+	return toClusterNodeInfo(&list.Items[0]), nil
+}
+
 func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 	nodeName := ""
 	if machine.Status.NodeRef.IsDefined() {
 		nodeName = machine.Status.NodeRef.Name
+	}
+	clusterName := machine.Labels[capiv1.ClusterNameLabel]
+	name := machine.Name
+	if nodeName != "" {
+		name = nodeName
 	}
 
 	role := workerRole
@@ -119,6 +144,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 
 	_, paused := machine.Annotations[capiv1.PausedAnnotation]
 	return strategies.ClusterNodeInfo{
+		ID:            uuids.NodeID(clusterName, name),
 		Paused:        paused,
 		Name:          machine.Name,
 		NodeName:      nodeName,

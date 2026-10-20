@@ -76,7 +76,8 @@ func TestClusterClientList(t *testing.T) {
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioned", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisionedPhase}},
 			&capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "provisioning", Namespace: testNamespace}, Status: capiv1.ClusterStatus{Phase: provisioningPhase}},
 		}
-		clusterClient := NewClusterClient(newFakeClient(t, objects...), testNamespace)
+		fc := newFakeClient(t, objects...)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		clusters, err := clusterClient.List(t.Context())
 
@@ -88,7 +89,8 @@ func TestClusterClientList(t *testing.T) {
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
+		fc := newFakeClient(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		clusters, err := clusterClient.List(t.Context())
 
@@ -98,9 +100,8 @@ func TestClusterClientList(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)}), testNamespace,
-		)
+		fc := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		clusters, err := clusterClient.List(t.Context())
 
@@ -177,7 +178,8 @@ func TestClusterClientGet(t *testing.T) {
 			Spec:       capiv1.ClusterSpec{ControlPlaneEndpoint: capiv1.APIEndpoint{Host: controlPlaneIP, Port: 6443}},
 			Status:     capiv1.ClusterStatus{Phase: provisionedPhase},
 		}
-		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		fc := newFakeClient(t, cluster)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -207,7 +209,8 @@ func TestClusterClientGet(t *testing.T) {
 				},
 			},
 		}
-		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		fc := newFakeClient(t, cluster)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -266,7 +269,8 @@ func TestClusterClientGet(t *testing.T) {
 				Workers:      &capiv1.WorkersStatus{Replicas: ptr.To(int32(2))},
 			},
 		}
-		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		fc := newFakeClient(t, cluster)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -280,7 +284,8 @@ func TestClusterClientGet(t *testing.T) {
 
 	t.Run("invalid endpoint", func(t *testing.T) {
 		cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
-		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		fc := newFakeClient(t, cluster)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -289,9 +294,8 @@ func TestClusterClientGet(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(t, errTest)}), testNamespace,
-		)
+		fc := newErrorClient(t, interceptor.Funcs{Get: getErrorFunc(t, errTest)})
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -300,7 +304,8 @@ func TestClusterClientGet(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
+		fc := newFakeClient(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
@@ -314,7 +319,7 @@ func TestClusterClientDelete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
 		kubeClient := newFakeClient(t, cluster)
-		clusterClient := NewClusterClient(kubeClient, testNamespace)
+		clusterClient := NewClusterClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -324,7 +329,8 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
+		fc := newFakeClient(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		err := clusterClient.Delete(t.Context(), "")
 
@@ -332,7 +338,8 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("empty namespace", func(t *testing.T) {
-		clusterClient := NewClusterClient(newFakeClient(t), "")
+		fc := newFakeClient(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, "")
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -340,9 +347,8 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		clusterClient := NewClusterClient(
-			newErrorClient(t, interceptor.Funcs{Delete: deleteErrorFunc(t, errTest)}), testNamespace,
-		)
+		fc := newErrorClient(t, interceptor.Funcs{Delete: deleteErrorFunc(t, errTest)})
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -352,7 +358,8 @@ func TestClusterClientDelete(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
+		fc := newFakeClient(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 
 		err := clusterClient.Delete(t.Context(), clusterName)
 
@@ -388,7 +395,7 @@ func TestClusterClientCreatesClusterWithTags(t *testing.T) {
 			params.Name = clusterName
 			params.Tags = tc.tags
 			kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
-			clusterClient := NewClusterClient(kubeClient, testNamespace)
+			clusterClient := NewClusterClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 			info, err := clusterClient.Create(t.Context(), params)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
@@ -437,7 +444,7 @@ func TestClusterClientGetAllTags(t *testing.T) {
 			if tc.wantErr != nil {
 				kubeClient = newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, tc.wantErr)})
 			}
-			clusterClient := NewClusterClient(kubeClient, testNamespace)
+			clusterClient := NewClusterClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 
 			tags, err := clusterClient.GetAllTags(t.Context())
 
@@ -467,7 +474,8 @@ func TestClusterClientReadsClusterTags(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: tc.labels}}
-			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			fc := newFakeClient(t, cluster)
+			clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 			tags, err := clusterClient.GetTags(t.Context(), clusterName)
 			require.NoError(t, err)
 			if tc.tags == nil {
@@ -517,7 +525,7 @@ func TestClusterClientUpdatesClusterTags(t *testing.T) {
 			}
 			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace, Labels: labels}}
 			kubeClient := newFakeClient(t, cluster)
-			clusterClient := NewClusterClient(kubeClient, testNamespace)
+			clusterClient := NewClusterClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 			var err error
 			if tc.deleteTag {
 				err = clusterClient.DeleteTag(t.Context(), clusterName, tc.tag)
@@ -564,7 +572,8 @@ func TestClusterClientTagMissingCluster(t *testing.T) {
 	for name, operation := range testCases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			clusterClient := NewClusterClient(newFakeClient(t), testNamespace)
+			fc := newFakeClient(t)
+			clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
 			assert.ErrorIs(t, operation(t.Context(), clusterClient), strategies.ErrClusterNotFound)
 		})
 	}
@@ -679,7 +688,7 @@ func TestClusterResourceCreation(t *testing.T) {
 			return c.Get(ctx, key, obj, opts...)
 		},
 	}).Build()
-	info, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+	info, err := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 	creating = false
 	require.NoError(t, err)
 	require.Equal(t, testCluster, info.Name)
@@ -699,7 +708,7 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: testCluster, Namespace: testCreationNamespace}, cluster))
 	require.Equal(t, p.Description, cluster.Annotations["vmk.vates.tech/description"])
 	// A fresh client reads the persisted description for both detail and list.
-	freshClient := NewClusterClient(kube, testCreationNamespace)
+	freshClient := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace)
 	detail, err := freshClient.Get(t.Context(), testCluster)
 	require.NoError(t, err)
 	require.Equal(t, p.Description, detail.Description)
@@ -751,7 +760,7 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, int32(2), *md.Spec.Replicas)
 	require.Equal(t, testVersion, md.Spec.Template.Spec.Version)
 	get(bootstrapGroup, bootstrapTemplateKind, "demo-worker")
-	_, err = NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+	_, err = NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 	require.ErrorIs(t, err, strategies.ErrClusterAlreadyExists)
 }
 
@@ -773,7 +782,7 @@ func TestClusterResourcePreflightAndPartialFailure(t *testing.T) {
 				}
 				return c.Create(ctx, obj, opts...)
 			}}).Build()
-			_, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+			_, err := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 			require.Error(t, err)
 			clusters := &capiv1.ClusterList{}
 			require.NoError(t, kube.List(t.Context(), clusters))
@@ -807,7 +816,7 @@ func TestDeletePausedCluster(t *testing.T) {
 		Spec: capiv1.ClusterSpec{Paused: ptr.To(true)},
 	}
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
-	require.NoError(t, NewClusterClient(kube, testCreationNamespace).Delete(t.Context(), testCluster))
+	require.NoError(t, NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Delete(t.Context(), testCluster))
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(cluster), cluster))
 	require.False(t, cluster.DeletionTimestamp.IsZero())
 	require.Nil(t, cluster.Spec.Paused)
@@ -836,7 +845,7 @@ func TestClusterCreationValidation(t *testing.T) {
 			ns := testCreationNamespace
 			tc.modify(&p, &ns)
 			kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
-			_, err := NewClusterClient(kube, ns).Create(t.Context(), p)
+			_, err := NewClusterClient(kube, clientAsCache{kube}, ns).Create(t.Context(), p)
 			require.ErrorIs(t, err, tc.want)
 			clusters := &capiv1.ClusterList{}
 			require.NoError(t, kube.List(t.Context(), clusters))
@@ -851,7 +860,7 @@ func TestClusterCreateAPIError(t *testing.T) {
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error { return injected },
 	}).Build()
-	_, err := NewClusterClient(kube, testCreationNamespace).Create(t.Context(), p)
+	_, err := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 	require.ErrorIs(t, err, injected)
 }
 
@@ -899,7 +908,7 @@ func TestSetClusterReplicas(t *testing.T) {
 			otherMD.Spec.ClusterName = scalingOtherCluster
 			otherMD.Labels[capiv1.ClusterNameLabel] = scalingOtherCluster
 			k8s := newFakeClient(t, cluster, md, cp, otherCluster, otherMD)
-			service := NewClusterClient(k8s, testNamespace)
+			service := NewClusterClient(k8s, clientAsCache{k8s}, testNamespace)
 			for _, replicas := range []int32{3, 1, 1} {
 				var err error
 				if controlPlane {
@@ -1065,7 +1074,7 @@ func TestScalingPreservesResourcesAndNamespace(t *testing.T) {
 	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
 	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(cp), cp))
 	expectedMD, expectedCP := md.DeepCopy(), cp.DeepCopy()
-	service := NewClusterClient(k8s, testNamespace)
+	service := NewClusterClient(k8s, clientAsCache{k8s}, testNamespace)
 	require.NoError(t, service.SetWorkerReplicas(t.Context(), cluster.Name, 3))
 	require.NoError(t, service.SetControlPlaneReplicas(t.Context(), cluster.Name, 3))
 	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
@@ -1122,7 +1131,7 @@ func TestScalingPatchAndErrors(t *testing.T) {
 					}
 				}
 				k8s := interceptor.NewClient(newFakeClient(t, cluster, md, cp).(client.WithWatch), interceptors)
-				service := NewClusterClient(k8s, testNamespace)
+				service := NewClusterClient(k8s, clientAsCache{k8s}, testNamespace)
 				replicas := int32(3)
 				if kind == scalingNoopCase {
 					replicas = 1
@@ -1165,8 +1174,8 @@ func TestPauseRoundTrip(t *testing.T) {
 		Spec:       capiv1.MachineSpec{ClusterName: clusterName},
 	}
 	kube := newFakeClient(t, cluster, machine)
-	clusters := NewClusterClient(kube, testNamespace)
-	machines := NewMachineClient(kube, testNamespace)
+	clusters := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
+	machines := NewMachineClient(kube, clientAsCache{kube}, testNamespace)
 	for _, paused := range []bool{true, true, false, false} {
 		require.NoError(t, clusters.SetPaused(t.Context(), clusterName, paused))
 		require.NoError(t, machines.SetMachinePaused(t.Context(), clusterName, machine.Name, paused))
@@ -1190,7 +1199,7 @@ func TestResumeClusterPreservesMachinePause(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 	machine.Annotations = map[string]string{capiv1.PausedAnnotation: ""}
 	kube := newFakeClient(t, cluster, machine)
-	require.NoError(t, NewClusterClient(kube, testNamespace).SetPaused(t.Context(), clusterName, false))
+	require.NoError(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetPaused(t.Context(), clusterName, false))
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.True(t, toClusterNodeInfo(machine).Paused)
 }
@@ -1199,15 +1208,15 @@ func TestPauseValidation(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, otherClusterName, false, "")
 	machine.Labels[capiv1.ClusterNameLabel] = clusterName
 	kube := newFakeClient(t, machine)
-	clusters := NewClusterClient(kube, testNamespace)
-	machines := NewMachineClient(kube, testNamespace)
+	clusters := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
+	machines := NewMachineClient(kube, clientAsCache{kube}, testNamespace)
 	for _, paused := range []bool{true, false} {
 		require.ErrorIs(t, clusters.SetPaused(t.Context(), "", paused), strategies.ErrClusterNameRequired)
-		require.ErrorIs(t, NewClusterClient(kube, "").SetPaused(t.Context(), clusterName, paused), strategies.ErrClusterNamespaceRequired)
+		require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, "").SetPaused(t.Context(), clusterName, paused), strategies.ErrClusterNamespaceRequired)
 		require.ErrorIs(t, clusters.SetPaused(t.Context(), clusterName, paused), strategies.ErrClusterNotFound)
 		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), "", machine.Name, paused), strategies.ErrClusterNameRequired)
 		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, "", paused), strategies.ErrNodeNameRequired)
-		require.ErrorIs(t, NewMachineClient(kube, "").SetMachinePaused(t.Context(), clusterName, machine.Name, paused), strategies.ErrClusterNamespaceRequired)
+		require.ErrorIs(t, NewMachineClient(kube, clientAsCache{kube}, "").SetMachinePaused(t.Context(), clusterName, machine.Name, paused), strategies.ErrClusterNamespaceRequired)
 		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, "missing", paused), strategies.ErrNodeNotFound)
 		require.ErrorIs(t, machines.SetMachinePaused(t.Context(), clusterName, machine.Name, paused), strategies.ErrNodeNotFound)
 	}
@@ -1239,8 +1248,8 @@ func TestPausePatchErrors(t *testing.T) {
 			if tc.want == nil {
 				clusterWant, machineWant = strategies.ErrClusterNotFound, strategies.ErrNodeNotFound
 			}
-			require.ErrorIs(t, NewClusterClient(kube, testNamespace).SetPaused(t.Context(), clusterName, true), clusterWant)
-			require.ErrorIs(t, NewMachineClient(kube, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true), machineWant)
+			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetPaused(t.Context(), clusterName, true), clusterWant)
+			require.ErrorIs(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterName, machine.Name, true), machineWant)
 		})
 	}
 }

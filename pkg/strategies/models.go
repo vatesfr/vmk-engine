@@ -1,5 +1,7 @@
 package strategies
 
+import "github.com/gofrs/uuid"
+
 // MaxClusterDescriptionLength limits descriptions in Unicode code points.
 const MaxClusterDescriptionLength = 4000
 
@@ -55,6 +57,7 @@ type MachineDeployment struct {
 type ClusterInfo struct {
 	Paused                      bool
 	IsAvailable                 bool
+	ID                          uuid.UUID
 	IsControlPlaneInitialized   *bool
 	IsInfrastructureProvisioned *bool
 	Name                        string

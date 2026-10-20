@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-fuego/fuego"
 	"github.com/go-playground/validator/v10"
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -74,6 +75,20 @@ func TestReplicaAdmissionErrorKeepsTechnicalCausePrivate(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, problem.StatusCode())
 	require.Equal(t, strategies.ErrReplicasRejected.Error(), problem.Detail)
 	require.ErrorIs(t, problem, cause)
+}
+
+func TestToHTTPErrorInvalidUUID(t *testing.T) {
+	input, err := uuid.FromString("not-a-uuid")
+	require.Error(t, err)
+	assert.Equal(t, uuid.UUID{}, input)
+
+	result := toHTTPError(err)
+	var problem fuego.HTTPError
+	require.ErrorAs(t, result, &problem)
+	assert.Equal(t, http.StatusBadRequest, problem.StatusCode())
+	assert.Equal(t, "Invalid UUID", problem.Title)
+	assert.Equal(t, "path parameter 'id' must be a valid UUID", problem.Detail)
+	assert.ErrorIs(t, result, err)
 }
 
 func TestToHTTPErrorPreservesOtherHTTPStatuses(t *testing.T) {

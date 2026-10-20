@@ -32,31 +32,31 @@ type ClusterClient struct {
 }
 
 const (
-	scalingClusterKind      = "Cluster"
-	xoGroup                 = "vates.infrastructure.cluster.x-k8s.io"
-	cpGroup                 = "controlplane.cluster.x-k8s.io"
-	bootstrapGroup          = "bootstrap.cluster.x-k8s.io"
-	specKey                 = "spec"
-	templateKey             = "template"
-	metadataKey             = "metadata"
-	nameKey                 = "name"
-	namePrefixKey           = "namePrefix"
-	kubeadmConfigSpecKey    = "kubeadmConfigSpec"
-	clusterConfigurationKey = "clusterConfiguration"
-	apiServerKey            = "apiServer"
-	certSANsKey             = "certSANs"
-	xoClusterKind           = "XOCluster"
-	xoMachineTemplateKind   = "XOMachineTemplate"
-	controlPlaneKind        = "KubeadmControlPlane"
-	bootstrapTemplateKind   = "KubeadmConfigTemplate"
-	endpointKey             = "controlPlaneEndpoint"
-	bootstrapKey            = "bootstrap"
-	commandsKey             = "preKubeadmCommands"
-	kindKey                 = "kind"
-	clusterTagLabelPrefix   = "tags.vmk.vates.tech/"
+	scalingClusterKind                 = "Cluster"
+	xoGroup                            = "vates.infrastructure.cluster.x-k8s.io"
+	cpGroup                            = "controlplane.cluster.x-k8s.io"
+	bootstrapGroup                     = "bootstrap.cluster.x-k8s.io"
+	specKey                            = "spec"
+	templateKey                        = "template"
+	metadataKey                        = "metadata"
+	nameKey                            = "name"
+	namePrefixKey                      = "namePrefix"
+	kubeadmConfigSpecKey               = "kubeadmConfigSpec"
+	clusterConfigurationKey            = "clusterConfiguration"
+	apiServerKey                       = "apiServer"
+	certSANsKey                        = "certSANs"
+	xoClusterKind                      = "XOCluster"
+	xoMachineTemplateKind              = "XOMachineTemplate"
+	controlPlaneKind                   = "KubeadmControlPlane"
+	bootstrapTemplateKind              = "KubeadmConfigTemplate"
+	endpointKey                        = "controlPlaneEndpoint"
+	bootstrapKey                       = "bootstrap"
+	commandsKey                        = "preKubeadmCommands"
+	kindKey                            = "kind"
+	clusterTagLabelPrefix              = "tags.vmk.vates.tech/"
+	clusterDescriptionAnnotation       = "vmk.vates.tech/description"
+	clusterCreatedByXOUserIDAnnotation = "vmk.vates.tech/created-by-xo-user-id"
 )
-
-const clusterDescriptionAnnotation = "vmk.vates.tech/description"
 
 var _ strategies.ForManagingClusterResources = ClusterClient{}
 
@@ -263,6 +263,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 		IsInfrastructureProvisioned: value.Status.Initialization.InfrastructureProvisioned,
 		Name:                        value.GetName(),
 		Description:                 value.Annotations[clusterDescriptionAnnotation],
+		CreatedByXOUserID:           value.Annotations[clusterCreatedByXOUserIDAnnotation],
 		Phase:                       value.Status.Phase,
 		ControlPlaneEndpoint:        controlPlaneEndpoint,
 		Version:                     value.Spec.Topology.Version,
@@ -477,6 +478,13 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 		cluster.Annotations = map[string]string{clusterDescriptionAnnotation: p.Description}
 	}
 
+	if p.CreatedByXOUserID != "" {
+		if cluster.Annotations == nil {
+			cluster.Annotations = make(map[string]string)
+		}
+		cluster.Annotations[clusterCreatedByXOUserIDAnnotation] = p.CreatedByXOUserID
+	}
+
 	xoSpec := map[string]any{
 		endpointKey:     map[string]any{"host": p.ControlPlaneIP, "port": int64(d.EndpointPort), "subnet": int64(d.EndpointSubnet)},
 		"injectSSHKeys": false,
@@ -540,6 +548,7 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 		ID:                   uuids.ClusterID(p.Name),
 		Name:                 p.Name,
 		Description:          p.Description,
+		CreatedByXOUserID:    p.CreatedByXOUserID,
 		Phase:                "Creating",
 		CreatedAt:            cluster.CreationTimestamp.String(),
 		Version:              p.Version,

@@ -213,6 +213,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 		ControlPlaneIP:       controlPlaneIP,
 		VMNamePrefix:         vmNamePrefix,
 		Tags:                 map[string]string{"environment": "production"},
+		CreatedByXOUserID:    "xo-user-123",
 	}
 
 	clusterDefaults.EXPECT().GetClusterCreationDefaults(t.Context()).Return(clusterCreationDefaults, nil)
@@ -222,6 +223,7 @@ func TestCreateClusterGetsDefaultsFromStrategy(t *testing.T) {
 		VMNamePrefix:         params.VMNamePrefix,
 		Name:                 clusterName,
 		Defaults:             clusterCreationDefaults,
+		CreatedByXOUserID:    params.CreatedByXOUserID,
 		ControlPlaneReplicas: &params.ControlPlaneReplicas,
 		MachineDeployments: []strategies.MachineDeployment{{
 			Name:     clusterCreationDefaults.WorkerName,

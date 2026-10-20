@@ -1149,3 +1149,47 @@ func TestGetAllNodesHTTPFields(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterCreatorHTTP(t *testing.T) {
+	for _, creatorID := range []string{"xo-user-123", ""} {
+		for _, method := range []string{http.MethodPost, http.MethodGet, "LIST"} {
+			t.Run(method+"/"+creatorID, func(t *testing.T) {
+				response := map[string]any{
+					"id": clusterUUID.String(), "name": clusterName, "is_reconciliation_paused": false, "is_available": false,
+					"control_plane_status": map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
+					"worker_status":        map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
+				}
+				if creatorID != "" {
+					response["created_by_xo_user_id"] = creatorID
+				}
+				var expected any = response
+				tc := httpTestCase{method: method, path: getClusterByUUIDPath, expectedStatus: http.StatusOK}
+				info := strategies.ClusterInfo{ID: clusterUUID, Name: clusterName, CreatedByXOUserID: creatorID}
+				switch method {
+				case http.MethodPost:
+					tc.path = clustersPath
+					tc.body = strings.Replace(createClusterRequestBody, `"vm_name_prefix":"test"`, `"vm_name_prefix":"test","created_by_xo_user_id":"`+creatorID+`"`, 1)
+					tc.setupMock = func(ctx context.Context, service *mocks.MockForManagingClusters) {
+						params := validCreateClusterParams()
+						params.CreatedByXOUserID = creatorID
+						service.EXPECT().CreateCluster(ctx, params).Return(info, nil)
+					}
+				case http.MethodGet:
+					tc.setupMock = func(ctx context.Context, service *mocks.MockForManagingClusters) {
+						service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(info, nil)
+					}
+				case "LIST":
+					tc.method, tc.path = http.MethodGet, clustersPath
+					expected = []any{response}
+					tc.setupMock = func(ctx context.Context, service *mocks.MockForManagingClusters) {
+						service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{info}, nil)
+					}
+				}
+				body, err := json.Marshal(expected)
+				require.NoError(t, err)
+				tc.expectedJSON = string(body)
+				executeHTTPTestCase(t, tc)
+			})
+		}
+	}
+}

@@ -401,7 +401,8 @@ curl --request POST http://127.0.0.1:8080/kubernetes/clusters \
     "kubernetes_version": "1.36.9",
     "control_plane_ip": "10.30.138.14",
     "vm_name_prefix": "jls-capi-dev-",
-    "description": "Development cluster for the backend team"
+    "description": "Development cluster for the backend team",
+    "created_by_xo_user_id": "xo-user-123"
   }'
 ```
 
@@ -433,6 +434,11 @@ descriptions return HTTP 422. It is stored on the CAPI `Cluster` in the
 `vmk.vates.tech/description` annotation and returned in creation, detail and list
 responses. Empty descriptions and clusters without this annotation omit the
 response field.
+
+The optional string `created_by_xo_user_id` identifies the XO user who created
+the cluster. It is stored in the CAPI `Cluster` annotation
+`vmk.vates.tech/created-by-xo-user-id` and returned in creation, detail and list
+responses. An absent or empty value is not stored and omits the response field.
 
 This example reproduces the test cluster configuration. If `my-cluster`
 already exists, creation returns 409. To create another cluster alongside it,

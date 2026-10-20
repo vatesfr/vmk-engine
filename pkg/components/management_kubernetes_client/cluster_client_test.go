@@ -744,6 +744,7 @@ func newClusterCreationTestSetup(t *testing.T) (strategies.CreateClusterResource
 
 func TestClusterResourceCreation(t *testing.T) {
 	p, objects, scheme := newClusterCreationTestSetup(t)
+	p.CreatedByXOUserID = "xo-user-123"
 	p.Description = "Cluster de l’équipe \"Backend\"\nTest 🚀"
 	createdAt := metav1.NewTime(time.Date(2026, time.October, 15, 10, 0, 0, 0, time.UTC))
 	creating := true
@@ -768,6 +769,7 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Equal(t, testCluster, info.Name)
 	require.Equal(t, p.Tags, info.Tags)
 	require.Equal(t, p.Description, info.Description)
+	require.Equal(t, p.CreatedByXOUserID, info.CreatedByXOUserID)
 	require.Equal(t, "Creating", info.Phase)
 	responseCreatedAt, err := time.Parse("2006-01-02 15:04:05 -0700 MST", info.CreatedAt)
 	require.NoError(t, err)
@@ -781,15 +783,18 @@ func TestClusterResourceCreation(t *testing.T) {
 	cluster := &capiv1.Cluster{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: testCluster, Namespace: testCreationNamespace}, cluster))
 	require.Equal(t, p.Description, cluster.Annotations["vmk.vates.tech/description"])
-	// A fresh client reads the persisted description for both detail and list.
+	require.Equal(t, p.CreatedByXOUserID, cluster.Annotations["vmk.vates.tech/created-by-xo-user-id"])
+	// A fresh client reads persisted metadata for both detail and list.
 	freshClient := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace)
 	detail, err := freshClient.Get(t.Context(), testCluster)
 	require.NoError(t, err)
 	require.Equal(t, p.Description, detail.Description)
+	require.Equal(t, p.CreatedByXOUserID, detail.CreatedByXOUserID)
 	listed, err := freshClient.List(t.Context())
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
 	require.Equal(t, p.Description, listed[0].Description)
+	require.Equal(t, p.CreatedByXOUserID, listed[0].CreatedByXOUserID)
 	require.Nil(t, cluster.Spec.Paused)
 	require.Empty(t, cluster.Spec.Topology.ClassRef.Name)
 	require.Equal(t, []string{testPodCIDR}, cluster.Spec.ClusterNetwork.Pods.CIDRBlocks)
@@ -1385,6 +1390,30 @@ func TestSetDescriptionErrors(t *testing.T) {
 					},
 				}).Build()
 			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetDescription(t.Context(), clusterUUID, "new"), tc.wantErr)
+		})
+	}
+}
+
+func TestClusterCreatorAnnotationOptional(t *testing.T) {
+	for _, creatorID := range []string{"xo-user-123", ""} {
+		t.Run(creatorID, func(t *testing.T) {
+			params, objects, scheme := newClusterCreationTestSetup(t)
+			params.CreatedByXOUserID = creatorID
+			kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+			resource := NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace)
+			created, err := resource.Create(t.Context(), params)
+			require.NoError(t, err)
+			require.Equal(t, creatorID, created.CreatedByXOUserID)
+			stored := &capiv1.Cluster{}
+			require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: params.Name, Namespace: testCreationNamespace}, stored))
+			if creatorID == "" {
+				require.NotContains(t, stored.Annotations, clusterCreatedByXOUserIDAnnotation)
+			} else {
+				require.Equal(t, creatorID, stored.Annotations[clusterCreatedByXOUserIDAnnotation])
+			}
+			detail, err := resource.Get(t.Context(), params.Name)
+			require.NoError(t, err)
+			require.Equal(t, creatorID, detail.CreatedByXOUserID)
 		})
 	}
 }

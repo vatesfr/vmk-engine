@@ -83,6 +83,7 @@ func (c ClusterManager) CreateCluster(ctx context.Context, params strategies.Cre
 		Version:              "v" + params.Version,
 		Name:                 params.Name,
 		Description:          params.Description,
+		CreatedByXOUserID:    params.CreatedByXOUserID,
 		Defaults:             defaults,
 		ControlPlaneIP:       params.ControlPlaneIP,
 		VMNamePrefix:         params.VMNamePrefix,

@@ -10,6 +10,7 @@ type CreateClusterParams struct {
 	Version              string
 	Name                 string
 	Description          string
+	CreatedByXOUserID    string
 	ControlPlaneReplicas int32
 	WorkerReplicas       int32
 	ControlPlaneIP       string
@@ -43,6 +44,7 @@ type CreateClusterResourceParams struct {
 	VMNamePrefix         string
 	Name                 string
 	Description          string
+	CreatedByXOUserID    string
 	ControlPlaneReplicas *int32
 	MachineDeployments   []MachineDeployment
 	Tags                 map[string]string
@@ -64,6 +66,7 @@ type ClusterInfo struct {
 	IsInfrastructureProvisioned *bool
 	Name                        string
 	Description                 string
+	CreatedByXOUserID           string
 	Phase                       string
 	CreatedAt                   string
 	Version                     string

@@ -14,6 +14,7 @@ type ClusterHandler struct {
 }
 
 type ClusterCreateParams struct {
+	CreatedByXOUserID    string `json:"created_by_xo_user_id,omitempty" description:"XO user ID of the cluster creator, persisted on the CAPI Cluster"`
 	KubernetesVersion    string `json:"kubernetes_version" validate:"required" description:"Available Kubernetes release in major.minor.patch format, without a v prefix" example:"1.36.9"`
 	Name                 string `json:"name" validate:"required" description:"Lowercase RFC 1123 label; generated resource names including suffixes must fit within 63 characters"`
 	Description          string `json:"description,omitempty" validate:"max=4000"`
@@ -55,6 +56,7 @@ type ClusterConfigResponse struct {
 type ClusterInfo struct {
 	IsCordon                    *bool             `json:"is_cordon,omitempty"`
 	IsDraining                  *bool             `json:"is_draining,omitempty" description:"Cordoned node with at least one terminating pod; cluster value means any node"`
+	CreatedByXOUserID           string            `json:"created_by_xo_user_id,omitempty" description:"XO user ID supplied at cluster creation"`
 	Paused                      *bool             `json:"is_reconciliation_paused,omitempty" description:"Cluster API reconciliation paused via spec.paused. VMs and workloads continue running"`
 	IsAvailable                 *bool             `json:"is_available,omitempty"`
 	ID                          *uuid.UUID        `json:"id,omitempty"`
@@ -204,6 +206,7 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 		Version:              value.KubernetesVersion,
 		Name:                 value.Name,
 		Description:          value.Description,
+		CreatedByXOUserID:    value.CreatedByXOUserID,
 		ControlPlaneReplicas: value.ControlPlaneReplicas,
 		WorkerReplicas:       value.WorkerReplicas,
 		ControlPlaneIP:       value.ControlPlaneIP,
@@ -223,6 +226,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		Paused:                      &value.Paused,
 		Name:                        value.Name,
 		Description:                 value.Description,
+		CreatedByXOUserID:           value.CreatedByXOUserID,
 		Phase:                       value.Phase,
 		CreatedAt:                   value.CreatedAt,
 		ControlPlaneEndpoint:        value.ControlPlaneEndpoint,

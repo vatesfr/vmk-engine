@@ -291,7 +291,9 @@ keeping Kubernetes types out of the manager and shared contracts.
 and requires `ForManagingClusterResources`, implemented by `ClusterClient`.
 The manager owns the use cases and application error handling; the client
 stores the optional description as the `vmk.vates.tech/description` annotation
-on the CAPI `Cluster`, alongside tags stored as labels with the
+on the CAPI `Cluster`. The optional creator ID `created_by_xo_user_id` is stored
+in `vmk.vates.tech/created-by-xo-user-id` on the same resource and read back in
+creation, detail and list responses. Tags are stored as labels with the
 `tags.vmk.vates.tech/` prefix. Tags can be supplied during cluster creation or changed through the
 HTTP tag routes; the Kubernetes resource is the source of truth across process
 restarts. Label-specific validation stays in `ClusterClient`, so another

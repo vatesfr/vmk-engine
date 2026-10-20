@@ -20,6 +20,7 @@ import (
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
+	"capv-proxy/pkg/uuids"
 )
 
 const (
@@ -104,7 +105,12 @@ const (
 	}`
 )
 
-var errTest = errors.New("test error")
+var (
+	errTest              = errors.New("test error")
+	clusterUUID          = uuids.ClusterID(clusterName)
+	getClusterByUUIDPath = "/kubernetes/clusters/" + clusterUUID.String()
+	getNodeByUUIDPath    = "/kubernetes/nodes/" + uuids.NodeID(clusterName, controlPlaneNodeName).String()
+)
 
 type httpTestCase struct {
 	method         string
@@ -137,10 +143,10 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -165,10 +171,10 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -184,8 +190,8 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{
-				"name":"cluster-1","control_plane_status":{"ready_replicas":0}},
-				{"name":"cluster-2","control_plane_status":{"ready_replicas":0}}
+				"id":"00000000-0000-0000-0000-000000000000","name":"cluster-1","control_plane_status":{"ready_replicas":0}},
+				{"id":"00000000-0000-0000-0000-000000000000","name":"cluster-2","control_plane_status":{"ready_replicas":0}}
 			]`,
 		},
 		"list clusters with selected availability": {
@@ -198,37 +204,44 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `[{"name":"cluster-1","is_available":true},{"name":"cluster-2","is_available":false}]`,
+			expectedJSON:   `[{"id":"00000000-0000-0000-0000-000000000000","name":"cluster-1","is_available":true},{"id":"00000000-0000-0000-0000-000000000000","name":"cluster-2","is_available":false}]`,
 		},
 		"get available cluster": {
 			method: http.MethodGet,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true}, nil)
+				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
 		"get cluster": {
 			method: http.MethodGet,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{
-					Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint,
+				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{
+					ID: clusterUUID, Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneEndpoint,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"id":"` + clusterUUID.String() + `","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
-		"get missing cluster": {
+		"get cluster with invalid UUID": {
+			method:         http.MethodGet,
+			path:           getClusterPath,
+			expectedStatus: http.StatusBadRequest,
+			expectedTitle:  "Invalid UUID",
+			expectedDetail: "path parameter 'id' must be a valid UUID",
+		},
+		"get missing cluster by UUID": {
 			method: http.MethodGet,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedTitle:  clusterNotFoundTitle,
@@ -236,9 +249,9 @@ func TestHTTPRoutes(t *testing.T) {
 		},
 		"get cluster with version status": {
 			method: http.MethodGet,
-			path:   getClusterPath,
+			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetCluster(ctx, clusterName).Return(strategies.ClusterInfo{
+				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{
 					Name: clusterName,
 					ControlPlanesStatus: strategies.NodeTypeStatus{
 						UpToDateReplicas: 1,
@@ -251,7 +264,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":1,
 					"versions":[{"version":"v1.36.0","replicas":1},{"version":"v1.35.0","replicas":2}]},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":4,
@@ -274,7 +287,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `[{"name":"cluster-1",
+			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","name":"cluster-1",
 				"control_plane_status":{"up_to_date_replicas":1,"versions":[{"version":"v1.36.0"},{"version":"v1.35.0"}]},
 				"worker_status":{"versions":[{"version":"v1.36.0","replicas":4}]}}]`,
 		},
@@ -291,7 +304,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `[{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
+			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
 				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"}]`,
 		},
 		"get cluster nodes with all fields": {
@@ -304,7 +317,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `[{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}]`,
+			expectedJSON:   `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}]`,
 		},
 		"get cluster nodes with selected fields": {
 			method: http.MethodGet,
@@ -316,7 +329,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON:   `[{"name":"control-plane-0","status":"Ready"}]`,
+			expectedJSON:   `[{"id":"00000000-0000-0000-0000-000000000000","name":"control-plane-0","status":"Ready"}]`,
 		},
 		"get cluster config": {
 			method: http.MethodGet,
@@ -337,7 +350,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -351,7 +364,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -511,6 +524,37 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().SetClusterTag(ctx, clusterName, environmentTag, productionValue).Return(strategies.ErrInvalidClusterTagName)
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
+		},
+		"get node by UUID": {
+			method: http.MethodGet,
+			path:   getNodeByUUIDPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				nodeID := uuids.NodeID(clusterName, controlPlaneNodeName)
+				service.EXPECT().GetNodeByUUID(ctx, nodeID).Return(strategies.ClusterNodeInfo{
+					ID: nodeID, Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
+					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedJSON: `{"id":"` + uuids.NodeID(clusterName, controlPlaneNodeName).String() + `","is_reconciliation_paused":false,"name":"control-plane-0",` +
+				`"role":"control-plane","status":"Ready","endpoint":"10.0.0.11"}`,
+		},
+		"get missing node by UUID": {
+			method: http.MethodGet,
+			path:   getNodeByUUIDPath,
+			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+				service.EXPECT().GetNodeByUUID(ctx, uuids.NodeID(clusterName, controlPlaneNodeName)).Return(strategies.ClusterNodeInfo{}, strategies.ErrNodeNotFound)
+			},
+			expectedStatus: http.StatusNotFound,
+			expectedTitle:  "Node not found",
+			expectedDetail: strategies.ErrNodeNotFound.Error(),
+		},
+		"get node with invalid UUID": {
+			method:         http.MethodGet,
+			path:           "/kubernetes/nodes/not-a-uuid",
+			expectedStatus: http.StatusBadRequest,
+			expectedTitle:  "Invalid UUID",
+			expectedDetail: "path parameter 'id' must be a valid UUID",
 		},
 		"unknown route": {
 			method:         http.MethodGet,
@@ -694,8 +738,8 @@ func TestGetAllNodesHTTP(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"},
-				{"is_reconciliation_paused":false,"name":"worker-0","role":"worker","status":"NotReady","$cluster":"other-cluster"}
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11","$cluster":"cluster-1"},
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"worker-0","role":"worker","status":"NotReady","$cluster":"other-cluster"}
 			]`,
 		},
 		"empty list": {
@@ -785,7 +829,9 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
 					}
 				},
-				expectedStatus: http.StatusOK, expectedJSON: `[{"is_reconciliation_paused":false,"name":"node-1","node_name":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
+				expectedStatus: http.StatusOK,
+				expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"node-1",` +
+					`"node_name":"worker-01","machine_id":"01234567-89ab-cdef-0123-456789abcdef"}]`,
 			})
 		})
 	}
@@ -1007,14 +1053,14 @@ func TestReconciliationPausedFieldSelection(t *testing.T) {
 		value := strconv.FormatBool(paused)
 		executeHTTPTestCase(t, httpTestCase{
 			method: http.MethodGet, path: clustersPath + "?fields=is_reconciliation_paused", expectedStatus: http.StatusOK,
-			expectedJSON: `[{"is_reconciliation_paused":` + value + `}]`,
+			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":` + value + `}]`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusters(ctx).Return([]strategies.ClusterInfo{{Name: clusterName, Paused: paused}}, nil)
 			},
 		})
 		executeHTTPTestCase(t, httpTestCase{
 			method: http.MethodGet, path: clusterNodesPath + "?fields=is_reconciliation_paused", expectedStatus: http.StatusOK,
-			expectedJSON: `[{"is_reconciliation_paused":` + value + `}]`,
+			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":` + value + `}]`,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterName).Return([]strategies.ClusterNodeInfo{{Name: "node-1", Paused: paused}}, nil)
 			},

@@ -93,12 +93,6 @@ func toHTTPError(err error) error {
 			Title:  "Cluster not found",
 			Detail: strategies.ErrClusterNotFound.Error(),
 		}
-	case errors.Is(err, strategies.ErrNodeNotFound):
-		return fuego.NotFoundError{
-			Err:    err,
-			Title:  "Node not found",
-			Detail: strategies.ErrNodeNotFound.Error(),
-		}
 	case errors.Is(err, strategies.ErrClusterAlreadyExists):
 		return fuego.ConflictError{
 			Err:    err,

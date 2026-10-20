@@ -14,6 +14,7 @@ import (
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
+	"capv-proxy/pkg/uuids"
 )
 
 type testCreateClusterParams struct {
@@ -438,6 +439,58 @@ func newTestClusterManager(t *testing.T) (
 	clusterManager := cluster_manager.NewClusterManager(clusterResources, clusterConfigs, clusterMachines, clusterDefaults, versionmanager.NewVersionManager())
 
 	return clusterResources, clusterConfigs, clusterMachines, clusterManager
+}
+
+func TestGetClusterByUUID(t *testing.T) {
+	clusterID := uuids.ClusterID(clusterName)
+	expectedInfo := strategies.ClusterInfo{ID: clusterID, Name: clusterName, Phase: provisionedPhase}
+
+	t.Run("success", func(t *testing.T) {
+		resources, _, _, manager := newTestClusterManager(t)
+		resources.EXPECT().GetByUUID(t.Context(), clusterID).Return(expectedInfo, nil)
+
+		info, err := manager.GetClusterByUUID(t.Context(), clusterID)
+
+		require.NoError(t, err)
+		assert.Equal(t, expectedInfo, info)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		resources, _, _, manager := newTestClusterManager(t)
+		resources.EXPECT().GetByUUID(t.Context(), clusterID).Return(strategies.ClusterInfo{}, errTest)
+
+		info, err := manager.GetClusterByUUID(t.Context(), clusterID)
+
+		assert.Empty(t, info)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errTest)
+	})
+}
+
+func TestGetNodeByUUID(t *testing.T) {
+	nodeID := uuids.NodeID(clusterName, controlPlaneNodeName)
+	expectedNode := strategies.ClusterNodeInfo{ID: nodeID, Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus}
+
+	t.Run("success", func(t *testing.T) {
+		_, _, machines, manager := newTestClusterManager(t)
+		machines.EXPECT().GetMachineByUUID(t.Context(), nodeID).Return(expectedNode, nil)
+
+		node, err := manager.GetNodeByUUID(t.Context(), nodeID)
+
+		require.NoError(t, err)
+		assert.Equal(t, expectedNode, node)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		_, _, machines, manager := newTestClusterManager(t)
+		machines.EXPECT().GetMachineByUUID(t.Context(), nodeID).Return(strategies.ClusterNodeInfo{}, errTest)
+
+		node, err := manager.GetNodeByUUID(t.Context(), nodeID)
+
+		assert.Empty(t, node)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errTest)
+	})
 }
 
 func TestGetAllNodes(t *testing.T) {

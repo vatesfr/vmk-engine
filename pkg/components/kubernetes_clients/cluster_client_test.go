@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,8 +84,8 @@ func TestClusterClientList(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []strategies.ClusterInfo{
-			{Name: "provisioned", Phase: provisionedPhase, CreatedAt: time.Time{}.String()},
-			{Name: "provisioning", Phase: provisioningPhase, CreatedAt: time.Time{}.String()},
+			{ID: uuids.ClusterID("provisioned"), Name: "provisioned", Phase: provisionedPhase, CreatedAt: time.Time{}.String()},
+			{ID: uuids.ClusterID("provisioning"), Name: "provisioning", Phase: provisioningPhase, CreatedAt: time.Time{}.String()},
 		}, clusters)
 	})
 
@@ -127,7 +128,7 @@ func TestClusterAvailability(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
 				Status:     capiv1.ClusterStatus{Phase: provisionedPhase, Conditions: testCase.conditions},
 			}
-			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			clusterClient := NewClusterClient(newFakeClient(t, cluster), newFakeCache(t, cluster), testNamespace)
 			info, err := clusterClient.Get(t.Context(), clusterName)
 			require.NoError(t, err)
 			assert.Equal(t, testCase.available, info.IsAvailable)
@@ -158,7 +159,8 @@ func TestClusterInitialization(t *testing.T) {
 					InfrastructureProvisioned: testCase.infrastructureProvisioned,
 				}},
 			}
-			clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+			kube := newFakeClient(t, cluster)
+			clusterClient := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
 			info, err := clusterClient.Get(t.Context(), clusterName)
 			require.NoError(t, err)
 			assert.Equal(t, testCase.controlPlaneInitialized, info.IsControlPlaneInitialized)
@@ -185,7 +187,7 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			CreatedAt: time.Time{}.String(), Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
+			ID: uuids.ClusterID(clusterName), CreatedAt: time.Time{}.String(), Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
 		}, info)
 	})
 
@@ -216,7 +218,7 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
+			ID: uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{
 				AvailableReplicas: 1, DesiredReplicas: 3, ReadyReplicas: 2, Replicas: 4, UpToDateReplicas: 1,
 				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion, Replicas: 1}, {Version: otherK8sVersion, Replicas: 3}},
@@ -245,13 +247,13 @@ func TestClusterClientGet(t *testing.T) {
 				},
 			},
 		}
-		clusterClient := NewClusterClient(newFakeClient(t, cluster), testNamespace)
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), newFakeCache(t, cluster), testNamespace)
 
 		info, err := clusterClient.Get(t.Context(), clusterName)
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			Name: clusterName, Version: k8sVersion, CreatedAt: time.Time{}.String(),
+			ID: uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: time.Time{}.String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{
 				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion}},
 			},
@@ -276,7 +278,7 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			Name: clusterName, CreatedAt: time.Time{}.String(),
+			ID: uuids.ClusterID(clusterName), Name: clusterName, CreatedAt: time.Time{}.String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{DesiredReplicas: 3},
 			WorkersStatus:       strategies.NodeTypeStatus{Replicas: 2},
 		}, info)
@@ -312,6 +314,58 @@ func TestClusterClientGet(t *testing.T) {
 		assert.Empty(t, info)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
+	})
+}
+
+func newFakeClientWithUUIDIndex(t *testing.T, objects ...client.Object) client.Client {
+	t.Helper()
+	return fake.NewClientBuilder().
+		WithScheme(newTestScheme(t)).
+		WithObjects(objects...).
+		WithIndex(&capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer).
+		WithIndex(&capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer).
+		Build()
+}
+
+func TestClusterClientGetByUUID(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		cluster := &capiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+			Status:     capiv1.ClusterStatus{Phase: provisionedPhase},
+		}
+		fc := newFakeClientWithUUIDIndex(t, cluster)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
+
+		id := uuids.ClusterID(clusterName)
+		info, err := clusterClient.GetByUUID(t.Context(), id)
+
+		require.NoError(t, err)
+		assert.Equal(t, strategies.ClusterInfo{
+			ID: id, Name: clusterName, Phase: provisionedPhase, CreatedAt: time.Time{}.String(),
+		}, info)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		fc := newFakeClientWithUUIDIndex(t)
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
+
+		info, err := clusterClient.GetByUUID(t.Context(), uuids.ClusterID("missing"))
+
+		assert.Empty(t, info)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, strategies.ErrClusterNotFound)
+	})
+
+	t.Run("kubernetes error", func(t *testing.T) {
+		fc := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
+		clusterClient := NewClusterClient(fc, clientAsCache{fc}, testNamespace)
+
+		info, err := clusterClient.GetByUUID(t.Context(), uuids.ClusterID(clusterName))
+
+		assert.Empty(t, info)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errTest)
+		assert.ErrorIs(t, err, strategies.ErrClusterRetrievalFailed)
 	})
 }
 
@@ -1033,7 +1087,7 @@ func TestClusterScalingGuards(t *testing.T) {
 			if tc.mutate != nil {
 				objects = append(objects, tc.mutate(cluster, md, cp)...)
 			}
-			service := NewClusterClient(newFakeClient(t, objects...), testNamespace)
+			service := NewClusterClient(newFakeClient(t, objects...), newFakeCache(t, objects...), testNamespace)
 			replicas := tc.replicas
 			if replicas == 0 && tc.name != "invalid replicas" {
 				replicas = 3
@@ -1056,7 +1110,7 @@ func TestClusterScalingGuards(t *testing.T) {
 func TestScalingExternalEtcd(t *testing.T) {
 	cluster, md, cp := scalingObjects()
 	require.NoError(t, unstructured.SetNestedMap(cp.Object, map[string]any{"endpoints": []any{"https://etcd:2379"}}, "spec", "kubeadmConfigSpec", "clusterConfiguration", "etcd", "external"))
-	service := NewClusterClient(newFakeClient(t, cluster, md, cp), testNamespace)
+	service := NewClusterClient(newFakeClient(t, cluster, md, cp), newFakeCache(t, cluster, md, cp), testNamespace)
 	require.NoError(t, service.SetControlPlaneReplicas(t.Context(), "demo", 2))
 }
 
@@ -1160,7 +1214,7 @@ func TestScalingPatchAndErrors(t *testing.T) {
 }
 
 func TestScalingMissingClusterAndNamespace(t *testing.T) {
-	service := NewClusterClient(newFakeClient(t), testNamespace)
+	service := NewClusterClient(newFakeClient(t), newFakeCache(t), testNamespace)
 	require.ErrorIs(t, service.SetWorkerReplicas(t.Context(), "missing", 3), strategies.ErrClusterNotFound)
 	require.ErrorIs(t, service.SetControlPlaneReplicas(t.Context(), "", 3), strategies.ErrClusterNameRequired)
 	service.namespace = ""
@@ -1262,7 +1316,7 @@ func TestSetDescriptionPersistence(t *testing.T) {
 				Labels: map[string]string{"description-test-metadata": preservedAnnotationValue},
 			}, Spec: capiv1.ClusterSpec{Paused: ptr.To(true)}}
 			kube := newFakeClient(t, original)
-			resource := NewClusterClient(kube, testNamespace)
+			resource := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
 			for _, description := range []string{"Équipe \"Backend\" 🚀\nTest", "updated", "updated", "", ""} {
 				require.NoError(t, resource.SetDescription(t.Context(), clusterName, description))
 				stored := &capiv1.Cluster{}
@@ -1274,7 +1328,7 @@ func TestSetDescriptionPersistence(t *testing.T) {
 				if description == "" {
 					require.NotContains(t, stored.Annotations, clusterDescriptionAnnotation)
 				}
-				fresh := NewClusterClient(kube, testNamespace)
+				fresh := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
 				info, err := fresh.Get(t.Context(), clusterName)
 				require.NoError(t, err)
 				require.Equal(t, description, info.Description)
@@ -1288,7 +1342,8 @@ func TestSetDescriptionPersistence(t *testing.T) {
 }
 
 func TestSetDescriptionErrors(t *testing.T) {
-	resource := NewClusterClient(newFakeClient(t), testNamespace)
+	kube := newFakeClient(t)
+	resource := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
 	require.ErrorIs(t, resource.SetDescription(t.Context(), clusterName, "new"), strategies.ErrClusterNotFound)
 	for _, tc := range []struct{ patchErr, wantErr error }{
 		{apierrors.NewConflict(schema.GroupResource{Resource: "clusters"}, clusterName, errTest), strategies.ErrClusterDescriptionUpdateConflict},
@@ -1303,7 +1358,7 @@ func TestSetDescriptionErrors(t *testing.T) {
 						return tc.patchErr
 					},
 				}).Build()
-			require.ErrorIs(t, NewClusterClient(kube, testNamespace).SetDescription(t.Context(), clusterName, "new"), tc.wantErr)
+			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetDescription(t.Context(), clusterName, "new"), tc.wantErr)
 		})
 	}
 }

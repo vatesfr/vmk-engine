@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"capv-proxy/pkg/strategies"
+	"capv-proxy/pkg/uuids"
 
 	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
@@ -77,8 +78,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
-				{Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
 		},
 		"empty cluster returns no machine": {
@@ -107,7 +108,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
@@ -117,7 +118,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace:   testNamespace,
 			clusterName: clusterName,
 			want: []strategies.ClusterNodeInfo{
-				{Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterName},
 			},
 		},
 	}
@@ -283,9 +284,12 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			},
 			namespace: testNamespace,
 			want: []strategies.ClusterNodeInfo{
-				{Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(externalIP), ParentCluster: otherClusterName},
-				{Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
-				{Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
+				{
+					ID: uuids.NodeID("stale-cluster-label", "z-node"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
+					Endpoint: nodeEndpoint(externalIP), ParentCluster: otherClusterName,
+				},
+				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
+				{ID: uuids.NodeID(clusterName, "a-node"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
 			},
 		},
 		"empty namespace returns an empty slice": {
@@ -495,4 +499,69 @@ func TestPauseRejectsConcurrentMachineReassignment(t *testing.T) {
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	require.Equal(t, otherClusterName, machine.Spec.ClusterName)
 	require.NotContains(t, machine.Annotations, capiv1.PausedAnnotation)
+}
+
+func TestMachineClientGetMachineByUUID(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue,
+			capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP})
+		fc := newFakeClientWithUUIDIndex(t, machine)
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		id := uuids.NodeID(clusterName, "machine-name")
+		node, err := machineClient.GetMachineByUUID(t.Context(), id)
+
+		require.NoError(t, err)
+		assert.Equal(t, strategies.ClusterNodeInfo{
+			ID: id, ParentCluster: clusterName, Name: "machine-name", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP),
+		}, node)
+	})
+
+	t.Run("node ref name takes precedence", func(t *testing.T) {
+		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
+		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
+		fc := newFakeClientWithUUIDIndex(t, machine)
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		id := uuids.NodeID(clusterName, "node-name")
+		node, err := machineClient.GetMachineByUUID(t.Context(), id)
+
+		require.NoError(t, err)
+		assert.Equal(t, "machine-name", node.Name)
+		assert.Equal(t, "node-name", node.NodeName)
+		assert.Equal(t, id, node.ID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		fc := newFakeClientWithUUIDIndex(t)
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "missing"))
+
+		assert.Empty(t, node)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, strategies.ErrNodeNotFound)
+	})
+
+	t.Run("namespace required", func(t *testing.T) {
+		machineClient := NewMachineClient(nil, nil, "")
+
+		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "any"))
+
+		assert.Empty(t, node)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, strategies.ErrClusterNamespaceRequired)
+	})
+
+	t.Run("kubernetes error", func(t *testing.T) {
+		fc := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
+		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
+
+		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "any"))
+
+		assert.Empty(t, node)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errTest)
+		assert.Contains(t, err.Error(), "list Machines by UUID")
+	})
 }

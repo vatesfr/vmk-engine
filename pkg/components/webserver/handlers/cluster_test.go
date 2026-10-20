@@ -14,6 +14,7 @@ import (
 	"capv-proxy/pkg/components/webserver/handlers"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
+	"capv-proxy/pkg/uuids"
 
 	"k8s.io/utils/ptr"
 )
@@ -110,8 +111,9 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetCluster(t *testing.T) {
+	clusterUUID := uuids.ClusterID(clusterName)
 	expectedServiceResult := strategies.ClusterInfo{
-		Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
+		ID: clusterUUID, Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
 	}
 	testCases := map[string]struct {
 		serviceResult strategies.ClusterInfo
@@ -123,6 +125,7 @@ func TestGetCluster(t *testing.T) {
 			expected: handlers.ClusterInfo{
 				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
+				ID:                   clusterUUID,
 				Name:                 clusterName,
 				Phase:                clusterPhase,
 				ControlPlaneEndpoint: controlPlaneIP,
@@ -136,9 +139,9 @@ func TestGetCluster(t *testing.T) {
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			service, handler := newClusterHandler(t)
-			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(testCase.serviceResult, testCase.serviceError)
+			service.EXPECT().GetClusterByUUID(gomock.Any(), clusterUUID).Return(testCase.serviceResult, testCase.serviceError)
 
-			result, err := handler.GetCluster(newContextWithClusterID())
+			result, err := handler.GetCluster(newContextWithClusterUUID())
 
 			assert.Equal(t, testCase.expected, result)
 			assertHandlerError(t, err, testCase.serviceError)
@@ -173,7 +176,7 @@ func TestClusterInitializationResponse(t *testing.T) {
 				IsControlPlaneInitialized:   testCase.isControlPlaneInitialized,
 				IsInfrastructureProvisioned: testCase.isInfrastructureProvisioned,
 			}
-			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(info, nil)
+			service.EXPECT().GetCluster(gomock.Any(), clusterID).Return(info, nil)
 			result, err := handler.GetCluster(newContextWithClusterID())
 			require.NoError(t, err)
 			assert.Equal(t, testCase.isControlPlaneInitialized, result.IsControlPlaneInitialized)
@@ -342,8 +345,8 @@ func TestCreateClusterApplicationErrors(t *testing.T) {
 func TestClusterNotFoundApplicationErrors(t *testing.T) {
 	testCases := map[string]func(*mocks.MockForManagingClusters, handlers.ClusterHandler) error{
 		"get cluster": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
-			service.EXPECT().GetCluster(gomock.Any(), clusterName).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
-			_, err := handler.GetCluster(newContextWithClusterID())
+			service.EXPECT().GetClusterByUUID(gomock.Any(), uuids.ClusterID(clusterName)).Return(strategies.ClusterInfo{}, strategies.ErrClusterNotFound)
+			_, err := handler.GetCluster(newContextWithClusterUUID())
 			return err
 		},
 		"get config": func(service *mocks.MockForManagingClusters, handler handlers.ClusterHandler) error {
@@ -404,6 +407,18 @@ func newContextWithClusterID() *fuego.MockContext[any, any] {
 	return ctx
 }
 
+func newContextWithClusterUUID() *fuego.MockContext[any, any] {
+	ctx := fuego.NewMockContextNoBody()
+	ctx.PathParams["id"] = uuids.ClusterID(clusterName).String()
+	return ctx
+}
+
+func newContextWithNodeUUID() *fuego.MockContext[any, any] {
+	ctx := fuego.NewMockContextNoBody()
+	ctx.PathParams["id"] = uuids.NodeID(clusterName, nodeName).String()
+	return ctx
+}
+
 func assertHandlerError(t *testing.T, actual, serviceError error) {
 	t.Helper()
 	if serviceError == nil {
@@ -420,6 +435,44 @@ func errorStatusCode(t *testing.T, err error) int {
 	var statusError fuego.ErrorWithStatus
 	require.ErrorAs(t, err, &statusError)
 	return statusError.StatusCode()
+}
+
+func TestGetNode(t *testing.T) {
+	nodeUUID := uuids.NodeID(clusterName, nodeName)
+	testCases := map[string]struct {
+		serviceResult strategies.ClusterNodeInfo
+		serviceError  error
+		expected      handlers.ClusterNodeInfo
+	}{
+		testCaseSuccess: {
+			serviceResult: strategies.ClusterNodeInfo{
+				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+			},
+			expected: handlers.ClusterNodeInfo{
+				Paused: ptr.To(false),
+				ID:     nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+			},
+		},
+		testCaseServiceError: {serviceError: errTest},
+		"node not found":     {serviceError: strategies.ErrNodeNotFound},
+	}
+
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			service, handler := newClusterHandler(t)
+			service.EXPECT().GetNodeByUUID(gomock.Any(), nodeUUID).Return(testCase.serviceResult, testCase.serviceError)
+
+			result, err := handler.GetNode(newContextWithNodeUUID())
+
+			assert.Equal(t, testCase.expected, result)
+			if testCase.serviceError == nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, testCase.serviceError)
+			}
+		})
+	}
 }
 
 func TestGetAllNodes(t *testing.T) {

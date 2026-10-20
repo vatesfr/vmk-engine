@@ -17,6 +17,9 @@ var RootNamespace = uuid.NewV5(uuid.NamespaceDNS, "capv-proxy.vates.tech")
 
 // ClusterID returns the stable UUID v5 for a cluster identified by name.
 func ClusterID(clusterName string) uuid.UUID {
+	if clusterName == "" {
+		return uuid.Nil
+	}
 	return uuid.NewV5(RootNamespace, clusterName)
 }
 
@@ -24,5 +27,8 @@ func ClusterID(clusterName string) uuid.UUID {
 // nodeName must be the Kubernetes node name (NodeRef.Name) when the machine
 // is bound to a node, otherwise the CAPI Machine name.
 func NodeID(clusterName, nodeName string) uuid.UUID {
+	if clusterName == "" || nodeName == "" {
+		return uuid.Nil
+	}
 	return uuid.NewV5(ClusterID(clusterName), nodeName)
 }

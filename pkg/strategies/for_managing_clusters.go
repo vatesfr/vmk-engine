@@ -39,5 +39,5 @@ type ClusterNodeInfo struct {
 	Status        string
 	Endpoint      string
 	MachineID     *uuid.UUID
-	ParentCluster string
+	ParentCluster uuid.UUID
 }

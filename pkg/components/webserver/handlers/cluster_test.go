@@ -31,12 +31,18 @@ const (
 	workerReplicas       int32 = 1
 	nodeName                   = "control-plane-0"
 	nodeRole                   = "control-plane"
+	workerName                 = "worker-0"
 	nodeStatus                 = "Ready"
 	nodeEndpoint               = "10.0.0.11"
 	clusterConfig              = "apiVersion: v1\nkind: Config"
 )
 
-var errTest = errors.New("test error")
+var (
+	errTest     = errors.New("test error")
+	nodeUUID    = uuids.NodeID(clusterName, nodeName)
+	clusterUUID = uuids.ClusterID(clusterName)
+	workerUUID  = uuids.NodeID(clusterName, workerName)
+)
 
 func TestNewFromNodeStatus(t *testing.T) {
 	testCases := map[string]struct {
@@ -81,11 +87,12 @@ func TestGetClusters(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: []strategies.ClusterInfo{{
-				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,
+				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP, ID: clusterUUID,
 			}},
 			expected: []handlers.ClusterInfo{{
 				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
+				ID:                   &clusterUUID,
 				Name:                 clusterName,
 				Phase:                clusterPhase,
 				ControlPlaneEndpoint: controlPlaneIP,
@@ -125,7 +132,7 @@ func TestGetCluster(t *testing.T) {
 			expected: handlers.ClusterInfo{
 				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
-				ID:                   clusterUUID,
+				ID:                   &clusterUUID,
 				Name:                 clusterName,
 				Phase:                clusterPhase,
 				ControlPlaneEndpoint: controlPlaneIP,
@@ -213,11 +220,11 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: []strategies.ClusterNodeInfo{{
-				Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID,
 			}},
 			expected: []handlers.ClusterNodeInfo{{
 				Paused: ptr.To(false),
-				Name:   nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+				ID:     &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID,
 			}},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -279,8 +286,9 @@ func TestCreateCluster(t *testing.T) {
 		expected      handlers.ClusterInfo
 	}{
 		testCaseSuccess: {
-			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description},
+			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description, ID: clusterUUID},
 			expected: handlers.ClusterInfo{
+				ID:                 &clusterUUID,
 				Paused:             ptr.To(false),
 				IsAvailable:        ptr.To(false),
 				Name:               clusterName,
@@ -446,11 +454,11 @@ func TestGetNode(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterNodeInfo{
-				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID,
 			},
 			expected: handlers.ClusterNodeInfo{
 				Paused: ptr.To(false),
-				ID:     nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint,
+				ID:     &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID,
 			},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -483,12 +491,12 @@ func TestGetAllNodes(t *testing.T) {
 	}{
 		"maps all node fields and preserves order": {
 			serviceResult: []strategies.ClusterNodeInfo{
-				{Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
-				{Name: "worker-0", Role: "worker", Status: "NotReady"},
+				{ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID},
+				{ID: workerUUID, Name: workerName, Role: "worker", Status: "NotReady", ParentCluster: clusterUUID},
 			},
 			expected: []handlers.ClusterNodeInfo{
-				{Paused: ptr.To(false), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint},
-				{Paused: ptr.To(false), Name: "worker-0", Role: "worker", Status: "NotReady"},
+				{Paused: ptr.To(false), ID: &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID},
+				{Paused: ptr.To(false), ID: &workerUUID, Name: workerName, Role: "worker", Status: "NotReady", ParentCluster: &clusterUUID},
 			},
 		},
 		"empty result":                      {serviceResult: []strategies.ClusterNodeInfo{}, expected: []handlers.ClusterNodeInfo{}},

@@ -68,7 +68,10 @@ const (
 	preservedAnnotationValue = "preserved"
 )
 
-var errTest = errors.New("test error")
+var (
+	errTest     = errors.New("test error")
+	clusterUUID = uuids.ClusterID(clusterName)
+)
 
 func TestClusterClientList(t *testing.T) {
 	t.Run("success", func(t *testing.T) {

@@ -76,16 +76,16 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: controlPlaneIP}),
 			},
 			namespace: testNamespace,
-			clusterID: uuids.ClusterID(clusterName),
+			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
-				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterUUID},
 			},
 		},
 		"empty cluster returns no machine": {
 			objects:   nil,
 			namespace: testNamespace,
-			clusterID: uuids.ClusterID(clusterName),
+			clusterID: clusterUUID,
 			want:      []strategies.ClusterNodeInfo{},
 		},
 		caseEmptyName: {
@@ -97,7 +97,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		caseEmptyNamespace: {
 			objects:         nil,
 			namespace:       "",
-			clusterID:       uuids.ClusterID(clusterName),
+			clusterID:       clusterUUID,
 			wantErrContains: errClusterNamespace,
 		},
 		"not ready condition maps to NotReady": {
@@ -106,9 +106,9 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 					capiv1.MachineAddress{Type: capiv1.MachineInternalIP, Address: workerIP}),
 			},
 			namespace: testNamespace,
-			clusterID: uuids.ClusterID(clusterName),
+			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterUUID},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
@@ -116,9 +116,9 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 				machineWithStatus(workerRole, testNamespace, clusterName, false, metav1.ConditionUnknown),
 			},
 			namespace: testNamespace,
-			clusterID: uuids.ClusterID(clusterName),
+			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterUUID},
 			},
 		},
 	}
@@ -151,12 +151,12 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		kubeClient := newErrorClient(t, interceptor.Funcs{List: listErrorFunc(t, errTest)})
 		machineClient := NewMachineClient(kubeClient, clientAsCache{kubeClient}, testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 
 		assert.Nil(t, nodes)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errTest)
-		assert.Contains(t, err.Error(), "list Machines for cluster "+testNamespace+"/"+uuids.ClusterID(clusterName).String())
+		assert.Contains(t, err.Error(), "list Machines for cluster "+testNamespace+"/"+clusterUUID.String())
 	})
 
 	t.Run("node name and phase", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Status.Phase = "Provisioning"
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -180,7 +180,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Spec.ProviderID = xok8scommon.GetProviderID(uuid.Nil, &xosdk.VM{ID: vmID})
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -193,7 +193,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 		machine.Spec.ProviderID = "aws:///us-east-1a/i-1234567890abcdef0"
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-		nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
+		nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
@@ -247,7 +247,7 @@ func TestMachineClientEndpointPriority(t *testing.T) {
 			machine := machineWithStatus(workerRole, testNamespace, clusterName, false, "", tc.addresses...)
 			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
-			nodes, err := machineClient.GetMachinesByCluster(t.Context(), uuids.ClusterID(clusterName))
+			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
 			assert.Equal(t, tc.want, nodes[0].Endpoint)
@@ -285,11 +285,11 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			namespace: testNamespace,
 			want: []strategies.ClusterNodeInfo{
 				{
-					ID: uuids.NodeID("stale-cluster-label", "z-node"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
-					Endpoint: nodeEndpoint(externalIP), ParentCluster: otherClusterName,
+					ID: uuids.NodeID(otherClusterName, "z-node"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
+					Endpoint: nodeEndpoint(externalIP), ParentCluster: uuids.ClusterID(otherClusterName),
 				},
 				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
-				{ID: uuids.NodeID(clusterName, "a-node"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterName},
+				{ID: uuids.NodeID(clusterName, "a-node"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID},
 			},
 		},
 		"empty namespace returns an empty slice": {
@@ -513,7 +513,7 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterNodeInfo{
-			ID: id, ParentCluster: clusterName, Name: "machine-name", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP),
+			ID: id, ParentCluster: clusterUUID, Name: "machine-name", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP),
 		}, node)
 	})
 

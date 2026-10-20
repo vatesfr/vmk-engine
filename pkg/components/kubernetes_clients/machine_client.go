@@ -107,7 +107,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 	if machine.Status.NodeRef.IsDefined() {
 		nodeName = machine.Status.NodeRef.Name
 	}
-	clusterName := machine.Labels[capiv1.ClusterNameLabel]
+	clusterName := machine.Spec.ClusterName
 	name := machine.Name
 	if nodeName != "" {
 		name = nodeName
@@ -152,7 +152,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		Status:        status,
 		Endpoint:      machineEndpoint(machine.Status.Addresses),
 		MachineID:     machineID,
-		ParentCluster: machine.Spec.ClusterName,
+		ParentCluster: uuids.ClusterID(clusterName),
 	}
 }
 

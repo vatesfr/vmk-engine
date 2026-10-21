@@ -117,6 +117,35 @@ func TestGetClusters(t *testing.T) {
 	}
 }
 
+func TestClusterNetworkingResponse(t *testing.T) {
+	info := strategies.ClusterInfo{
+		ID: clusterUUID, Name: clusterName, APIServerPort: 7443,
+		PodCIDRBlocks:     []string{"10.244.0.0/16", "fd00:1::/64"},
+		ServiceCIDRBlocks: []string{"10.96.0.0/12", "fd00:2::/108"},
+		ServiceDomain:     "cluster.local", ControlPlaneEndpoint: "https://10.0.0.10:6443",
+	}
+	service, handler := newClusterHandler(t)
+	service.EXPECT().GetClusters(gomock.Any()).Return([]strategies.ClusterInfo{info}, nil).Times(2)
+	service.EXPECT().GetClusterByUUID(gomock.Any(), clusterUUID).Return(info, nil)
+	listed, err := handler.GetClusters(fuego.NewMockContextNoBody())
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	detail, err := handler.GetCluster(newContextWithClusterUUID())
+	require.NoError(t, err)
+	require.Equal(t, listed[0], detail)
+	selected, err := handler.GetClusters(fuego.NewMockContextNoBody().SetQueryParam("fields",
+		"api_server_port,pod_cidr_blocks,service_cidr_blocks,service_domain,control_plane_endpoint"))
+	require.NoError(t, err)
+	encoded, err := json.Marshal(selected)
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"api_server_port":7443,"pod_cidr_blocks":["10.244.0.0/16","fd00:1::/64"],
+		"service_cidr_blocks":["10.96.0.0/12","fd00:2::/108"],"service_domain":"cluster.local",
+		"control_plane_endpoint":"https://10.0.0.10:6443"}]`, string(encoded))
+	encoded, err = json.Marshal(handlers.ClusterInfo{APIServerPort: 6443})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"api_server_port":6443}`, string(encoded))
+}
+
 func TestGetCluster(t *testing.T) {
 	expectedServiceResult := strategies.ClusterInfo{
 		ID: clusterUUID, Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP,

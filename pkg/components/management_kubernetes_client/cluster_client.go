@@ -266,8 +266,15 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 		CreatedByXOUserID:           value.Annotations[clusterCreatedByXOUserIDAnnotation],
 		Phase:                       value.Status.Phase,
 		ControlPlaneEndpoint:        controlPlaneEndpoint,
+		APIServerPort:               value.Spec.ClusterNetwork.APIServerPort,
+		PodCIDRBlocks:               value.Spec.ClusterNetwork.Pods.CIDRBlocks,
+		ServiceCIDRBlocks:           value.Spec.ClusterNetwork.Services.CIDRBlocks,
+		ServiceDomain:               value.Spec.ClusterNetwork.ServiceDomain,
 		Version:                     value.Spec.Topology.Version,
 		Tags:                        optionalClusterTags(value.Labels),
+	}
+	if info.APIServerPort == 0 {
+		info.APIServerPort = 6443
 	}
 	if info.Version == "" && value.Status.ControlPlane != nil && len(value.Status.ControlPlane.Versions) == 1 {
 		info.Version = value.Status.ControlPlane.Versions[0].Version

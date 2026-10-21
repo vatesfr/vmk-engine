@@ -38,6 +38,15 @@ These milestones remain `true` once completed and do not indicate current
 availability. They can be selected with
 `GET /kubernetes/clusters?fields=name,is_control_plane_initialized,is_infrastructure_provisioned`.
 
+Cluster list and detail responses expose networking fields from CAPI
+`spec.clusterNetwork`: `api_server_port` (defaults to `6443` when unspecified),
+`pod_cidr_blocks` and `service_cidr_blocks` (arrays, including dual-stack ranges),
+and `service_domain`. Unspecified CIDR blocks and service domains are omitted.
+The API server bind port can differ from the public endpoint port. The existing
+`control_plane_endpoint` contains the full HTTPS URL when available.
+These fields support collection selection, for example
+`GET /kubernetes/clusters?fields=name,api_server_port,pod_cidr_blocks,service_cidr_blocks,service_domain,control_plane_endpoint`.
+
 ## HTTP errors
 
 Request validation now returns **422 Unprocessable Entity** instead of 400.

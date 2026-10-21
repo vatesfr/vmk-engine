@@ -89,8 +89,8 @@ func TestClusterClientList(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []strategies.ClusterInfo{
-			{ID: uuids.ClusterID("provisioned"), Name: "provisioned", Phase: provisionedPhase, CreatedAt: time.Time{}.String()},
-			{ID: uuids.ClusterID("provisioning"), Name: "provisioning", Phase: provisioningPhase, CreatedAt: time.Time{}.String()},
+			{APIServerPort: 6443, ID: uuids.ClusterID("provisioned"), Name: "provisioned", Phase: provisionedPhase, CreatedAt: time.Time{}.String()},
+			{APIServerPort: 6443, ID: uuids.ClusterID("provisioning"), Name: "provisioning", Phase: provisioningPhase, CreatedAt: time.Time{}.String()},
 		}, clusters)
 	})
 
@@ -178,6 +178,43 @@ func TestClusterInitialization(t *testing.T) {
 	}
 }
 
+func TestClusterNetworking(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unspecified", true: "dual stack with custom bind port"}[configured], func(t *testing.T) {
+			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
+			if configured {
+				cluster.Spec.ClusterNetwork = capiv1.ClusterNetwork{
+					APIServerPort: 7443,
+					Pods:          capiv1.NetworkRanges{CIDRBlocks: []string{testPodCIDR, "fd00:1::/64"}},
+					Services:      capiv1.NetworkRanges{CIDRBlocks: []string{testServiceCIDR, "fd00:2::/108"}},
+					ServiceDomain: testDomain,
+				}
+				cluster.Spec.ControlPlaneEndpoint = capiv1.APIEndpoint{Host: controlPlaneIP, Port: 6443}
+			}
+			kube := newFakeClient(t, cluster)
+			resource := NewClusterClient(kube, clientAsCache{kube}, testNamespace)
+			listed, err := resource.List(t.Context())
+			require.NoError(t, err)
+			require.Len(t, listed, 1)
+			detail, err := resource.GetByUUID(t.Context(), clusterUUID)
+			require.NoError(t, err)
+			require.Equal(t, listed[0], detail)
+			if configured {
+				require.Equal(t, int32(7443), detail.APIServerPort)
+				require.Equal(t, []string{testPodCIDR, "fd00:1::/64"}, detail.PodCIDRBlocks)
+				require.Equal(t, []string{testServiceCIDR, "fd00:2::/108"}, detail.ServiceCIDRBlocks)
+				require.Equal(t, testDomain, detail.ServiceDomain)
+				require.Equal(t, "https://"+controlPlaneIP+":6443", detail.ControlPlaneEndpoint)
+			} else {
+				require.Equal(t, int32(6443), detail.APIServerPort)
+				require.Empty(t, detail.PodCIDRBlocks)
+				require.Empty(t, detail.ServiceCIDRBlocks)
+				require.Empty(t, detail.ServiceDomain)
+			}
+		})
+	}
+}
+
 func TestClusterClientGet(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		cluster := &capiv1.Cluster{
@@ -192,7 +229,8 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			ID: uuids.ClusterID(clusterName), CreatedAt: time.Time{}.String(), Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
+			APIServerPort: 6443,
+			ID:            uuids.ClusterID(clusterName), CreatedAt: time.Time{}.String(), Name: clusterName, Phase: provisionedPhase, ControlPlaneEndpoint: "https://" + controlPlaneIP + ":6443",
 		}, info)
 	})
 
@@ -223,7 +261,8 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			ID: uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
+			APIServerPort: 6443,
+			ID:            uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: createdAt.Local().String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{
 				AvailableReplicas: 1, DesiredReplicas: 3, ReadyReplicas: 2, Replicas: 4, UpToDateReplicas: 1,
 				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion, Replicas: 1}, {Version: otherK8sVersion, Replicas: 3}},
@@ -258,7 +297,8 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			ID: uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: time.Time{}.String(),
+			APIServerPort: 6443,
+			ID:            uuids.ClusterID(clusterName), Name: clusterName, Version: k8sVersion, CreatedAt: time.Time{}.String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{
 				Versions: []strategies.VersionNodeStatus{{Version: k8sVersion}},
 			},
@@ -283,7 +323,8 @@ func TestClusterClientGet(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			ID: uuids.ClusterID(clusterName), Name: clusterName, CreatedAt: time.Time{}.String(),
+			APIServerPort: 6443,
+			ID:            uuids.ClusterID(clusterName), Name: clusterName, CreatedAt: time.Time{}.String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{DesiredReplicas: 3},
 			WorkersStatus:       strategies.NodeTypeStatus{Replicas: 2},
 		}, info)
@@ -347,7 +388,8 @@ func TestClusterClientGetByUUID(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterInfo{
-			ID: id, Name: clusterName, Phase: provisionedPhase, CreatedAt: time.Time{}.String(),
+			APIServerPort: 6443,
+			ID:            id, Name: clusterName, Phase: provisionedPhase, CreatedAt: time.Time{}.String(),
 		}, info)
 	})
 

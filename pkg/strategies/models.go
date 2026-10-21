@@ -71,6 +71,10 @@ type ClusterInfo struct {
 	CreatedAt                   string
 	Version                     string
 	ControlPlaneEndpoint        string
+	APIServerPort               int32
+	PodCIDRBlocks               []string
+	ServiceCIDRBlocks           []string
+	ServiceDomain               string
 	ControlPlanesStatus         NodeTypeStatus
 	WorkersStatus               NodeTypeStatus
 	Tags                        map[string]string

@@ -67,6 +67,10 @@ type ClusterInfo struct {
 	Phase                       string            `json:"phase,omitempty"`
 	CreatedAt                   string            `json:"created_at,omitempty"`
 	ControlPlaneEndpoint        string            `json:"control_plane_endpoint,omitempty"`
+	APIServerPort               int32             `json:"api_server_port,omitempty" description:"API server bind port from CAPI clusterNetwork; defaults to 6443"`
+	PodCIDRBlocks               []string          `json:"pod_cidr_blocks,omitempty" description:"Pod network CIDR blocks from CAPI clusterNetwork"`
+	ServiceCIDRBlocks           []string          `json:"service_cidr_blocks,omitempty" description:"Service network CIDR blocks from CAPI clusterNetwork"`
+	ServiceDomain               string            `json:"service_domain,omitempty" description:"Service DNS domain from CAPI clusterNetwork"`
 	ControlPlaneStatus          *NodeStatus       `json:"control_plane_status,omitempty"`
 	WorkerStatus                *NodeStatus       `json:"worker_status,omitempty"`
 	Tags                        map[string]string `json:"tags,omitempty"`
@@ -230,6 +234,10 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		Phase:                       value.Phase,
 		CreatedAt:                   value.CreatedAt,
 		ControlPlaneEndpoint:        value.ControlPlaneEndpoint,
+		APIServerPort:               value.APIServerPort,
+		PodCIDRBlocks:               value.PodCIDRBlocks,
+		ServiceCIDRBlocks:           value.ServiceCIDRBlocks,
+		ServiceDomain:               value.ServiceDomain,
 		ControlPlaneStatus:          NewFromNodeStatus(value.ControlPlanesStatus),
 		WorkerStatus:                NewFromNodeStatus(value.WorkersStatus),
 		Tags:                        value.Tags,

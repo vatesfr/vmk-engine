@@ -553,6 +553,12 @@ Kubernetes Node name; it is omitted until the Node reference is available.
 `node_name` is also descriptive: it is not used for deletion and does not
 contribute to the node `id`.
 
+Node responses expose `ips` instead of `endpoint`: an array of internal and external
+IPv4/IPv6 addresses from the CAPI Machine's `status.addresses`, without a scheme
+or port (for example, `"ips": ["10.0.0.11", "2001:db8::1"]`). Hostnames, empty or
+invalid IPs, and duplicate addresses are excluded. The field is omitted when no
+IP is available. Both node collections support `?fields=name,ips`.
+
 Node responses also include `version` from the CAPI Machine's `spec.version`,
 preserving its format (for example, `v1.36.0`). The field is omitted when empty.
 To select it for a cluster's nodes, use

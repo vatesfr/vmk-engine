@@ -81,8 +81,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace: testNamespace,
 			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID},
-				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID},
 			},
 		},
 		"empty cluster returns no machine": {
@@ -111,7 +111,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace: testNamespace,
 			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, Endpoint: nodeEndpoint(workerIP), ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
@@ -223,56 +223,51 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	})
 }
 
-type testMachineEndpointParams struct {
-	addresses []capiv1.MachineAddress
-	want      string
-}
-
-func TestMachineClientEndpointPriority(t *testing.T) {
-	testCases := map[string]testMachineEndpointParams{
-		"internal ip wins": {
+func TestMachineClientIPs(t *testing.T) {
+	testCases := map[string]struct {
+		addresses []capiv1.MachineAddress
+		want      []string
+	}{
+		"all internal and external IPs": {
 			addresses: []capiv1.MachineAddress{
 				{Type: capiv1.MachineExternalIP, Address: externalIP},
 				{Type: capiv1.MachineInternalIP, Address: workerIP},
+				{Type: capiv1.MachineInternalIP, Address: "2001:db8::1"},
+				{Type: capiv1.MachineExternalIP, Address: "2001:db8::2"},
 			},
-			want: nodeEndpoint(workerIP),
+			want: []string{externalIP, workerIP, "2001:db8::1", "2001:db8::2"},
 		},
-		"external ip when no internal": {
-			addresses: []capiv1.MachineAddress{{Type: capiv1.MachineExternalIP, Address: externalIP}},
-			want:      nodeEndpoint(externalIP),
-		},
-		"hostname when no ip": {
+		"hostname excluded": {
 			addresses: []capiv1.MachineAddress{{Type: capiv1.MachineHostName, Address: hostname}},
-			want:      nodeEndpoint(hostname),
 		},
-		"no address returns empty endpoint": {
-			addresses: nil,
-			want:      "",
-		},
-		"empty preferred address is ignored": {
+		"no addresses": {},
+		"empty and invalid IPs excluded": {
 			addresses: []capiv1.MachineAddress{
 				{Type: capiv1.MachineInternalIP, Address: ""},
+				{Type: capiv1.MachineInternalIP, Address: hostname},
 				{Type: capiv1.MachineExternalIP, Address: externalIP},
 			},
-			want: nodeEndpoint(externalIP),
+			want: []string{externalIP},
 		},
-		"ipv6 address is bracketed": {
-			addresses: []capiv1.MachineAddress{{Type: capiv1.MachineInternalIP, Address: "2001:db8::1"}},
-			want:      "https://[2001:db8::1]:10250",
+		"duplicate IPs included once": {
+			addresses: []capiv1.MachineAddress{
+				{Type: capiv1.MachineInternalIP, Address: workerIP},
+				{Type: capiv1.MachineExternalIP, Address: workerIP},
+			},
+			want: []string{workerIP},
 		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-
 			machine := machineWithStatus(workerRole, testNamespace, clusterName, false, "", tc.addresses...)
 			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 			nodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
-			assert.Equal(t, tc.want, nodes[0].Endpoint)
+			assert.Equal(t, tc.want, nodes[0].IPs)
 		})
 	}
 }
@@ -308,12 +303,12 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			want: []strategies.ClusterNodeInfo{
 				{
 					ID: uuids.NodeID(otherClusterName, "a-machine"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
-					Endpoint: nodeEndpoint(externalIP), ParentCluster: uuids.ClusterID(otherClusterName),
+					IPs: []string{externalIP}, ParentCluster: uuids.ClusterID(otherClusterName),
 				},
 				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
 				{
 					ID: uuids.NodeID(clusterName, "z-machine"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus,
-					Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID,
+					IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID,
 				},
 			},
 		},
@@ -366,8 +361,6 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 		})
 	}
 }
-
-func nodeEndpoint(ip string) string { return "https://" + ip + ":10250" }
 
 func TestMachineClientDeleteMachine(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -546,7 +539,7 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterNodeInfo{
-			ID: id, ParentCluster: clusterUUID, Name: "machine-name", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP),
+			ID: id, ParentCluster: clusterUUID, Name: "machine-name", Role: workerRole, Status: readyStatus, IPs: []string{workerIP},
 		}, node)
 	})
 

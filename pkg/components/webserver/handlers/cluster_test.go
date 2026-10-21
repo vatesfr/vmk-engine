@@ -33,7 +33,7 @@ const (
 	nodeRole                   = "control-plane"
 	workerName                 = "worker-0"
 	nodeStatus                 = "Ready"
-	nodeEndpoint               = "10.0.0.11"
+	nodeIP                     = "10.0.0.11"
 	clusterConfig              = "apiVersion: v1\nkind: Config"
 )
 
@@ -219,11 +219,11 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: []strategies.ClusterNodeInfo{{
-				ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion,
+				ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, Version: clusterVersion,
 			}},
 			expected: []handlers.ClusterNodeInfo{{
 				Paused: ptr.To(false),
-				ID:     ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion,
+				ID:     ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, Version: clusterVersion,
 			}},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -446,11 +446,11 @@ func TestGetNode(t *testing.T) {
 	}{
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterNodeInfo{
-				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: clusterUUID,
+				ID: nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, ParentCluster: clusterUUID,
 			},
 			expected: handlers.ClusterNodeInfo{
 				Paused: ptr.To(false),
-				ID:     &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, ParentCluster: &clusterUUID,
+				ID:     &nodeUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, ParentCluster: &clusterUUID,
 			},
 		},
 		testCaseServiceError: {serviceError: errTest},
@@ -483,11 +483,11 @@ func TestGetAllNodes(t *testing.T) {
 	}{
 		"maps all node fields and preserves order": {
 			serviceResult: []strategies.ClusterNodeInfo{
-				{ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion},
+				{ID: nodeUUID, ParentCluster: clusterUUID, Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, Version: clusterVersion},
 				{ID: workerUUID, ParentCluster: clusterUUID, Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 			expected: []handlers.ClusterNodeInfo{
-				{ID: ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Paused: ptr.To(false), Name: nodeName, Role: nodeRole, Status: nodeStatus, Endpoint: nodeEndpoint, Version: clusterVersion},
+				{ID: ptr.To(nodeUUID), ParentCluster: ptr.To(clusterUUID), Paused: ptr.To(false), Name: nodeName, Role: nodeRole, Status: nodeStatus, IPs: []string{nodeIP}, Version: clusterVersion},
 				{ID: ptr.To(workerUUID), ParentCluster: ptr.To(clusterUUID), Paused: ptr.To(false), Name: "worker-0", Role: "worker", Status: "NotReady"},
 			},
 		},

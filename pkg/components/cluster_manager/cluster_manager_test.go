@@ -336,8 +336,8 @@ func TestGetClusterNodesInfo(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		clusterResources, _, clusterMachines, clusterManager := newTestClusterManager(t)
 		expected := []strategies.ClusterNodeInfo{
-			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP, Version: clusterVersion},
-			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
+			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, IPs: []string{controlPlaneNodeIP}, Version: clusterVersion},
+			{Name: workerNodeName, Role: workerRole, Status: readyStatus, IPs: []string{workerNodeIP}},
 		}
 		clusterResources.EXPECT().GetByUUID(t.Context(), clusterID).Return(clusterInfo, nil)
 		clusterMachines.EXPECT().GetMachinesByCluster(t.Context(), clusterID).Return(expected, nil)
@@ -498,8 +498,8 @@ func TestGetAllNodes(t *testing.T) {
 		err   error
 	}{
 		"success": {nodes: []strategies.ClusterNodeInfo{
-			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, Endpoint: controlPlaneNodeIP, Version: clusterVersion},
-			{Name: workerNodeName, Role: workerRole, Status: readyStatus, Endpoint: workerNodeIP},
+			{Name: controlPlaneNodeName, Role: controlPlaneRole, Status: readyStatus, IPs: []string{controlPlaneNodeIP}, Version: clusterVersion},
+			{Name: workerNodeName, Role: workerRole, Status: readyStatus, IPs: []string{workerNodeIP}},
 		}},
 		"empty result": {nodes: []strategies.ClusterNodeInfo{}},
 		"retrieval error discards partial result": {

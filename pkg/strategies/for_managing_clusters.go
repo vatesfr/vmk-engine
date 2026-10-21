@@ -40,7 +40,7 @@ type ClusterNodeInfo struct {
 	NodeName      string
 	Role          string
 	Status        string
-	Endpoint      string
+	IPs           []string
 	MachineID     *uuid.UUID
 	ParentCluster uuid.UUID
 	Version       string

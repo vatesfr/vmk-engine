@@ -185,26 +185,27 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		NodeName:      nodeName,
 		Role:          role,
 		Status:        status,
-		Endpoint:      machineEndpoint(machine.Status.Addresses),
+		IPs:           machineIPs(machine.Status.Addresses),
 		MachineID:     machineID,
 		ParentCluster: uuids.ClusterID(clusterName),
 		Version:       machine.Spec.Version,
 	}
 }
 
-func machineEndpoint(addresses capiv1.MachineAddresses) string {
-	for _, addressType := range []capiv1.MachineAddressType{
-		capiv1.MachineInternalIP,
-		capiv1.MachineExternalIP,
-		capiv1.MachineHostName,
-	} {
-		for _, address := range addresses {
-			if address.Type == addressType && address.Address != "" {
-				return "https://" + net.JoinHostPort(address.Address, "10250")
-			}
+func machineIPs(addresses capiv1.MachineAddresses) []string {
+	var ips []string
+	seen := make(map[string]bool)
+	for _, address := range addresses {
+		if address.Type != capiv1.MachineInternalIP && address.Type != capiv1.MachineExternalIP {
+			continue
 		}
+		if net.ParseIP(address.Address) == nil || seen[address.Address] {
+			continue
+		}
+		ips = append(ips, address.Address)
+		seen[address.Address] = true
 	}
-	return ""
+	return ips
 }
 
 // DeleteMachine requests deletion by the node UUID.

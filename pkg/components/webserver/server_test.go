@@ -41,7 +41,7 @@ const (
 	controlPlaneNodeName           = "control-plane-0"
 	controlPlaneNodeRole           = "control-plane"
 	controlPlaneNodeStatus         = "Ready"
-	controlPlaneNodeEndpoint       = "10.0.0.11"
+	controlPlaneNodeIP             = "10.0.0.11"
 	clusterConfig                  = "apiVersion: v1\nkind: Config"
 	pingPath                       = "/ping"
 	clustersPath                   = "/kubernetes/clusters"
@@ -302,13 +302,13 @@ func TestHTTPRoutes(t *testing.T) {
 					ParentCluster: clusterUUID,
 					Role:          controlPlaneNodeRole,
 					Status:        controlPlaneNodeStatus,
-					Endpoint:      controlPlaneNodeEndpoint,
+					IPs:           []string{controlPlaneNodeIP},
 					Version:       k8sVersion,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
-				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
+				`"status":"Ready","ips":["10.0.0.11"],"$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
 		},
 		"get cluster nodes with all fields": {
 			method: http.MethodGet,
@@ -316,13 +316,13 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
-					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, Version: k8sVersion,
+					Status: controlPlaneNodeStatus, IPs: []string{controlPlaneNodeIP}, Version: k8sVersion,
 					ParentCluster: clusterUUID,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane",` +
-				`"status":"Ready","endpoint":"10.0.0.11","$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
+				`"status":"Ready","ips":["10.0.0.11"],"$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"}]`,
 		},
 		"get cluster nodes with selected fields": {
 			method: http.MethodGet,
@@ -330,7 +330,7 @@ func TestHTTPRoutes(t *testing.T) {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return([]strategies.ClusterNodeInfo{{
 					Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
-					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, Version: k8sVersion,
+					Status: controlPlaneNodeStatus, IPs: []string{controlPlaneNodeIP}, Version: k8sVersion,
 				}}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -548,13 +548,13 @@ func TestHTTPRoutes(t *testing.T) {
 				nodeID := uuids.NodeID(clusterName, controlPlaneNodeName)
 				service.EXPECT().GetNodeByUUID(ctx, nodeID).Return(strategies.ClusterNodeInfo{
 					ID: nodeID, Name: controlPlaneNodeName, Role: controlPlaneNodeRole,
-					Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint,
+					Status: controlPlaneNodeStatus, IPs: []string{controlPlaneNodeIP},
 					ParentCluster: clusterUUID,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `{"id":"` + uuids.NodeID(clusterName, controlPlaneNodeName).String() + `","is_reconciliation_paused":false,"name":"control-plane-0",` +
-				`"role":"control-plane","status":"Ready","endpoint":"10.0.0.11", "$cluster":"` + clusterUUID.String() + `"}`,
+				`"role":"control-plane","status":"Ready","ips":["10.0.0.11"], "$cluster":"` + clusterUUID.String() + `"}`,
 		},
 		"get missing node by UUID": {
 			method: http.MethodGet,
@@ -749,13 +749,13 @@ func TestGetAllNodesHTTP(t *testing.T) {
 		"list all nodes": {
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
 				service.EXPECT().GetAllNodes(ctx).Return([]strategies.ClusterNodeInfo{
-					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, Endpoint: controlPlaneNodeEndpoint, ParentCluster: clusterUUID, Version: k8sVersion},
+					{Name: controlPlaneNodeName, Role: controlPlaneNodeRole, Status: controlPlaneNodeStatus, IPs: []string{controlPlaneNodeIP}, ParentCluster: clusterUUID, Version: k8sVersion},
 					{Name: "worker-0", Role: "worker", Status: "NotReady", ParentCluster: uuid.FromStringOrNil("10000000-0000-0000-0000-000000000001")},
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","endpoint":"10.0.0.11",` +
+				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"control-plane-0","role":"control-plane","status":"Ready","ips":["10.0.0.11"],` +
 				`"$cluster":"` + clusterUUID.String() + `","version":"v1.36.0"},
 				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"worker-0","role":"worker","status":"NotReady","$cluster":"10000000-0000-0000-0000-000000000001"}
 			]`,
@@ -1191,5 +1191,27 @@ func TestClusterCreatorHTTP(t *testing.T) {
 				executeHTTPTestCase(t, tc)
 			})
 		}
+	}
+}
+
+func TestNodeIPsFieldSelection(t *testing.T) {
+	for _, path := range []string{clusterNodesPath, "/kubernetes/nodes"} {
+		t.Run(path, func(t *testing.T) {
+			executeHTTPTestCase(t, httpTestCase{
+				method: http.MethodGet, path: path + "?fields=name,ips", expectedStatus: http.StatusOK,
+				expectedJSON: `[{"name":"node-with-ips","ips":["10.0.0.11","2001:db8::1"]},{"name":"node-without-ips"}]`,
+				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
+					nodes := []strategies.ClusterNodeInfo{
+						{Name: "node-with-ips", IPs: []string{controlPlaneNodeIP, "2001:db8::1"}},
+						{Name: "node-without-ips"},
+					}
+					if path == clusterNodesPath {
+						service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return(nodes, nil)
+					} else {
+						service.EXPECT().GetAllNodes(ctx).Return(nodes, nil)
+					}
+				},
+			})
+		})
 	}
 }

@@ -43,11 +43,13 @@ func ClusterID(clusterName string) uuid.UUID {
 }
 
 // NodeID returns the stable UUID v5 for a node scoped under its cluster.
-// nodeName must be the Kubernetes node name (NodeRef.Name) when the machine
-// is bound to a node, otherwise the CAPI Machine name.
-func NodeID(clusterName, nodeName string) uuid.UUID {
-	if clusterName == "" || nodeName == "" {
+// machineName is the CAPI Machine resource name (metadata.name), never the
+// registered Kubernetes Node name from status.nodeRef: the Machine name is
+// assigned at creation and unique per namespace, so the ID never changes when
+// the Node joins the cluster and two Machines can never share it.
+func NodeID(clusterName, machineName string) uuid.UUID {
+	if clusterName == "" || machineName == "" {
 		return uuid.Nil
 	}
-	return uuid.NewV5(ClusterID(clusterName), nodeName)
+	return uuid.NewV5(ClusterID(clusterName), machineName)
 }

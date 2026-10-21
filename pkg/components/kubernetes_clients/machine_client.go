@@ -147,10 +147,6 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		nodeName = machine.Status.NodeRef.Name
 	}
 	clusterName := machine.Spec.ClusterName
-	name := machine.Name
-	if nodeName != "" {
-		name = nodeName
-	}
 
 	role := workerRole
 	if _, isControlPlane := machine.Labels[capiv1.MachineControlPlaneLabel]; isControlPlane {
@@ -183,7 +179,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 
 	_, paused := machine.Annotations[capiv1.PausedAnnotation]
 	return strategies.ClusterNodeInfo{
-		ID:            uuids.NodeID(clusterName, name),
+		ID:            uuids.NodeID(clusterName, machine.Name),
 		Paused:        paused,
 		Name:          machine.Name,
 		NodeName:      nodeName,

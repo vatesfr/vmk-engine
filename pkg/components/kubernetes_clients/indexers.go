@@ -31,17 +31,13 @@ func clusterUUIDIndexer(obj client.Object) []string {
 	return []string{uuids.ClusterID(obj.GetName()).String()}
 }
 
-// machineUUIDIndexer computes the UUID v5 for a Machine object.
-// Name resolution must match toClusterNodeInfo: NodeRef.Name takes precedence
-// over machine.Name.
+// machineUUIDIndexer computes the UUID v5 for a Machine object from
+// spec.clusterName and metadata.name, matching toClusterNodeInfo. The Node name
+// in status.nodeRef is deliberately not used: it is empty until the Node
+// registers, and switching to it later would change the Machine's ID.
 func machineUUIDIndexer(obj client.Object) []string {
 	machine := obj.(*capiv1.Machine)
-	clusterName := machine.Spec.ClusterName
-	name := machine.Name
-	if machine.Status.NodeRef.IsDefined() {
-		name = machine.Status.NodeRef.Name
-	}
-	return []string{uuids.NodeID(clusterName, name).String()}
+	return []string{uuids.NodeID(machine.Spec.ClusterName, machine.Name).String()}
 }
 
 // machineClusterUUIDIndexer computes the UUID v5 of the cluster a Machine

@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	uuids "capv-proxy/pkg/helpers/uuids"
+	"capv-proxy/pkg/helpers/uuids"
 	"capv-proxy/pkg/strategies"
 
 	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
@@ -184,8 +184,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 	})
 
 	t.Run("node name and phase", func(t *testing.T) {
-		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
-		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: resolvedNodeName}
+		machine := machineWithStatus(resolvedNodeName, testNamespace, clusterName, false, "")
 		machine.Status.Phase = "Provisioning"
 		machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
@@ -193,8 +192,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
-		assert.Equal(t, "machine-name", nodes[0].Name)
-		assert.Equal(t, resolvedNodeName, nodes[0].NodeName)
+		assert.Equal(t, resolvedNodeName, nodes[0].Name)
 		assert.Equal(t, "Provisioning", nodes[0].Status)
 	})
 
@@ -309,11 +307,14 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			namespace: testNamespace,
 			want: []strategies.ClusterNodeInfo{
 				{
-					ID: uuids.NodeID(otherClusterName, "z-node"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
+					ID: uuids.NodeID(otherClusterName, "a-machine"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
 					Endpoint: nodeEndpoint(externalIP), ParentCluster: uuids.ClusterID(otherClusterName),
 				},
 				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
-				{ID: uuids.NodeID(clusterName, "a-node"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus, Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID},
+				{
+					ID: uuids.NodeID(clusterName, "z-machine"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus,
+					Endpoint: nodeEndpoint(controlPlaneIP), ParentCluster: clusterUUID,
+				},
 			},
 		},
 		"empty namespace returns an empty slice": {
@@ -471,9 +472,9 @@ func TestDeleteMachineUsesUUID(t *testing.T) {
 		duplicate bool
 		wantErr   error
 	}{
-		"node ref UUID deletes machine":         {requested: uuids.NodeID(clusterName, resolvedNodeName)},
-		"machine resource name is not an alias": {requested: deleteMachineUUID, wantErr: strategies.ErrNodeNotFound},
-		"duplicate node ID is ambiguous":        {requested: uuids.NodeID(clusterName, resolvedNodeName), duplicate: true, wantErr: strategies.ErrNodeAmbiguous},
+		"node ref UUID deletes machine":             {requested: deleteMachineUUID},
+		"node name is not an alias":                 {requested: uuids.NodeID(clusterName, resolvedNodeName), wantErr: strategies.ErrNodeNotFound},
+		"shared node name does not change identity": {requested: deleteMachineUUID, duplicate: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
@@ -512,20 +513,6 @@ func TestPauseMachineWithoutAnnotations(t *testing.T) {
 	require.Contains(t, machine.Annotations, capiv1.PausedAnnotation)
 }
 
-func TestPauseRejectsAmbiguousNodeID(t *testing.T) {
-	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
-	machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "shared-node"}
-	duplicate := machine.DeepCopy()
-	duplicate.Name = duplicateMachineName
-	kube := newFakeClient(t, machine, duplicate)
-
-	err := NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, uuids.NodeID(clusterName, "shared-node"), true)
-
-	require.ErrorIs(t, err, strategies.ErrNodeAmbiguous)
-	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
-	assert.NotContains(t, machine.Annotations, capiv1.PausedAnnotation)
-}
-
 func TestPauseRejectsConcurrentMachineReassignment(t *testing.T) {
 	machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
 	kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(machine).
@@ -561,35 +548,6 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 		assert.Equal(t, strategies.ClusterNodeInfo{
 			ID: id, ParentCluster: clusterUUID, Name: "machine-name", Role: workerRole, Status: readyStatus, Endpoint: nodeEndpoint(workerIP),
 		}, node)
-	})
-
-	t.Run("node ref name takes precedence", func(t *testing.T) {
-		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, metav1.ConditionTrue)
-		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
-		fc := newFakeClient(t, machine)
-		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
-
-		id := uuids.NodeID(clusterName, "node-name")
-		node, err := machineClient.GetMachineByUUID(t.Context(), id)
-
-		require.NoError(t, err)
-		assert.Equal(t, "machine-name", node.Name)
-		assert.Equal(t, "node-name", node.NodeName)
-		assert.Equal(t, id, node.ID)
-	})
-
-	t.Run("duplicate node ID is ambiguous", func(t *testing.T) {
-		machine := machineWithStatus("machine-name", testNamespace, clusterName, false, "")
-		machine.Status.NodeRef = capiv1.MachineNodeReference{Name: "node-name"}
-		duplicate := machine.DeepCopy()
-		duplicate.Name = duplicateMachineName
-		fc := newFakeClient(t, machine, duplicate)
-		machineClient := NewMachineClient(fc, clientAsCache{fc}, testNamespace)
-
-		node, err := machineClient.GetMachineByUUID(t.Context(), uuids.NodeID(clusterName, "node-name"))
-
-		assert.Empty(t, node)
-		require.ErrorIs(t, err, strategies.ErrNodeAmbiguous)
 	})
 
 	t.Run("not found", func(t *testing.T) {

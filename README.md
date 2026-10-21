@@ -455,11 +455,14 @@ curl "http://127.0.0.1:8080/kubernetes/clusters/<cluster-uuid>/nodes"
 ```
 
 The `id` fields contain the UUIDs used to address clusters and nodes in API
-routes. The `name` field contains the CAPI resource name and is descriptive; it
-is not used to address deletion requests. The optional `node_name` field contains
-`status.nodeRef.name`, the registered Kubernetes Node name; it is omitted until
-the Node reference is available. `node_name` is also descriptive and is not used
-for deletion.
+routes. A node `id` is derived from the cluster name and the CAPI Machine
+resource name, so it is known as soon as the Machine exists and does not change
+when the Kubernetes Node later registers. The `name` field contains the CAPI
+resource name and is descriptive; it is not used to address deletion requests.
+The optional `node_name` field contains `status.nodeRef.name`, the registered
+Kubernetes Node name; it is omitted until the Node reference is available.
+`node_name` is also descriptive: it is not used for deletion and does not
+contribute to the node `id`.
 
 Delete a node using the cluster and node UUIDs from their `id` fields:
 
@@ -544,7 +547,9 @@ requests without enforcing authentication. RBAC permissions must be upgraded
 along with the service (see Required RBAC permissions below).
 
 Every cluster and node response includes a stable `id` field: a **UUID v5**
-derived deterministically from the resource name. The same cluster or node
+derived deterministically from the resource name. A cluster `id` is derived
+from the Cluster name; a node `id` is derived from the cluster name and the
+Machine name, never from the registered Node name. The same cluster or node
 always produces the same UUID across process restarts, so clients can use `id`
 as a stable key. Use it to fetch a resource directly:
 

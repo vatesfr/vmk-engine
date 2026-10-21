@@ -296,10 +296,14 @@ UID and resource-version preconditions to protect against concurrent replacement
 or reassignment. The HTTP boundary returns 204 without waiting for finalizers.
 Replica counts are unchanged. HTTP routes, parameters, responses, and application
 errors use node terminology. Node responses expose `id` (the stable UUID used to
-address the node), `name` (the stable Kubernetes resource name), optional
-`node_name` (the registered Node name from `status.nodeRef.name`), and `node_id`
-(the provider VM UUID). The `name` and `node_name` fields are descriptive and are
-not used to address deletion requests.
+address the node, a UUID v5 of the Machine name under the cluster's UUID),
+`name` (the stable Kubernetes resource name), optional `node_name` (the
+registered Node name from `status.nodeRef.name`), and `node_id` (the provider
+VM UUID). The `name` and `node_name` fields are descriptive and are not used to
+address deletion requests. Because `id` never depends on `status.nodeRef`, it is
+available as soon as the Machine is created and does not change when the Node
+registers; since Machine names are unique per namespace, two Machines in the
+configured namespace can never share an `id`.
 
 ## Replica updates
 

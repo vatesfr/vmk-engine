@@ -114,23 +114,24 @@ func (c ClusterClient) Get(ctx context.Context, name string) (strategies.Cluster
 }
 
 func (c ClusterClient) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
-	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	cluster, err := c.getClusterFromCacheByUUID(ctx, id)
 	if err != nil {
 		return strategies.ClusterInfo{}, err
 	}
 	return toInfo(cluster), nil
 }
 
-func getClusterFromCacheByUUID(ctx context.Context, informerCache cache.Cache, namespace string, id uuid.UUID) (*capiv1.Cluster, error) {
+// getClusterFromCacheByUUID reads the cache to return a Cluster using its UUID
+func (c ClusterClient) getClusterFromCacheByUUID(ctx context.Context, id uuid.UUID) (*capiv1.Cluster, error) {
 	if id == uuid.Nil {
 		return nil, strategies.ErrClusterIDRequired
 	}
-	if namespace == "" {
+	if c.namespace == "" {
 		return nil, strategies.ErrClusterNamespaceRequired
 	}
 	list := &capiv1.ClusterList{}
-	if err := informerCache.List(ctx, list,
-		client.InNamespace(namespace),
+	if err := c.informerCache.List(ctx, list,
+		client.InNamespace(c.namespace),
 		client.MatchingFields{uuids.UUIDIndexKey: id.String()},
 	); err != nil {
 		return nil, fmt.Errorf("%w: %w", strategies.ErrClusterRetrievalFailed, err)
@@ -144,8 +145,10 @@ func getClusterFromCacheByUUID(ctx context.Context, informerCache cache.Cache, n
 	return &list.Items[0], nil
 }
 
+// getClusterResourceByUUID returns a fresh cluster resource using its UUID
+// It uses the cache first to get the cluster name
 func (c ClusterClient) getClusterResourceByUUID(ctx context.Context, id uuid.UUID) (*capiv1.Cluster, error) {
-	clusterFromCache, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	clusterFromCache, err := c.getClusterFromCacheByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +203,7 @@ func (c ClusterClient) GetAllTags(ctx context.Context) (map[string]map[string]st
 }
 
 func (c ClusterClient) GetTags(ctx context.Context, id uuid.UUID) (map[string]string, error) {
-	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	cluster, err := c.getClusterFromCacheByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +214,7 @@ func (c ClusterClient) GetTag(ctx context.Context, id uuid.UUID, tag string) (st
 	if err := validateClusterTag(tag, ""); err != nil {
 		return "", err
 	}
-	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	cluster, err := c.getClusterFromCacheByUUID(ctx, id)
 	if err != nil {
 		return "", err
 	}
@@ -734,7 +737,7 @@ func pausePatchError(err, notFound error) error {
 
 // SetDescription patches only the description annotation, preserving other metadata.
 func (c ClusterClient) SetDescription(ctx context.Context, id uuid.UUID, description string) error {
-	cluster, err := getClusterFromCacheByUUID(ctx, c.informerCache, c.namespace, id)
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
 	if err != nil {
 		return err
 	}

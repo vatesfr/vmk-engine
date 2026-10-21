@@ -112,7 +112,7 @@ func run(opts options) error {
 		return err
 	}
 
-	informerCache, err := newInformerCache(restConfig, scheme)
+	informerCache, err := newInformerCache(restConfig, scheme, opts.namespace)
 	if err != nil {
 		return err
 	}
@@ -182,8 +182,13 @@ func newK8sClient(config *rest.Config, scheme *runtime.Scheme) (client.Client, e
 	return k8sClient, nil
 }
 
-func newInformerCache(config *rest.Config, scheme *runtime.Scheme) (cache.Cache, error) {
-	informerCache, err := cache.New(config, cache.Options{Scheme: scheme})
+func newInformerCache(config *rest.Config, scheme *runtime.Scheme, namespace string) (cache.Cache, error) {
+	informerCache, err := cache.New(config, cache.Options{
+		Scheme: scheme,
+		DefaultNamespaces: map[string]cache.Config{
+			namespace: {},
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create informer cache: %w", err)
 	}

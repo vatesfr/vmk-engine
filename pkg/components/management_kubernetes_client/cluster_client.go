@@ -32,6 +32,8 @@ type ClusterClient struct {
 }
 
 const (
+	versionKey                         = "version"
+	replicasKey                        = "replicas"
 	scalingClusterKind                 = "Cluster"
 	xoGroup                            = "vates.infrastructure.cluster.x-k8s.io"
 	cpGroup                            = "controlplane.cluster.x-k8s.io"
@@ -160,11 +162,25 @@ func (c ClusterClient) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	if err := c.kubernetesClient.Delete(ctx, cluster); err != nil {
+	return c.withClusterMutation(ctx, cluster.Name, func(ctx context.Context) error { return c.deleteCluster(ctx, id) })
+}
+
+func (c ClusterClient) deleteCluster(ctx context.Context, id uuid.UUID) error {
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := ensureNoUpgrade(cluster); err != nil {
+		return err
+	}
+	if err := c.kubernetesClient.Delete(ctx, cluster, client.Preconditions{UID: &cluster.UID, ResourceVersion: &cluster.ResourceVersion}); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
 		}
-		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, cluster.Name, err)
+		if apierrors.IsConflict(err) {
+			return upgradeConflict("cluster changed during deletion; read its lock state before retrying")
+		}
+		return fmt.Errorf("delete Cluster %s/%s: %w", c.namespace, cluster.Name, mutationWriteError(err))
 	}
 
 	// A partial creation may still be paused. Unpause only after
@@ -299,6 +315,11 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 			UpToDateReplicas:  int(ptr.Deref(status.UpToDateReplicas, 0)),
 			Versions:          toVersionNodeStatuses(status.Versions),
 		}
+	}
+	if op, err := readUpgrade(value); err != nil {
+		info.IsUpgrading = true
+	} else if op != nil {
+		info.IsUpgrading = op.Locked
 	}
 	return info
 }
@@ -598,6 +619,9 @@ func (c ClusterClient) scalingCluster(ctx context.Context, id uuid.UUID, replica
 	if err := validateScalingObject(cluster, cluster); err != nil {
 		return nil, err
 	}
+	if err := ensureNoUpgrade(cluster); err != nil {
+		return nil, err
+	}
 	if ptr.Deref(cluster.Spec.Paused, false) {
 		return nil, scalingConflict("Cluster is paused")
 	}
@@ -634,6 +658,17 @@ func (c ClusterClient) SetPaused(ctx context.Context, id uuid.UUID, paused bool)
 	if err != nil {
 		return err
 	}
+	return c.withClusterMutation(ctx, cluster.Name, func(ctx context.Context) error { return c.setPaused(ctx, id, paused) })
+}
+
+func (c ClusterClient) setPaused(ctx context.Context, id uuid.UUID, paused bool) error {
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := ensureNoUpgrade(cluster); err != nil {
+		return err
+	}
 	if (paused && ptr.Deref(cluster.Spec.Paused, false)) || (!paused && cluster.Spec.Paused == nil) {
 		return nil
 	}
@@ -649,6 +684,17 @@ func (c ClusterClient) SetPaused(ctx context.Context, id uuid.UUID, paused bool)
 }
 
 func (c ClusterClient) SetWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
+	if replicas < 1 {
+		return strategies.ErrInvalidReplicas
+	}
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
+	if err != nil {
+		return err
+	}
+	return c.withClusterMutation(ctx, cluster.Name, func(ctx context.Context) error { return c.setWorkerReplicas(ctx, id, replicas) })
+}
+
+func (c ClusterClient) setWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
 	cluster, err := c.scalingCluster(ctx, id, replicas)
 	if err != nil {
 		return err
@@ -685,6 +731,17 @@ func (c ClusterClient) SetWorkerReplicas(ctx context.Context, id uuid.UUID, repl
 }
 
 func (c ClusterClient) SetControlPlaneReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
+	if replicas < 1 {
+		return strategies.ErrInvalidReplicas
+	}
+	cluster, err := c.getClusterResourceByUUID(ctx, id)
+	if err != nil {
+		return err
+	}
+	return c.withClusterMutation(ctx, cluster.Name, func(ctx context.Context) error { return c.setControlPlaneReplicas(ctx, id, replicas) })
+}
+
+func (c ClusterClient) setControlPlaneReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {
 	cluster, err := c.scalingCluster(ctx, id, replicas)
 	if err != nil {
 		return err
@@ -734,7 +791,7 @@ func (c ClusterClient) patchReplicas(ctx context.Context, obj, before client.Obj
 		// Only the replicas field is changed. Keep webhook details internal.
 		return fmt.Errorf("%w: %w", strategies.ErrReplicasRejected, err)
 	case err != nil:
-		return fmt.Errorf("patch replicas: %w", err)
+		return fmt.Errorf("patch replicas: %w", mutationWriteError(err))
 	default:
 		return nil
 	}
@@ -747,7 +804,7 @@ func pausePatchError(err, notFound error) error {
 	case apierrors.IsConflict(err):
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateConflict, err)
 	default:
-		return fmt.Errorf("patch pause state: %w", err)
+		return fmt.Errorf("patch pause state: %w", mutationWriteError(err))
 	}
 }
 

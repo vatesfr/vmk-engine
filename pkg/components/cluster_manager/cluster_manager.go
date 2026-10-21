@@ -229,8 +229,12 @@ func (c ClusterManager) DeleteClusterNode(ctx context.Context, clusterID uuid.UU
 		return strategies.ErrNodeIDRequired
 	}
 	// Ensure the cluster exists, so an unknown UUID is reported as not found
-	if _, err := c.clusterResources.GetByUUID(ctx, clusterID); err != nil {
+	cluster, err := c.clusterResources.GetByUUID(ctx, clusterID)
+	if err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
+	}
+	if cluster.IsUpgrading {
+		return strategies.ErrClusterUpgradeConflict
 	}
 	if err := c.clusterMachines.DeleteMachine(ctx, clusterID, nodeID); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionFailed, err)
@@ -255,8 +259,12 @@ func (c ClusterManager) SetClusterNodePaused(ctx context.Context, clusterID, nod
 	if nodeID == uuid.Nil {
 		return strategies.ErrNodeIDRequired
 	}
-	if _, err := c.clusterResources.GetByUUID(ctx, clusterID); err != nil {
+	cluster, err := c.clusterResources.GetByUUID(ctx, clusterID)
+	if err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)
+	}
+	if cluster.IsUpgrading {
+		return strategies.ErrClusterUpgradeConflict
 	}
 	if err := c.clusterMachines.SetMachinePaused(ctx, clusterID, nodeID, paused); err != nil {
 		return fmt.Errorf("%w: %w", strategies.ErrPauseUpdateFailed, err)

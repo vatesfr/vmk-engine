@@ -3,6 +3,7 @@ package management_kubernetes_client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1228,6 +1229,9 @@ func TestScalingPatchAndErrors(t *testing.T) {
 				patches := 0
 				injected := errors.New("technical failure")
 				interceptors := interceptor.Funcs{Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					if _, ok := obj.(*capiv1.Cluster); ok {
+						return c.Patch(ctx, obj, patch, opts...)
+					}
 					patches++
 					data, err := patch.Data(obj)
 					require.NoError(t, err)
@@ -1355,28 +1359,40 @@ func TestPausePatchErrors(t *testing.T) {
 		{"not found", apierrors.NewNotFound(schema.GroupResource{Group: capiv1.GroupVersion.Group, Resource: pauseMachineResource}, deleteMachineName), nil},
 		{"failure", errTest, errTest},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
-			machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
-			kube := fake.NewClientBuilder().WithScheme(newFakeClient(t).Scheme()).WithObjects(cluster, machine).
-				WithIndex(&capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer).
-				WithIndex(&capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer).
-				WithIndex(&capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer).
-				WithInterceptorFuncs(interceptor.Funcs{
-					Patch: func(_ context.Context, _ client.WithWatch, obj client.Object, patch client.Patch, _ ...client.PatchOption) error {
+		for _, targetMachine := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/machine=%t", tc.name, targetMachine), func(t *testing.T) {
+				cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace}}
+				machine := machineWithStatus(deleteMachineName, testNamespace, clusterName, false, "")
+				kube := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, machine).
+					WithIndex(&capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer).
+					WithIndex(&capiv1.Machine{}, uuids.UUIDIndexKey, machineUUIDIndexer).
+					WithIndex(&capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer).WithInterceptorFuncs(interceptor.Funcs{
+					Patch: func(ctx context.Context, underlying client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 						data, err := patch.Data(obj)
 						require.NoError(t, err)
+						if strings.Contains(string(data), mutationAnnotation) {
+							return underlying.Patch(ctx, obj, patch, opts...)
+						}
 						require.Contains(t, string(data), `"resourceVersion"`)
 						return tc.err
 					},
 				}).Build()
-			clusterWant, machineWant := tc.want, tc.want
-			if tc.want == nil {
-				clusterWant, machineWant = strategies.ErrClusterNotFound, strategies.ErrNodeNotFound
-			}
-			require.ErrorIs(t, NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetPaused(t.Context(), clusterUUID, true), clusterWant)
-			require.ErrorIs(t, NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, deleteMachineUUID, true), machineWant)
-		})
+				want := tc.want
+				var err error
+				if targetMachine {
+					if want == nil {
+						want = strategies.ErrNodeNotFound
+					}
+					err = NewMachineClient(kube, clientAsCache{kube}, testNamespace).SetMachinePaused(t.Context(), clusterUUID, deleteMachineUUID, true)
+				} else {
+					if want == nil {
+						want = strategies.ErrClusterNotFound
+					}
+					err = NewClusterClient(kube, clientAsCache{kube}, testNamespace).SetPaused(t.Context(), clusterUUID, true)
+				}
+				require.ErrorIs(t, err, want)
+			})
+		}
 	}
 }
 

@@ -23,7 +23,7 @@ func TestNodeStateJSONPreservesFalseAndOmitsUnknown(t *testing.T) {
 	clusters.EXPECT().GetClusterNodesInfo(gomock.Any(), clusterUUID).AnyTimes().Return([]strategies.ClusterNodeInfo{
 		{Name: "known", IsCordon: ptr.To(false), IsDraining: ptr.To(false)}, {Name: "unknown"},
 	}, nil)
-	handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(clusters, versions)
+	handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(clusters, nil, versions)
 	for _, query := range []string{"", "?fields=name,is_cordon,is_draining"} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/kubernetes/clusters/"+clusterUUID.String()+"/nodes"+query, nil))
@@ -39,7 +39,7 @@ func TestNodeStateJSONPreservesFalseAndOmitsUnknown(t *testing.T) {
 
 func TestNodeRoutesOpenAPI(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	server := HttpServer{SwaggerUI: SwaggerUIDisabled}.newServer(mocks.NewMockForManagingClusters(ctrl), mocks.NewMockForManagingVersions(ctrl))
+	server := HttpServer{SwaggerUI: SwaggerUIDisabled}.newServer(mocks.NewMockForManagingClusters(ctrl), nil, mocks.NewMockForManagingVersions(ctrl))
 	actions := []string{"cordon", "uncordon", "drain"}
 	for _, action := range actions {
 		path := server.OpenAPI.Description().Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeID}/" + action)
@@ -59,7 +59,7 @@ func TestClusterStateJSONOnListAndDetail(t *testing.T) {
 	info := strategies.ClusterInfo{Name: "cluster", IsCordon: ptr.To(false), IsDraining: ptr.To(true)}
 	clusters.EXPECT().GetClusters(gomock.Any()).Return([]strategies.ClusterInfo{info}, nil)
 	clusters.EXPECT().GetClusterByUUID(gomock.Any(), clusterUUID).Return(info, nil)
-	handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(clusters, versions)
+	handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(clusters, nil, versions)
 	for _, path := range []string{"/kubernetes/clusters?fields=name,is_cordon,is_draining", "/kubernetes/clusters/" + clusterUUID.String()} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))

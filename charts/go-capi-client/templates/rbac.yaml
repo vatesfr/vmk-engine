@@ -18,7 +18,7 @@ rules:
     verbs: ["create", "get", "patch"]
   - apiGroups: ["bootstrap.cluster.x-k8s.io"]
     resources: ["kubeadmconfigtemplates"]
-    verbs: ["create"]
+    verbs: ["create", "get"]
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["clusters"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]

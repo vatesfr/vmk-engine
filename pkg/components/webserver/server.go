@@ -29,17 +29,17 @@ func IsSwaggerUI(value string) bool {
 	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
 }
 
-func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) error {
-	return httpServer.newServer(clusterService, versionService).Run()
+func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) error {
+	return httpServer.newServer(clusterService, clusterUpgrader, versionService).Run()
 }
 
 // Handler builds the complete HTTP application without opening a network
 // listener. It is intended for httptest-based tests and embedding.
-func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) http.Handler {
-	return httpServer.newServer(clusterService, versionService).Mux
+func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) http.Handler {
+	return httpServer.newServer(clusterService, clusterUpgrader, versionService).Mux
 }
 
-func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters, versionService strategies.ForManagingVersions) *fuego.Server {
+func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) *fuego.Server {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,
@@ -82,13 +82,20 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		apiRouter,
 		"/clusters",
 	)
-	clusterHandler := handlers.NewClusterHandler(clusterService)
+	clusterHandler := handlers.NewClusterHandler(clusterService, clusterUpgrader)
 	versionsHandler := handlers.NewVersionsHandler(versionService)
 
 	fuego.Get(clusterRouter, "", clusterHandler.GetClusters,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
 	)
 	fuego.Get(clusterRouter, "/{id}", clusterHandler.GetCluster, notFoundResponse("Cluster not found"), validationResponse())
+	fuego.Post(clusterRouter, "/{id}/upgrades", clusterHandler.UpgradeCluster,
+		fuego.OptionDescription("Starts a durable rolling upgrade for this cluster. Locks mutations until all machines converge. "+
+			"Repeating the active target returns the same operation."),
+		fuego.OptionDefaultStatusCode(http.StatusAccepted),
+		decodingResponse(), validationResponse(), notFoundResponse("Cluster not found"),
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster is locked or not ready for upgrade", fuego.Response{Type: fuego.HTTPError{}}),
+	)
 	fuego.Get(clusterRouter, "/{id}/nodes", clusterHandler.GetClusterNodesInfo,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
 		validationResponse(),
@@ -119,6 +126,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster state, configuration or concurrent update prevents scaling", fuego.Response{Type: fuego.HTTPError{}}),
 	)
 	fuego.Delete(clusterRouter, "/{id}", clusterHandler.DeleteCluster,
+		fuego.OptionAddResponse(http.StatusConflict, "Cluster is locked or changed during deletion", fuego.Response{Type: fuego.HTTPError{}}),
 		fuego.OptionDefaultStatusCode(http.StatusNoContent),
 		noContentResponse(), notFoundResponse("Cluster not found"), validationResponse(),
 	)

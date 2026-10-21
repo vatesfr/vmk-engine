@@ -57,6 +57,7 @@ flowchart LR
     subgraph http[HTTP component — pkg/components/webserver]
         fuego --> handlers[ClusterHandler]
         handlers -->|calls Strategy| port[ForManagingClusters]
+        handlers -->|starts upgrade| upgraderport[ForUpgradingClusters]
         fuego --> versionhandler[VersionsHandler]
         versionhandler --> versionport[ForManagingVersions]
     end
@@ -74,6 +75,9 @@ flowchart LR
         manager -->|validates requested release| versionport
     end
 
+    upgraderport -->|implemented by| upgrader[ClusterUpgrader — validation and execution]
+    upgrader -->|calls required interface| clusterport
+    upgrader -->|validates requested release| versionport
     versionport -->|implemented by| versions[VersionManager — static catalog]
     port -->|implemented by| manager
     clusterport -->|implemented by| clusters[ClusterClient]
@@ -103,6 +107,7 @@ flowchart LR
     configurator -. creates and wires .-> versions
     configurator -. creates\nRegisterIndexes\nStart\nWaitForCacheSync .-> cache
     configurator -. creates and wires .-> workload
+    configurator -. creates and wires .-> upgrader
 ```
 
 The roles from Component + Strategy map to the code as follows:
@@ -115,7 +120,9 @@ The roles from Component + Strategy map to the code as follows:
 | Strategy | `strategies.ForManagingClusters` | Shared contract used by the HTTP component and implemented by `ClusterManager` |
 | Provided operations | `cluster_manager.ClusterManager` methods | Expose cluster-management use cases without declaring a producer-owned Go interface |
 | Component | `cluster_manager.ClusterManager` | Owns cluster-management use cases and orchestration |
-| Strategy | `strategies.ForManagingVersions` | Used by the HTTP and cluster components; implemented by `VersionManager` |
+| Strategy | `strategies.ForUpgradingClusters` | Starts or resumes upgrades by cluster UUID and requested version |
+| Component | `cluster_upgrader.ClusterUpgrader` | Owns upgrade validation, planning, execution, persistence, locks, recovery and goroutine lifecycle |
+| Strategy | `strategies.ForManagingVersions` | Used by the HTTP, cluster-management and upgrade components; implemented by `VersionManager` |
 | Component | `versionmanager.VersionManager` | Owns the static release catalog and exact version availability checks |
 | Strategies | `ForManagingClusterResources`, `ForManagingClusterMachines`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
 | Strategies | `ClusterClient`, `MachineClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
@@ -135,7 +142,7 @@ controller-runtime `cache.Cache`:
 - **Reads** (`List`, `Get`, UUID lookup, tag reads) go through the informer
   cache, which is kept current by Kubernetes watch events. UUID-based lookups
   (`GetByUUID`, `GetMachineByUUID`) use custom UUID v5 field indexes registered
-  in `pkg/components/kubernetes_clients/indexers.go` before the cache starts.
+  in `pkg/components/management_kubernetes_client/indexers.go` before the cache starts.
 - **Writes** (`Create`, `Delete`, scaling, pause, `SetTag`, `DeleteTag`) go
   through the direct `client.Client`, which always contacts the Kubernetes API.
   Cluster mutations first resolve the UUID through the informer cache, then
@@ -186,7 +193,8 @@ For `GET /kubernetes/clusters/{id}/config` (cluster UUID):
 
 `ClusterManager` also requires `ForManagingVersions`, implemented by `VersionManager`,
 to reject unavailable versions before fetching defaults or creating resources.
-The configurator injects the same version manager into the HTTP and cluster components.
+The configurator injects the same version manager into the HTTP, cluster-management
+and upgrade components.
 `GET /kubernetes/versions-available` calls `GetAllVersions`; the handler maps
 Strategy `VersionGroup` values to JSON DTOs using `lo.Map`, preserving their
 newest-first order. The catalog is defined in code, not queried from Kubernetes.
@@ -219,6 +227,7 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `cmd/http_server/` | Executable, CLI options, runtime configuration, and object wiring |
 | `pkg/components/webserver/` | HTTP component, transport DTOs, handlers, middleware, and OpenAPI |
 | `pkg/components/cluster_manager/` | Cluster-management use cases and orchestration |
+| `pkg/components/cluster_upgrader/` | Validated upgrade execution, persistent locks, recovery and per-operation goroutines |
 | `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
 | `pkg/components/management_kubernetes_client/` | Kubernetes implementations of resource Strategies; informer cache UUID  |
 | `pkg/components/workload_kubernetes_client/` | Workload Node actions, observed states and dynamic client creation |
@@ -400,3 +409,139 @@ The `Paused` field in the shared models and `is_reconciliation_paused` in HTTP D
 configured pause independently. Resuming a cluster does not remove individual
 Machine annotations, and resuming a Machine does not change the cluster spec.
 Existing cluster deletion still clears spec pause after requesting deletion.
+
+
+## Cluster upgrades and persistent lock
+
+`POST /kubernetes/clusters/{id}/upgrades` accepts `{"version":"1.36.5"}`.
+The HTTP handler calls `ForUpgradingClusters.StartUpgrade` directly with the cluster
+UUID and requested version. It resolves the UUID through `GetByUUID`, then reads
+fresh upgrade state by resource name. ClusterUpgrader owns request and preflight checks:
+release catalogue, allowed version paths, initial cluster health and repeated-target
+handling. It depends on `ForManagingClusterResources` and `ForManagingVersions`;
+ClusterManager has no dependency on the upgrader.
+It reads an `UpgradeContext` through `ForManagingClusterResources.GetUpgradeContext`:
+only the Cluster identity, pause/deletion/topology flags and persisted operation.
+Control-plane, worker and Machine observations have separate read methods and models.
+`StartUpgrade` checks request parameters, the active lock, Cluster lifecycle/topology,
+control-plane availability, the version transition, worker convergence and observed
+Machine versions. It then calls `BuildControlPlaneUpgradeTarget` and
+`BuildWorkerUpgradeTarget` with the corresponding resource snapshots to capture
+identities and bootstrap hashes in an internal `clusterUpgradePlan`.
+For an active operation, it skips initial health checks, resumes the same target
+without writing a new operation, and rejects a competing target.
+ClusterUpgrader creates the operation ID and persists the operation and lock
+atomically through `SaveUpgrade`. A converged plan already at the requested version
+is stored as completed without starting a worker.
+
+ClusterClient maps CAPI observations into shared models in `strategies/models.go`.
+These models contain strings, readiness/pause flags, resource-version tokens and
+operation metadata; components never receive CAPI objects or client handles.
+`UpgradeWorkerState` adds the rollout strategy to the common node-group observations;
+the control-plane state has no worker-specific fields. `ResourceSnapshot` contains
+only name, UID and resourceVersion. Persistence receives that token and the operation,
+without readiness, worker or Machine observations. Application methods receive the
+Cluster token, target version and relevant plan; worker application also receives
+the operation ID used for deterministic template names.
+The adapter checks membership, supported references, UID/resourceVersion identity,
+and the managed bootstrap representation. It persists the operation in the Cluster's
+`vmk.vates.tech/upgrade` annotation.
+The `vmk.vates.tech/upgrade-active=true` label selects pending work. Both are saved
+in one optimistic patch before any rollout change. The persisted `locked` flag
+prevents a second upgrade, including across API processes. Repeated active targets
+return the original operation. Conflicting mutations return 409 while locked.
+
+`ForManagingClusters.GetCluster` exposes only `IsUpgrading`, serialized as
+`is_upgrading` in Cluster responses. It reflects the persistent lock, including
+during retries; malformed operation state conservatively reports true. The POST
+response maps the accepted `UpgradeOperation` to a webserver-owned `UpgradeStatus`
+DTO; persistence targets and resource identities are not exposed.
+
+The HTTP configurator creates `cluster_upgrader.ClusterUpgrader` with the service
+lifetime, Kubernetes resource strategy and version catalogue, then injects it into
+the HTTP component as `ForUpgradingClusters`. Stop cancels and waits for in-flight
+validation and lock persistence as well as registered workers. After lock
+persistence, ClusterUpgrader starts a worker identified by cluster name and
+operation ID. Its local registry prevents duplicate workers in the same process;
+no goroutine or timer runs for idle clusters and no global periodic scan runs.
+
+At startup, the configurator calls `ClusterUpgrader.ResumeClusterUpgrades` once to
+restore workers from persisted active locks. Failure to list operations fails
+startup. A malformed operation or individual Cluster read failure is logged and
+skipped so other clusters and the HTTP API remain available. The persisted lock is
+retained; fixing the annotation and repeating the target request can resume it.
+`Stop` closes admission under the scheduler mutex, cancels the component context,
+and waits for in-flight starts and registered workers. Initial lock writes use a
+context canceled by either the request or the service. A committed lock is retained
+for recovery if shutdown interrupts its start; new starts after shutdown are rejected.
+The private executor always uses the service context and runs only through the registry.
+
+A worker executes the private `runUpgrade` method sequentially: `upgradeControlPlane`,
+`waitForControlPlane`, `upgradeWorkers`, `waitForWorkers`, `waitForMachines`, then
+`completeUpgrade`. Upgrade functions perform idempotent writes and retry failures.
+Wait functions only read resources, including when reporting errors: they do not
+patch resources, create templates, or update the persisted operation. They check
+convergence every ten seconds and proceed immediately when ready.
+The Kubernetes adapter separates error-only Apply methods from read-only readiness
+queries. These queries validate resource identities, bootstrap hashes and references
+as well as controller observations, so external changes cannot silently pass a wait.
+Finalization rechecks both rollouts and observed Machine versions before releasing
+the lock. Each attempt reads the persisted operation and current persistence token.
+A finished, replaced or missing operation stops its worker, as does deletion of the
+Cluster or service cancellation. While waiting for the control plane, it reads only
+control-plane state. Worker observations are loaded after control-plane convergence, and Machine
+observations during final verification. The manager separately reads all
+prerequisites before building a plan.
+Runtime checks are necessary because pause, health and resource membership may have
+changed since that initial validation.
+
+ClusterUpgrader handles persistence conflicts and transient failures. A lost response
+to initial lock persistence still starts a worker, which verifies the persisted
+operation ID before writing. Missing or different operation identities cause it to
+exit. Concurrent writes yield `ErrUpgradeStateChanged` without overwriting a newer
+operation. Failures retain the lock and original completion state, including ambiguous
+writes to the completion state.
+
+Persistent operation identity, optimistic patches, deterministic template names
+and ownership/spec checks preserve idempotency across crashes and service replicas.
+Source and target bootstrap hashes detect unexpected changes. No stage is
+persisted: execution re-reads the actual resources and replays idempotent writes. Completion is recorded through `Locked=false` and `CompletedAt`. Legacy JSON
+annotations containing `stage` remain readable; that field is ignored and omitted
+on subsequent saves. Preflight and delegation tests stay in `cluster_manager_test.go`. Execution, persistence, lock,
+recovery and goroutine lifecycle tests live in `cluster_upgrader_test.go`. Kubernetes
+storage tests exercise the complete manager-to-upgrader-to-resource path for
+optimistic locking, source-template preservation and ambiguous API writes.
+
+The control plane version and bootstrap change in a single patch. Workers are
+updated only after control-plane generation, replica counts and reported versions
+converge. Each deployment switches its version and bootstrap reference together;
+source templates are never mutated. Existing VM image references remain unchanged,
+so this implementation requires the managed bootstrap to install target packages.
+The service refuses unknown bootstrap command layouts rather than guessing.
+
+Success requires worker controller convergence and Ready Machines reporting the
+target kubelet version. The completion patch removes the active label and releases
+the lock atomically. Errors retain the lock and retry; there is no expiry or
+automatic rollback. Regular Cluster responses expose `is_upgrading`; detailed
+progress remains in the persisted operation and service logs.
+Only the latest operation is stored; generated templates remain Cluster-owned.
+
+Mutating API operations acquire `vmk.vates.tech/mutation-lock` on the Cluster
+before touching its control plane, deployments or Machines. All such operations
+and upgrade acquisition compete on the same Cluster resourceVersion. A reservation
+blocks both fresh upgrade preflights and stale plans whose preflight began earlier.
+Cleanup matches the reservation token and Cluster UID, retries optimistic conflicts,
+and uses a bounded context independent of request cancellation. A definitively
+rejected write releases the reservation. A crash, failed cleanup or write with an
+ambiguous outcome retains it without a TTL; clearing it requires verifying that no
+owning request or delayed write is still active. The annotation does not block
+other clusters, reads, descriptions or tag changes.
+
+Readiness accepts CAPI 1.13 observations without aggregated `status.versions`.
+Control-plane `status.version`, observed generations and replica counters provide
+the fallback; final Machine readiness and observed kubelet versions remain mandatory.
+
+The locks coordinate requests through this API; they are not an admission policy
+for kubectl or external controllers. Operators must coordinate external changes
+and infrastructure/application prerequisites. A full Vates rollout remains
+necessary to verify provider behavior beyond the fake-client and HTTP tests.

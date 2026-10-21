@@ -90,6 +90,7 @@ func TestGetClusters(t *testing.T) {
 				Name: clusterName, Phase: clusterPhase, ControlPlaneEndpoint: controlPlaneIP, ID: clusterUUID,
 			}},
 			expected: []handlers.ClusterInfo{{
+				IsUpgrading:          ptr.To(false),
 				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
 				ID:                   &clusterUUID,
@@ -158,6 +159,7 @@ func TestGetCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: expectedServiceResult,
 			expected: handlers.ClusterInfo{
+				IsUpgrading:          ptr.To(false),
 				Paused:               ptr.To(false),
 				IsAvailable:          ptr.To(false),
 				ID:                   &clusterUUID,
@@ -316,6 +318,7 @@ func TestCreateCluster(t *testing.T) {
 		testCaseSuccess: {
 			serviceResult: strategies.ClusterInfo{Name: clusterName, Phase: clusterPhase, Description: validBody.Description, ID: clusterUUID},
 			expected: handlers.ClusterInfo{
+				IsUpgrading:        ptr.To(false),
 				ID:                 &clusterUUID,
 				Paused:             ptr.To(false),
 				IsAvailable:        ptr.To(false),
@@ -434,7 +437,7 @@ func TestDeleteCluster(t *testing.T) {
 func newClusterHandler(t *testing.T) (*mocks.MockForManagingClusters, handlers.ClusterHandler) {
 	t.Helper()
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	return service, handlers.NewClusterHandler(service)
+	return service, handlers.NewClusterHandler(service, nil)
 }
 
 func newContextWithClusterUUID() *fuego.MockContext[any, any] {

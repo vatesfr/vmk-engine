@@ -42,6 +42,64 @@ func (m *MockForManagingClusterResources) EXPECT() *MockForManagingClusterResour
 	return m.recorder
 }
 
+// ApplyControlPlaneUpgrade mocks base method.
+func (m *MockForManagingClusterResources) ApplyControlPlaneUpgrade(ctx context.Context, cluster strategies.ResourceSnapshot, version string, target strategies.UpgradeTarget) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyControlPlaneUpgrade", ctx, cluster, version, target)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplyControlPlaneUpgrade indicates an expected call of ApplyControlPlaneUpgrade.
+func (mr *MockForManagingClusterResourcesMockRecorder) ApplyControlPlaneUpgrade(ctx, cluster, version, target any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyControlPlaneUpgrade", reflect.TypeOf((*MockForManagingClusterResources)(nil).ApplyControlPlaneUpgrade), ctx, cluster, version, target)
+}
+
+// ApplyWorkerUpgrade mocks base method.
+func (m *MockForManagingClusterResources) ApplyWorkerUpgrade(ctx context.Context, cluster strategies.ResourceSnapshot, operationID, version string, targets []strategies.UpgradeTarget) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyWorkerUpgrade", ctx, cluster, operationID, version, targets)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplyWorkerUpgrade indicates an expected call of ApplyWorkerUpgrade.
+func (mr *MockForManagingClusterResourcesMockRecorder) ApplyWorkerUpgrade(ctx, cluster, operationID, version, targets any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyWorkerUpgrade", reflect.TypeOf((*MockForManagingClusterResources)(nil).ApplyWorkerUpgrade), ctx, cluster, operationID, version, targets)
+}
+
+// BuildControlPlaneUpgradeTarget mocks base method.
+func (m *MockForManagingClusterResources) BuildControlPlaneUpgradeTarget(ctx context.Context, cluster, controlPlane strategies.ResourceSnapshot, version string) (strategies.UpgradeTarget, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildControlPlaneUpgradeTarget", ctx, cluster, controlPlane, version)
+	ret0, _ := ret[0].(strategies.UpgradeTarget)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BuildControlPlaneUpgradeTarget indicates an expected call of BuildControlPlaneUpgradeTarget.
+func (mr *MockForManagingClusterResourcesMockRecorder) BuildControlPlaneUpgradeTarget(ctx, cluster, controlPlane, version any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildControlPlaneUpgradeTarget", reflect.TypeOf((*MockForManagingClusterResources)(nil).BuildControlPlaneUpgradeTarget), ctx, cluster, controlPlane, version)
+}
+
+// BuildWorkerUpgradeTarget mocks base method.
+func (m *MockForManagingClusterResources) BuildWorkerUpgradeTarget(ctx context.Context, cluster, worker strategies.ResourceSnapshot, version string) (strategies.UpgradeTarget, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildWorkerUpgradeTarget", ctx, cluster, worker, version)
+	ret0, _ := ret[0].(strategies.UpgradeTarget)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BuildWorkerUpgradeTarget indicates an expected call of BuildWorkerUpgradeTarget.
+func (mr *MockForManagingClusterResourcesMockRecorder) BuildWorkerUpgradeTarget(ctx, cluster, worker, version any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildWorkerUpgradeTarget", reflect.TypeOf((*MockForManagingClusterResources)(nil).BuildWorkerUpgradeTarget), ctx, cluster, worker, version)
+}
+
 // Create mocks base method.
 func (m *MockForManagingClusterResources) Create(ctx context.Context, params strategies.CreateClusterResourceParams) (strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
@@ -145,6 +203,111 @@ func (mr *MockForManagingClusterResourcesMockRecorder) GetTags(ctx, id any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTags", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetTags), ctx, id)
 }
 
+// GetUpgrade mocks base method.
+func (m *MockForManagingClusterResources) GetUpgrade(ctx context.Context, name string) (strategies.UpgradeOperation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUpgrade", ctx, name)
+	ret0, _ := ret[0].(strategies.UpgradeOperation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUpgrade indicates an expected call of GetUpgrade.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetUpgrade(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpgrade", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetUpgrade), ctx, name)
+}
+
+// GetUpgradeContext mocks base method.
+func (m *MockForManagingClusterResources) GetUpgradeContext(ctx context.Context, name string) (strategies.UpgradeContext, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUpgradeContext", ctx, name)
+	ret0, _ := ret[0].(strategies.UpgradeContext)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUpgradeContext indicates an expected call of GetUpgradeContext.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetUpgradeContext(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpgradeContext", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetUpgradeContext), ctx, name)
+}
+
+// GetUpgradeControlPlane mocks base method.
+func (m *MockForManagingClusterResources) GetUpgradeControlPlane(ctx context.Context, cluster strategies.ResourceSnapshot) (strategies.UpgradeResourceState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUpgradeControlPlane", ctx, cluster)
+	ret0, _ := ret[0].(strategies.UpgradeResourceState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUpgradeControlPlane indicates an expected call of GetUpgradeControlPlane.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetUpgradeControlPlane(ctx, cluster any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpgradeControlPlane", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetUpgradeControlPlane), ctx, cluster)
+}
+
+// GetUpgradeMachines mocks base method.
+func (m *MockForManagingClusterResources) GetUpgradeMachines(ctx context.Context, cluster strategies.ResourceSnapshot) ([]strategies.UpgradeMachineState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUpgradeMachines", ctx, cluster)
+	ret0, _ := ret[0].([]strategies.UpgradeMachineState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUpgradeMachines indicates an expected call of GetUpgradeMachines.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetUpgradeMachines(ctx, cluster any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpgradeMachines", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetUpgradeMachines), ctx, cluster)
+}
+
+// GetUpgradeWorkers mocks base method.
+func (m *MockForManagingClusterResources) GetUpgradeWorkers(ctx context.Context, cluster strategies.ResourceSnapshot) ([]strategies.UpgradeWorkerState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUpgradeWorkers", ctx, cluster)
+	ret0, _ := ret[0].([]strategies.UpgradeWorkerState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUpgradeWorkers indicates an expected call of GetUpgradeWorkers.
+func (mr *MockForManagingClusterResourcesMockRecorder) GetUpgradeWorkers(ctx, cluster any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpgradeWorkers", reflect.TypeOf((*MockForManagingClusterResources)(nil).GetUpgradeWorkers), ctx, cluster)
+}
+
+// IsControlPlaneUpgradeReady mocks base method.
+func (m *MockForManagingClusterResources) IsControlPlaneUpgradeReady(ctx context.Context, cluster strategies.ResourceSnapshot, version string, target strategies.UpgradeTarget) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsControlPlaneUpgradeReady", ctx, cluster, version, target)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsControlPlaneUpgradeReady indicates an expected call of IsControlPlaneUpgradeReady.
+func (mr *MockForManagingClusterResourcesMockRecorder) IsControlPlaneUpgradeReady(ctx, cluster, version, target any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsControlPlaneUpgradeReady", reflect.TypeOf((*MockForManagingClusterResources)(nil).IsControlPlaneUpgradeReady), ctx, cluster, version, target)
+}
+
+// IsWorkerUpgradeReady mocks base method.
+func (m *MockForManagingClusterResources) IsWorkerUpgradeReady(ctx context.Context, cluster strategies.ResourceSnapshot, operationID, version string, targets []strategies.UpgradeTarget) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsWorkerUpgradeReady", ctx, cluster, operationID, version, targets)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsWorkerUpgradeReady indicates an expected call of IsWorkerUpgradeReady.
+func (mr *MockForManagingClusterResourcesMockRecorder) IsWorkerUpgradeReady(ctx, cluster, operationID, version, targets any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsWorkerUpgradeReady", reflect.TypeOf((*MockForManagingClusterResources)(nil).IsWorkerUpgradeReady), ctx, cluster, operationID, version, targets)
+}
+
 // List mocks base method.
 func (m *MockForManagingClusterResources) List(ctx context.Context) ([]strategies.ClusterInfo, error) {
 	m.ctrl.T.Helper()
@@ -158,6 +321,35 @@ func (m *MockForManagingClusterResources) List(ctx context.Context) ([]strategie
 func (mr *MockForManagingClusterResourcesMockRecorder) List(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockForManagingClusterResources)(nil).List), ctx)
+}
+
+// ListActiveUpgrades mocks base method.
+func (m *MockForManagingClusterResources) ListActiveUpgrades(ctx context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActiveUpgrades", ctx)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActiveUpgrades indicates an expected call of ListActiveUpgrades.
+func (mr *MockForManagingClusterResourcesMockRecorder) ListActiveUpgrades(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActiveUpgrades", reflect.TypeOf((*MockForManagingClusterResources)(nil).ListActiveUpgrades), ctx)
+}
+
+// SaveUpgrade mocks base method.
+func (m *MockForManagingClusterResources) SaveUpgrade(ctx context.Context, cluster strategies.ResourceSnapshot, operation strategies.UpgradeOperation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveUpgrade", ctx, cluster, operation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveUpgrade indicates an expected call of SaveUpgrade.
+func (mr *MockForManagingClusterResourcesMockRecorder) SaveUpgrade(ctx, cluster, operation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveUpgrade", reflect.TypeOf((*MockForManagingClusterResources)(nil).SaveUpgrade), ctx, cluster, operation)
 }
 
 // SetControlPlaneReplicas mocks base method.

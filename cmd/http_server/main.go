@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"capv-proxy/pkg/components/cluster_manager"
+	"capv-proxy/pkg/components/cluster_upgrader"
 	"capv-proxy/pkg/components/management_kubernetes_client"
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver"
@@ -101,7 +102,8 @@ func (o options) validate() error {
 }
 
 func run(opts options) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	restConfig, scheme, err := buildRestConfig(opts.kubeClient, opts.kubeconfig)
 	if err != nil {
@@ -135,17 +137,23 @@ func run(opts options) error {
 	k8sConfigMapClient := management_kubernetes_client.NewConfigMapClient(k8sClient, opts.namespace)
 	workloadClient := workload_kubernetes_client.NewNodeClient(k8sSecretClient)
 	versionManager := versionmanager.NewVersionManager()
+	clusterUpgrader := cluster_upgrader.NewClusterUpgrader(ctx, k8sClusterClient, versionManager)
+	defer clusterUpgrader.Stop()
 	clusterManager := cluster_manager.NewClusterManager(
 		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,
 		workloadClient, workloadClient,
 	)
+
+	if err := clusterUpgrader.ResumeClusterUpgrades(ctx); err != nil {
+		return fmt.Errorf("resume cluster upgrades: %w", err)
+	}
 
 	httpServer := webserver.HttpServer{
 		Address:   opts.address,
 		Port:      opts.port,
 		SwaggerUI: opts.swaggerUI,
 	}
-	if err := httpServer.Run(clusterManager, versionManager); err != nil {
+	if err := httpServer.Run(clusterManager, clusterUpgrader, versionManager); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)
 	}
 

@@ -723,3 +723,12 @@ func TestSetClusterDescription(t *testing.T) {
 		})
 	}
 }
+
+func TestUpgradeLockBlocksNodeMutations(t *testing.T) {
+	resources := mocks.NewMockForManagingClusterResources(gomock.NewController(t))
+	machines := mocks.NewMockForManagingClusterMachines(gomock.NewController(t))
+	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, versionmanager.NewVersionManager(), nil, nil)
+	resources.EXPECT().GetByUUID(t.Context(), clusterUUID).Return(strategies.ClusterInfo{IsUpgrading: true}, nil).Times(2)
+	require.ErrorIs(t, manager.DeleteClusterNode(t.Context(), clusterUUID, deleteNodeUUID), strategies.ErrClusterUpgradeConflict)
+	require.ErrorIs(t, manager.SetClusterNodePaused(t.Context(), clusterUUID, deleteNodeUUID, true), strategies.ErrClusterUpgradeConflict)
+}

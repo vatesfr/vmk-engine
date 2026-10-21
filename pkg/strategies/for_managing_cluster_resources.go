@@ -12,6 +12,19 @@ type ForManagingClusterResources interface {
 	SetWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error
 	SetControlPlaneReplicas(ctx context.Context, id uuid.UUID, replicas int32) error
 	SetPaused(ctx context.Context, id uuid.UUID, paused bool) error
+	GetUpgradeContext(ctx context.Context, name string) (UpgradeContext, error)
+	GetUpgradeControlPlane(ctx context.Context, cluster ResourceSnapshot) (UpgradeResourceState, error)
+	GetUpgradeWorkers(ctx context.Context, cluster ResourceSnapshot) ([]UpgradeWorkerState, error)
+	GetUpgradeMachines(ctx context.Context, cluster ResourceSnapshot) ([]UpgradeMachineState, error)
+	ListActiveUpgrades(ctx context.Context) ([]string, error)
+	BuildControlPlaneUpgradeTarget(ctx context.Context, cluster, controlPlane ResourceSnapshot, version string) (UpgradeTarget, error)
+	BuildWorkerUpgradeTarget(ctx context.Context, cluster, worker ResourceSnapshot, version string) (UpgradeTarget, error)
+	SaveUpgrade(ctx context.Context, cluster ResourceSnapshot, operation UpgradeOperation) error
+	ApplyControlPlaneUpgrade(ctx context.Context, cluster ResourceSnapshot, version string, target UpgradeTarget) error
+	ApplyWorkerUpgrade(ctx context.Context, cluster ResourceSnapshot, operationID, version string, targets []UpgradeTarget) error
+	IsControlPlaneUpgradeReady(ctx context.Context, cluster ResourceSnapshot, version string, target UpgradeTarget) (bool, error)
+	IsWorkerUpgradeReady(ctx context.Context, cluster ResourceSnapshot, operationID, version string, targets []UpgradeTarget) (bool, error)
+	GetUpgrade(ctx context.Context, name string) (UpgradeOperation, error)
 	Create(ctx context.Context, params CreateClusterResourceParams) (ClusterInfo, error)
 	List(ctx context.Context) ([]ClusterInfo, error)
 	GetByUUID(ctx context.Context, id uuid.UUID) (ClusterInfo, error)

@@ -214,6 +214,18 @@ func (m MachineClient) DeleteMachine(ctx context.Context, clusterID, machineID u
 	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
 		return err
 	}
+	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
+	if err != nil {
+		return err
+	}
+	clusters := NewClusterClient(m.kubernetesClient, m.informerCache, m.namespace)
+	return clusters.withClusterMutation(ctx, machine.Spec.ClusterName, func(ctx context.Context) error { return m.deleteMachine(ctx, clusterID, machineID) })
+}
+
+func (m MachineClient) deleteMachine(ctx context.Context, clusterID, machineID uuid.UUID) error {
+	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
+		return err
+	}
 
 	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
 	if err != nil {
@@ -242,7 +254,7 @@ func (m MachineClient) DeleteMachine(ctx context.Context, clusterID, machineID u
 		if apierrors.IsConflict(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrNodeDeletionConflict, err)
 		}
-		return fmt.Errorf("delete Machine %s: %w", key, err)
+		return fmt.Errorf("delete Machine %s: %w", key, mutationWriteError(err))
 	}
 	return nil
 }
@@ -250,6 +262,18 @@ func (m MachineClient) DeleteMachine(ctx context.Context, clusterID, machineID u
 // SetMachinePaused changes only the Machine pause annotation. Membership is
 // checked against spec.clusterName, and the patch guards against reassignment.
 func (m MachineClient) SetMachinePaused(ctx context.Context, clusterID, machineID uuid.UUID, paused bool) error {
+	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
+		return err
+	}
+	machine, err := m.getMachineByUUIDInCluster(ctx, clusterID, machineID)
+	if err != nil {
+		return err
+	}
+	clusters := NewClusterClient(m.kubernetesClient, m.informerCache, m.namespace)
+	return clusters.withClusterMutation(ctx, machine.Spec.ClusterName, func(ctx context.Context) error { return m.setMachinePaused(ctx, clusterID, machineID, paused) })
+}
+
+func (m MachineClient) setMachinePaused(ctx context.Context, clusterID, machineID uuid.UUID, paused bool) error {
 	if err := m.validateMachineMutationInput(clusterID, machineID); err != nil {
 		return err
 	}

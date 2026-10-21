@@ -10,7 +10,8 @@ import (
 )
 
 type ClusterHandler struct {
-	clusterService strategies.ForManagingClusters
+	clusterService  strategies.ForManagingClusters
+	clusterUpgrader strategies.ForUpgradingClusters
 }
 
 type ClusterCreateParams struct {
@@ -29,6 +30,20 @@ type ClusterCreateParams struct {
 
 type ClusterDescriptionParams struct {
 	Description *string `json:"description" validate:"required,max=4000" description:"Cluster description, up to 4000 Unicode code points. An empty string clears it."`
+}
+
+// UpgradeStatus is the HTTP representation of an accepted upgrade.
+type UpgradeStatus struct {
+	ID          string `json:"id"`
+	Version     string `json:"version"`
+	Locked      bool   `json:"locked"`
+	StartedAt   string `json:"started_at"`
+	CompletedAt string `json:"completed_at,omitempty"`
+	Message     string `json:"message,omitempty"`
+}
+
+type ClusterUpgradeParams struct {
+	Version string `json:"version" validate:"required" description:"Available Kubernetes release without the v prefix" example:"1.36.5"`
 }
 
 type ClusterReplicasParams struct {
@@ -62,6 +77,7 @@ type ClusterInfo struct {
 	ID                          *uuid.UUID        `json:"id,omitempty"`
 	IsControlPlaneInitialized   *bool             `json:"is_control_plane_initialized,omitempty" description:"Control plane initialization milestone; stays true once reached. Omitted if unreported"`
 	IsInfrastructureProvisioned *bool             `json:"is_infrastructure_provisioned,omitempty" description:"Infrastructure provisioning milestone; stays true once reached. Omitted if unreported"`
+	IsUpgrading                 *bool             `json:"is_upgrading,omitempty"`
 	Name                        string            `json:"name,omitempty"`
 	Description                 string            `json:"description,omitempty"`
 	Phase                       string            `json:"phase,omitempty"`
@@ -121,9 +137,9 @@ type ClusterNodeInfo struct {
 	Version       string     `json:"version,omitempty"`
 }
 
-func NewClusterHandler(clusterService strategies.ForManagingClusters) ClusterHandler {
+func NewClusterHandler(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters) ClusterHandler {
 	return ClusterHandler{
-		clusterService: clusterService,
+		clusterService: clusterService, clusterUpgrader: clusterUpgrader,
 	}
 }
 
@@ -223,6 +239,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
 		IsCordon:                    value.IsCordon,
 		IsDraining:                  value.IsDraining,
+		IsUpgrading:                 &value.IsUpgrading,
 		IsAvailable:                 &value.IsAvailable,
 		IsControlPlaneInitialized:   value.IsControlPlaneInitialized,
 		IsInfrastructureProvisioned: value.IsInfrastructureProvisioned,
@@ -451,4 +468,23 @@ func (k ClusterHandler) SetClusterDescription(c fuego.ContextWithBody[ClusterDes
 		return nil, toHTTPError(err)
 	}
 	return nil, toHTTPErrorOrNil(k.clusterService.SetClusterDescription(c.Context(), id, *params.Description))
+}
+
+func (k ClusterHandler) UpgradeCluster(c fuego.ContextWithBody[ClusterUpgradeParams]) (UpgradeStatus, error) {
+	id, err := uuids.Parse(c.PathParam("id"))
+	if err != nil {
+		return UpgradeStatus{}, toHTTPError(err)
+	}
+	params, err := c.Body()
+	if err != nil {
+		return UpgradeStatus{}, toHTTPError(err)
+	}
+	status, err := k.clusterUpgrader.StartUpgrade(c.Context(), id, params.Version)
+	if err != nil {
+		return UpgradeStatus{}, toHTTPError(err)
+	}
+	return UpgradeStatus{
+		ID: status.ID, Version: status.Version, Locked: status.Locked,
+		StartedAt: status.StartedAt, CompletedAt: status.CompletedAt, Message: status.Message,
+	}, nil
 }

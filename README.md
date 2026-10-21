@@ -323,6 +323,7 @@ Base URL: `http://localhost:8080`.
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
+| `POST` | `/kubernetes/clusters/{id}/upgrades` | Starts a durable Kubernetes upgrade for one cluster | Working |
 | `PUT` | `/kubernetes/clusters/{id}/workers/replicas` | Sets the desired worker count | Working |
 | `PUT` | `/kubernetes/clusters/{id}/control-plane/replicas` | Sets the desired control-plane count | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/nodes/{nodeID}` | Requests deletion of a node by UUID belonging to the cluster | Working |
@@ -593,6 +594,99 @@ This operation deletes an individual node without changing the desired
 replica count. Its owning controller can create a replacement. To permanently
 reduce cluster capacity, use the replicas endpoints below.
 
+### Upgrading one cluster
+
+```bash
+curl --request POST http://127.0.0.1:8080/kubernetes/clusters/demo/upgrades \
+  --header 'Content-Type: application/json' \
+  --data '{"version":"1.36.5"}'
+
+curl http://127.0.0.1:8080/kubernetes/clusters/demo
+```
+
+The request accepts an exact release from `/kubernetes/versions-available`, without
+`v`, like the version supplied at cluster creation. It returns 202 with the accepted operation. The version in the response includes `v` to
+match CAPI. Only this cluster's control plane and worker deployments are changed;
+the ConfigMap and other clusters are untouched. A cluster must have a directly
+referenced v1beta2 KubeadmControlPlane and at least one MachineDeployment.
+Topology-managed clusters and OnDelete worker rollouts are unsupported.
+
+Before starting, the service requires matching, fully converged control-plane and
+worker versions, available replicas, and Ready Machines with observed kubelet
+versions. It permits patch upgrades or the next minor version; downgrades, skipped
+minors, prereleases and unavailable releases return 422. An already converged
+cluster at the requested version returns a completed operation without a rollout.
+
+The supported bootstrap is the one shipped with this service: each control-plane
+and worker `preKubeadmCommands` must contain exactly one standalone
+`FULL="v<current-version>"` assignment. The service updates this version anchor,
+retaining the cluster's existing commands and settings. Unknown bootstrap layouts
+are rejected with 409 before the cluster is locked. Upgrades never reload the
+creation ConfigMap or replace arbitrary version strings in shell commands.
+
+CAPI 1.13 observations without `status.versions` are supported: the service uses
+control-plane `status.version` and worker generation/replica convergence. Observed
+Machine and kubelet versions are still checked before starting and completing an upgrade.
+
+A persistent operation in the Cluster annotation `vmk.vates.tech/upgrade` acts as
+an exclusive upgrade lock. Lock acquisition uses a resourceVersion precondition,
+so concurrent API replicas cannot start different upgrades. While active, the
+same target returns the same operation and ensures its worker is running; a competing target returns 409. Scaling,
+cluster/node deletion, and cluster/node pause/resume requests through this API
+also return 409 while locked. Reads and tag changes remain available. This lock
+does not pause CAPI or stop VMs; direct Kubernetes writes and external controllers
+are outside the API lock and must be coordinated separately.
+
+Scaling, pause/resume and deletion reserve the same Cluster through the
+`vmk.vates.tech/mutation-lock` annotation before modifying any associated resource.
+Upgrade acquisition and mutation reservations use optimistic patches on that
+Cluster, so in-flight API mutations also exclude upgrades across service replicas.
+Other clusters remain independent. Successful or definitively rejected mutations
+release their reservation, including when request cancellation interrupts cleanup.
+A crash, failed cleanup or write with an unknown outcome retains the reservation
+without expiry. After verifying the owning request has ended and its resource
+write has finished, an operator can remove that annotation to allow further work.
+
+The HTTP handler calls ClusterUpgrader directly with the cluster UUID and requested
+version. ClusterUpgrader validates the request and resource health, builds its
+internal plan, persists the operation and lock, then starts a goroutine for that
+upgrade only. Its lifetime is tied to the service, independently of the HTTP request.
+The worker follows the rollout in order: control plane, workers, then final Machine
+verification and unlock. Applying target changes and observing their convergence
+are separate phases; waits only read resources and do not rewrite the operation.
+Each phase checks only its cluster and operation every
+10 seconds while waiting for CAPI or retrying an error; ready phases proceed
+immediately, and there is no global polling loop when idle. Repeating the active target does
+not start a duplicate worker in the same process. On startup, a single scan of
+persisted active operations starts a worker for each interrupted upgrade. A corrupt
+operation or individual read failure is logged and isolated to that cluster; it
+does not prevent the API from starting. Failure to list active operations still
+fails startup.
+Progress is inferred from the current resources; no stage is persisted. The service
+patches the control plane's version and bootstrap together, waits for its observed convergence, then
+creates new per-operation worker bootstrap templates and patches each deployment's
+version and bootstrap reference together. Source templates are retained unchanged.
+Generation, replica counts, reported versions and observed Machine kubelet versions
+must converge before the lock is released. `GET /kubernetes/clusters/{id}` exposes
+`is_upgrading`, which remains true while the operation holds the lock, including
+during retries. It becomes false after successful completion.
+
+On an API error, unhealthy machine, stalled drain, or unexpected resource change,
+the operation keeps its lock and its worker retries. Inspect the service logs, the
+persisted operation annotation and CAPI conditions, fix the underlying problem, and let the worker
+continue. The worker exits when the operation completes or is replaced, the Cluster
+is deleted, or the service stops. Service shutdown retains the persisted lock for
+startup recovery.
+There is no automatic timeout unlock, downgrade, force-unlock endpoint, or automatic
+rollback. Only the latest operation is retained internally. Generated templates are owned by the Cluster
+and retained until cluster deletion.
+
+Before production use, verify the installed CAPI/Vates and addon compatibility,
+VM image/bootstrap suitability, surge capacity, disruption budgets, removed APIs,
+and tested etcd/application backups. The service does not automatically validate
+these infrastructure and application prerequisites. Validate a complete rollout
+on a Vates test cluster first.
+
 ### Changing replica counts
 
 Set the number of workers:
@@ -790,7 +884,7 @@ The service uses the following minimum permissions in the target namespace:
 | `cluster.x-k8s.io` | `machinedeployments` | `create`, `get`, `list`, `patch` |
 | `vates.infrastructure.cluster.x-k8s.io` | `xoclusters`, `xomachinetemplates` | `create` |
 | `controlplane.cluster.x-k8s.io` | `kubeadmcontrolplanes` | `create`, `get`, `patch` |
-| `bootstrap.cluster.x-k8s.io` | `kubeadmconfigtemplates` | `create` |
+| `bootstrap.cluster.x-k8s.io` | `kubeadmconfigtemplates` | `create`, `get` |
 
 `watch` is required on `clusters` and `machines` so the informer cache can
 receive Kubernetes watch events and stay current without polling.
@@ -838,6 +932,9 @@ HTTP client
     v
 HTTP component (Fuego routes and handlers)
     +-- ForManagingVersions --------> VersionManager (static catalog)
+    +-- ForUpgradingClusters -------> ClusterUpgrader
+    |                                   +-- ForManagingClusterResources --> ClusterClient
+    |                                   `-- ForManagingVersions -------> VersionManager
     |
     v  ForManagingClusters
 ClusterManager
@@ -852,13 +949,14 @@ ClusterManager
 
 `cmd/http_server/main.go` is the Configurator: it builds the Kubernetes client
 and informer cache, registers UUID v5 field indexes, starts the cache goroutine,
-waits for the initial sync, then creates the Strategies and injects them into
-`ClusterManager` and `ClusterManager` into the HTTP component. This follows
+waits for the initial sync, then creates the Strategies and the independent
+`ClusterManager` and `ClusterUpgrader` components. Both components and the shared
+`VersionManager` are injected into the HTTP component. This follows
 Alistair Cockburn's **Component + Strategy** pattern.
 
-`ClusterClient` holds both a direct `client.Client` (for writes: create, delete,
-tag mutations) and a `cache.Cache` (for all reads: list, get, UUID lookup, tag
-reads). `MachineClient` also holds a direct client for node deletion and pause mutations. The UUID-based lookup routes
+`ClusterClient` holds both a direct `client.Client` (for writes and fresh reads
+used by mutations and upgrades) and a `cache.Cache` (for list, get, UUID lookup
+and tag reads). `MachineClient` also holds a direct client for node deletion and pause mutations. The UUID-based lookup routes
 (`GET /kubernetes/clusters/{uuid}`, `GET /kubernetes/nodes/{id}`) resolve in O(1)
 through UUID v5 field indexes registered on the informer cache at startup.
 
@@ -873,6 +971,7 @@ Main repository structure:
 cmd/http_server/                 entry point and CLI configuration
 pkg/components/webserver/   HTTP routes, handlers, validation, and DTOs
 pkg/components/cluster_manager/ cluster-management orchestration
+pkg/components/cluster_upgrader/ upgrade validation, execution and recovery
 pkg/components/version_manager/ available Kubernetes releases and validation
 pkg/components/management_kubernetes_client/ Management-cluster Kubernetes Strategies
 pkg/components/workload_kubernetes_client/   Workload Nodes, Pods and dynamic connections

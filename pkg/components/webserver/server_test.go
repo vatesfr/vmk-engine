@@ -18,12 +18,14 @@ import (
 
 	"capv-proxy/pkg/components/cluster_manager"
 	versionmanager "capv-proxy/pkg/components/version_manager"
+	"capv-proxy/pkg/components/webserver/handlers"
 	uuids "capv-proxy/pkg/helpers/uuids"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
 )
 
 const (
+	upgradeRequestBody             = `{"version":"1.36.5"}`
 	scalingWorkerTarget            = "workers"
 	k8sVersion                     = "v1.36.0"
 	clusterNotFoundTitle           = "Cluster not found"
@@ -145,10 +147,11 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned",
+                "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
+				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -173,10 +176,11 @@ func TestHTTPRoutes(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedJSON: `[
-				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned",
+                "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
-				{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
+				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
@@ -208,14 +212,14 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedJSON:   `[{"name":"cluster-1","is_available":true},{"name":"cluster-2","is_available":false}]`,
 		},
-		"get available cluster": {
+		"get upgrading cluster": {
 			method: http.MethodGet,
 			path:   getClusterByUUIDPath,
 			setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true}, nil)
+				service.EXPECT().GetClusterByUUID(ctx, clusterUUID).Return(strategies.ClusterInfo{Name: clusterName, IsAvailable: true, IsUpgrading: true}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":true,"is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -228,7 +232,8 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"id":"` + clusterUUID.String() + `","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"id":"` + clusterUUID.String() + `","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned",
+                "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -266,7 +271,7 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":1,
 					"versions":[{"version":"v1.36.0","replicas":1},{"version":"v1.35.0","replicas":2}]},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":4,
@@ -366,7 +371,8 @@ func TestHTTPRoutes(t *testing.T) {
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned","control_plane_endpoint":"10.0.0.10",
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned",
+                "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -380,7 +386,7 @@ func TestHTTPRoutes(t *testing.T) {
 				service.EXPECT().CreateCluster(ctx, params).Return(strategies.ClusterInfo{Name: clusterName, Tags: params.Tags}, nil)
 			},
 			expectedStatus: http.StatusOK,
-			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
+			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
@@ -729,7 +735,7 @@ func newTestHandler(
 ) http.Handler {
 	return HttpServer{
 		SwaggerUI: SwaggerUIDisabled,
-	}.Handler(clusterService, versionmanager.NewVersionManager())
+	}.Handler(clusterService, nil, versionmanager.NewVersionManager())
 }
 
 func TestClusterTagBodyHTTPDecoding(t *testing.T) {
@@ -857,7 +863,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 
 func TestNodeDeletionOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
 	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeID}")
 	require.NotNil(t, route)
 	require.NotNil(t, route.Delete)
@@ -894,7 +900,7 @@ func TestCreateClusterHTTPRejectsInvalidParameters(t *testing.T) {
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versions,
 				nil, nil,
 			)
-			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, versions)
+			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, nil, versions)
 			var payload map[string]any
 			require.NoError(t, json.Unmarshal([]byte(createClusterRequestBody), &payload))
 			payload[tc.field] = tc.value
@@ -1011,7 +1017,7 @@ func TestScalingHTTPValidation(t *testing.T) {
 
 func TestScalingOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
 	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
 		route := document.Paths.Find("/kubernetes/clusters/{id}/" + target + "/replicas")
 		require.NotNil(t, route)
@@ -1041,7 +1047,7 @@ func TestScalingOpenAPI(t *testing.T) {
 
 func TestPauseOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
 	for _, base := range []string{"/kubernetes/clusters/{id}", "/kubernetes/clusters/{id}/nodes/{nodeName}"} {
 		for _, endpoint := range []struct {
 			method string
@@ -1155,7 +1161,7 @@ func TestClusterCreatorHTTP(t *testing.T) {
 		for _, method := range []string{http.MethodPost, http.MethodGet, "LIST"} {
 			t.Run(method+"/"+creatorID, func(t *testing.T) {
 				response := map[string]any{
-					"id": clusterUUID.String(), "name": clusterName, "is_reconciliation_paused": false, "is_available": false,
+					"id": clusterUUID.String(), "name": clusterName, "is_upgrading": false, "is_reconciliation_paused": false, "is_available": false,
 					"control_plane_status": map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
 					"worker_status":        map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
 				}
@@ -1214,4 +1220,60 @@ func TestNodeIPsFieldSelection(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestUpgradeHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		method   string
+		body     string
+		err      error
+		expected int
+		call     bool
+	}{
+		{name: "start", method: http.MethodPost, body: upgradeRequestBody, expected: http.StatusAccepted, call: true},
+		{name: "mutation in progress", method: http.MethodPost, body: upgradeRequestBody, err: strategies.ErrClusterMutationConflict, expected: http.StatusConflict, call: true},
+		{name: "locked", method: http.MethodPost, body: upgradeRequestBody, err: strategies.ErrClusterUpgradeConflict, expected: http.StatusConflict, call: true},
+		{name: "invalid path", method: http.MethodPost, body: upgradeRequestBody, err: strategies.ErrInvalidUpgradeVersion, expected: http.StatusUnprocessableEntity, call: true},
+		{name: "no cluster", method: http.MethodPost, body: upgradeRequestBody, err: strategies.ErrClusterNotFound, expected: http.StatusNotFound, call: true},
+		{name: "missing version", method: http.MethodPost, body: `{}`, expected: http.StatusUnprocessableEntity},
+		{name: "malformed", method: http.MethodPost, body: `{`, expected: http.StatusBadRequest},
+		{name: "unexpected upgrade field", method: http.MethodPost, body: `{"version":"1.36.5","force":true}`, expected: http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upgrader := mocks.NewMockForUpgradingClusters(gomock.NewController(t))
+			status := strategies.UpgradeOperation{
+				ID: "op-1", Version: "v1.36.5", Locked: true,
+				StartedAt: "2026-10-20T10:00:00Z", Message: "Upgrade accepted",
+				ControlPlane: strategies.UpgradeTarget{Name: "internal-control-plane", UID: "internal-uid"},
+				Workers:      []strategies.UpgradeTarget{{Name: "internal-workers"}},
+			}
+			if tc.call {
+				upgrader.EXPECT().StartUpgrade(gomock.Any(), clusterUUID, "1.36.5").Return(status, tc.err)
+			}
+			req := httptest.NewRequest(tc.method, getClusterByUUIDPath+"/upgrades", strings.NewReader(tc.body))
+			req.Header.Set(contentTypeHeader, applicationJSON)
+			rec := httptest.NewRecorder()
+			(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager()).ServeHTTP(rec, req)
+			require.Equal(t, tc.expected, rec.Code, rec.Body.String())
+			if tc.expected == http.StatusAccepted {
+				assert.Empty(t, rec.Header().Get("Location"))
+				var actual handlers.UpgradeStatus
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &actual))
+				assert.NotContains(t, rec.Body.String(), "internal-")
+				assert.NotContains(t, rec.Body.String(), `"stage"`)
+				assert.Equal(t, handlers.UpgradeStatus{ID: status.ID, Version: status.Version, Locked: status.Locked, StartedAt: status.StartedAt, Message: status.Message}, actual)
+			}
+		})
+	}
+}
+
+func TestUpgradeHTTPRejectsInvalidUUID(t *testing.T) {
+	upgrader := mocks.NewMockForUpgradingClusters(gomock.NewController(t))
+	req := httptest.NewRequest(http.MethodPost, clustersPath+"/"+clusterName+"/upgrades", strings.NewReader(upgradeRequestBody))
+	req.Header.Set(contentTypeHeader, applicationJSON)
+	rec := httptest.NewRecorder()
+	(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager()).ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	// Invalid UUIDs must be rejected before calling the upgrader.
 }

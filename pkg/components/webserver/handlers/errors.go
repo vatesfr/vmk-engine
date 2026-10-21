@@ -57,9 +57,16 @@ func toHTTPError(err error) error {
 		return fuego.ConflictError{Err: err, Title: "Node operation blocked", Detail: err.Error()}
 	case errors.Is(err, strategies.ErrInvalidDrainOptions):
 		return fuego.HTTPError{Err: err, Status: http.StatusUnprocessableEntity, Title: "Invalid drain options", Detail: strategies.ErrInvalidDrainOptions.Error()}
+	case errors.Is(err, strategies.ErrClusterMutationConflict):
+		return fuego.ConflictError{Err: err, Title: "Cluster mutation conflict", Detail: err.Error()}
+	case errors.Is(err, strategies.ErrClusterUpgradeConflict):
+		return fuego.ConflictError{Err: err, Title: "Cluster upgrade conflict", Detail: err.Error()}
+	case errors.Is(err, strategies.ErrClusterUpgradeNotFound):
+		return fuego.NotFoundError{Err: err, Title: "Cluster upgrade not found", Detail: strategies.ErrClusterUpgradeNotFound.Error()}
 	case errors.Is(err, strategies.ErrReplicasRejected):
 		return fuego.HTTPError{Err: err, Status: http.StatusUnprocessableEntity, Title: "Invalid cluster parameters", Detail: strategies.ErrReplicasRejected.Error()}
-	case errors.Is(err, strategies.ErrInvalidReplicas),
+	case errors.Is(err, strategies.ErrInvalidUpgradeVersion),
+		errors.Is(err, strategies.ErrInvalidReplicas),
 		errors.Is(err, strategies.ErrInvalidControlPlaneReplicas),
 		errors.Is(err, strategies.ErrClusterDescriptionTooLong),
 		errors.Is(err, strategies.ErrInvalidClusterName),

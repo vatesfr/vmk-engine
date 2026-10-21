@@ -5,8 +5,8 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 
+	uuids "capv-proxy/pkg/helpers/uuids"
 	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/uuids"
 )
 
 type ClusterHandler struct {

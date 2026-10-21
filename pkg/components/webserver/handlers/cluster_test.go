@@ -12,9 +12,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"capv-proxy/pkg/components/webserver/handlers"
+	uuids "capv-proxy/pkg/helpers/uuids"
 	"capv-proxy/pkg/strategies"
 	"capv-proxy/pkg/strategies/mocks"
-	"capv-proxy/pkg/uuids"
 
 	"k8s.io/utils/ptr"
 )

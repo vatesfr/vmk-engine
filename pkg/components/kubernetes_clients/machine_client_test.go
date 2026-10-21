@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	uuids "capv-proxy/pkg/helpers/uuids"
 	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/uuids"
 
 	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"

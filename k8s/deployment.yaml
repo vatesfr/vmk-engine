@@ -161,8 +161,8 @@ data:
   serviceDomain: "cluster.local"
   cni: "cilium"
   controlPlaneMachineSpec: |
-    templateID: <your-xo-template-uuid>
-    poolID: <your-xo-pool-uuid>
+    templateID: 1fc7c1a2-f3c5-5689-a96a-aa8d5097c54c
+    poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
       cloudInit: true
@@ -175,8 +175,8 @@ data:
       networks:
         - networkID: <your-xo-network-uuid>
   workerMachineSpec: |
-    templateID: <your-xo-template-uuid>
-    poolID: <your-xo-pool-uuid>
+    templateID: 1fc7c1a2-f3c5-5689-a96a-aa8d5097c54c
+    poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
       cloudInit: true

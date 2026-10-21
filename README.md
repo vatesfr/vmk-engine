@@ -761,7 +761,7 @@ curl http://127.0.0.1:8080/kubernetes/clusters/<uuid>
 curl http://127.0.0.1:8080/kubernetes/nodes/<uuid>
 ```
 
-Each node entry also includes a `machine_id` field when the CAPI `Machine`
+Each node entry also includes a `node_id` field when the CAPI `Machine`
 exposes a Xen Orchestra `providerID` (for example
 `xenorchestra://<pool>/<vm-uuid>`). The server extracts the VM UUID and exposes
 it as the machine identifier; if the provider ID is missing or not from Xen

@@ -855,7 +855,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 				},
 				expectedStatus: http.StatusOK,
 				expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"node-1",` +
-					`"node_name":"worker-01","machine_id":"01234567-89ab-cdef-0123-456789abcdef", "$cluster":"00000000-0000-0000-0000-000000000000"}]`,
+					`"node_name":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef", "$cluster":"00000000-0000-0000-0000-000000000000"}]`,
 			})
 		})
 	}

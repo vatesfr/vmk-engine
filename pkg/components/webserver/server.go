@@ -62,7 +62,14 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	server.OpenAPI.Description().Info.Version = "0.1.0"
 	server.OpenAPI.Description().Info.Description = "REST API for managing kubernetes clusters."
 
-	fuego.Get(server, "/ping", handlers.HealthCheck,
+	// Share routing and OpenAPI while keeping health checks out of request/response logs.
+	healthServer := fuego.NewServer(fuego.WithLoggingMiddleware(fuego.LoggingConfig{
+		DisableRequest:  true,
+		DisableResponse: true,
+	}))
+	healthServer.Mux = server.Mux
+	healthServer.Engine = server.Engine
+	fuego.Get(healthServer, "/ping", handlers.HealthCheck,
 		fuego.OptionTags("Health"),
 	)
 

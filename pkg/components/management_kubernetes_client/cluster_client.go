@@ -305,7 +305,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 			ReadyReplicas:     int(ptr.Deref(status.ReadyReplicas, 0)),
 			Replicas:          int(ptr.Deref(status.Replicas, 0)),
 			UpToDateReplicas:  int(ptr.Deref(status.UpToDateReplicas, 0)),
-			Versions:          toVersionNodeStatuses(status.Versions),
+			Versions:          toVersionNodeStatuses(status.Versions, status.Replicas),
 		}
 	}
 	if status := value.Status.Workers; status != nil {
@@ -315,7 +315,7 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 			ReadyReplicas:     int(ptr.Deref(status.ReadyReplicas, 0)),
 			Replicas:          int(ptr.Deref(status.Replicas, 0)),
 			UpToDateReplicas:  int(ptr.Deref(status.UpToDateReplicas, 0)),
-			Versions:          toVersionNodeStatuses(status.Versions),
+			Versions:          toVersionNodeStatuses(status.Versions, status.Replicas),
 		}
 	}
 	if op, err := readUpgrade(value); err != nil {
@@ -344,7 +344,16 @@ func clusterScaling(cluster *capiv1.Cluster) *bool {
 	return nil
 }
 
-func toVersionNodeStatuses(versions []capiv1.StatusVersion) []strategies.VersionNodeStatus {
+// toVersionNodeStatuses converts the aggregated replica versions. Some control
+// plane providers do not report versions; their replicas are then reported
+// with an unknown version rather than omitted.
+func toVersionNodeStatuses(versions []capiv1.StatusVersion, replicas *int32) []strategies.VersionNodeStatus {
+	if len(versions) == 0 {
+		if count := ptr.Deref(replicas, 0); count > 0 {
+			return []strategies.VersionNodeStatus{{Replicas: int(count), Version: unknownVersion}}
+		}
+		return nil
+	}
 	var result []strategies.VersionNodeStatus
 	for _, version := range versions {
 		result = append(result, strategies.VersionNodeStatus{

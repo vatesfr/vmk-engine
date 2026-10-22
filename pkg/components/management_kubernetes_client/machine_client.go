@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	workerRole    = "worker"
-	unknownStatus = "Unknown"
+	workerRole     = "worker"
+	unknownStatus  = "Unknown"
+	unknownVersion = "unknown"
 )
 
 type MachineClient struct {
@@ -189,8 +190,21 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		IPs:           machineIPs(machine.Status.Addresses),
 		MachineID:     machineID,
 		ParentCluster: uuids.ClusterID(clusterName),
-		Version:       machine.Spec.Version,
+		Version:       machineVersion(machine),
 	}
+}
+
+// machineVersion returns the desired Machine version, falling back to the
+// kubelet version reported by the node. Some control plane providers do not
+// set spec.version on their Machines, so the version may be unknown.
+func machineVersion(machine *capiv1.Machine) string {
+	if machine.Spec.Version != "" {
+		return machine.Spec.Version
+	}
+	if machine.Status.NodeInfo != nil && machine.Status.NodeInfo.KubeletVersion != "" {
+		return machine.Status.NodeInfo.KubeletVersion
+	}
+	return unknownVersion
 }
 
 func machineIPs(addresses capiv1.MachineAddresses) []string {

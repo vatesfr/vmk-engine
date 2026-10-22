@@ -309,6 +309,25 @@ func TestClusterClientGet(t *testing.T) {
 		}, info)
 	})
 
+	t.Run("control plane without reported versions", func(t *testing.T) {
+		cluster := &capiv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
+			Status: capiv1.ClusterStatus{
+				ControlPlane: &capiv1.ClusterControlPlaneStatus{Replicas: ptr.To(int32(1)), ReadyReplicas: ptr.To(int32(1))},
+			},
+		}
+		clusterClient := NewClusterClient(newFakeClient(t, cluster), newFakeCache(t, cluster), testNamespace)
+
+		info, err := clusterClient.Get(t.Context(), clusterName)
+
+		require.NoError(t, err)
+		assert.Empty(t, info.Version)
+		assert.Equal(t, strategies.NodeTypeStatus{
+			Replicas: 1, ReadyReplicas: 1,
+			Versions: []strategies.VersionNodeStatus{{Version: unknownVersion, Replicas: 1}},
+		}, info.ControlPlanesStatus)
+	})
+
 	t.Run("partially populated replica status", func(t *testing.T) {
 		cluster := &capiv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
@@ -327,7 +346,9 @@ func TestClusterClientGet(t *testing.T) {
 			APIServerPort: 6443,
 			ID:            uuids.ClusterID(clusterName), Name: clusterName, CreatedAt: time.Time{}.String(),
 			ControlPlanesStatus: strategies.NodeTypeStatus{DesiredReplicas: 3},
-			WorkersStatus:       strategies.NodeTypeStatus{Replicas: 2},
+			WorkersStatus: strategies.NodeTypeStatus{
+				Replicas: 2, Versions: []strategies.VersionNodeStatus{{Version: unknownVersion, Replicas: 2}},
+			},
 		}, info)
 	})
 

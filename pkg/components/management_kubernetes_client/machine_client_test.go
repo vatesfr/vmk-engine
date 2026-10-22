@@ -19,6 +19,7 @@ import (
 	xosdk "github.com/vatesfr/xenorchestra-go-sdk/pkg/payloads"
 	xok8scommon "github.com/vatesfr/xenorchestra-k8s-common"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -81,8 +82,11 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace: testNamespace,
 			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus, IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID},
-				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID},
+				{
+					ID: uuids.NodeID(clusterName, "control-plane-a"), Name: "control-plane-a", Role: controlPlaneRole, Status: readyStatus,
+					IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID, Version: unknownVersion,
+				},
+				{ID: uuids.NodeID(clusterName, "worker-b"), Name: "worker-b", Role: workerRole, Status: readyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID, Version: unknownVersion},
 			},
 		},
 		"empty cluster returns no machine": {
@@ -111,7 +115,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace: testNamespace,
 			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: notReadyStatus, IPs: []string{workerIP}, ParentCluster: clusterUUID, Version: unknownVersion},
 			},
 		},
 		"unknown ready condition maps to Unknown": {
@@ -121,7 +125,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 			namespace: testNamespace,
 			clusterID: clusterUUID,
 			want: []strategies.ClusterNodeInfo{
-				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterUUID},
+				{ID: uuids.NodeID(clusterName, workerRole), Name: workerRole, Role: workerRole, Status: unknownStatus, ParentCluster: clusterUUID, Version: unknownVersion},
 			},
 		},
 	}
@@ -303,12 +307,12 @@ func TestMachineClientGetAllMachines(t *testing.T) {
 			want: []strategies.ClusterNodeInfo{
 				{
 					ID: uuids.NodeID(otherClusterName, "a-machine"), Name: "a-machine", NodeName: "z-node", Role: workerRole, Status: notReadyStatus,
-					IPs: []string{externalIP}, ParentCluster: uuids.ClusterID(otherClusterName),
+					IPs: []string{externalIP}, ParentCluster: uuids.ClusterID(otherClusterName), Version: unknownVersion,
 				},
-				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase},
+				{ID: uuids.NodeID("", "unlabelled"), Name: "unlabelled", Role: workerRole, Status: provisioningPhase, Version: unknownVersion},
 				{
 					ID: uuids.NodeID(clusterName, "z-machine"), Name: "z-machine", NodeName: "a-node", Role: controlPlaneRole, Status: readyStatus,
-					IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID,
+					IPs: []string{controlPlaneIP}, ParentCluster: clusterUUID, Version: unknownVersion,
 				},
 			},
 		},
@@ -548,6 +552,7 @@ func TestMachineClientGetMachineByUUID(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, strategies.ClusterNodeInfo{
 			ID: id, ParentCluster: clusterUUID, Name: "machine-name", Role: workerRole, Status: readyStatus, IPs: []string{workerIP},
+			Version: unknownVersion,
 		}, node)
 	})
 
@@ -613,21 +618,33 @@ func TestGetNodeNameChecksMembershipAndRegistration(t *testing.T) {
 }
 
 func TestMachineClientNodeVersion(t *testing.T) {
-	for _, version := range []string{"v1.36.0", "v1.35.4", ""} {
-		t.Run("version="+version, func(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		specVersion    string
+		kubeletVersion string
+		want           string
+	}{
+		{name: "spec version", specVersion: "v1.36.0", kubeletVersion: "v1.35.0", want: "v1.36.0"},
+		{name: "kubelet fallback", kubeletVersion: "v1.35.4", want: "v1.35.4"},
+		{name: "unknown", want: unknownVersion},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			machine := machineWithStatus("machine", testNamespace, clusterName, false, metav1.ConditionTrue)
-			machine.Spec.Version = version
+			machine.Spec.Version = tc.specVersion
+			if tc.kubeletVersion != "" {
+				machine.Status.NodeInfo = &corev1.NodeSystemInfo{KubeletVersion: tc.kubeletVersion}
+			}
 			machineClient := NewMachineClient(nil, newFakeCache(t, machine), testNamespace)
 
 			clusterNodes, err := machineClient.GetMachinesByCluster(t.Context(), clusterUUID)
 			require.NoError(t, err)
 			require.Len(t, clusterNodes, 1)
-			assert.Equal(t, version, clusterNodes[0].Version)
+			assert.Equal(t, tc.want, clusterNodes[0].Version)
 
 			allNodes, err := machineClient.GetAllMachines(t.Context())
 			require.NoError(t, err)
 			require.Len(t, allNodes, 1)
-			assert.Equal(t, version, allNodes[0].Version)
+			assert.Equal(t, tc.want, allNodes[0].Version)
 		})
 	}
 }

@@ -32,6 +32,7 @@ type ForManagingClusters interface {
 }
 
 type ClusterNodeInfo struct {
+	IsDeleting    bool
 	ID            uuid.UUID
 	IsCordon      *bool
 	IsDraining    *bool

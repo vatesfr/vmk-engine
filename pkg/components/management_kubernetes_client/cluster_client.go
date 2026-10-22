@@ -272,6 +272,8 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 	}
 
 	info := strategies.ClusterInfo{
+		IsDeleting:                  !value.DeletionTimestamp.IsZero(),
+		IsScaling:                   clusterScaling(value),
 		Paused:                      ptr.Deref(value.Spec.Paused, false),
 		IsAvailable:                 apimeta.IsStatusConditionTrue(value.Status.Conditions, capiv1.ClusterAvailableCondition),
 		ID:                          uuids.ClusterID(value.GetName()),
@@ -322,6 +324,24 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 		info.IsUpgrading = op.Locked
 	}
 	return info
+}
+
+func clusterScaling(cluster *capiv1.Cluster) *bool {
+	up := apimeta.FindStatusCondition(cluster.Status.Conditions, capiv1.ClusterScalingUpCondition)
+	down := apimeta.FindStatusCondition(cluster.Status.Conditions, capiv1.ClusterScalingDownCondition)
+	known := func(condition *metav1.Condition) bool {
+		return condition != nil && condition.ObservedGeneration == cluster.Generation &&
+			(condition.Status == metav1.ConditionTrue || condition.Status == metav1.ConditionFalse)
+	}
+	if (known(up) && up.Status == metav1.ConditionTrue) || (known(down) && down.Status == metav1.ConditionTrue) {
+		value := true
+		return &value
+	}
+	if known(up) && known(down) {
+		value := false
+		return &value
+	}
+	return nil
 }
 
 func toVersionNodeStatuses(versions []capiv1.StatusVersion) []strategies.VersionNodeStatus {

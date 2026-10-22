@@ -57,6 +57,8 @@ type MachineDeployment struct {
 
 // ClusterInfo is the shared representation returned by cluster Strategies.
 type ClusterInfo struct {
+	IsDeleting                  bool
+	IsScaling                   *bool
 	IsCordon                    *bool
 	IsDraining                  *bool
 	IsUpgrading                 bool

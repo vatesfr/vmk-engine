@@ -47,6 +47,14 @@ The API server bind port can differ from the public endpoint port. The existing
 These fields support collection selection, for example
 `GET /kubernetes/clusters?fields=name,api_server_port,pod_cidr_blocks,service_cidr_blocks,service_domain,control_plane_endpoint`.
 
+Cluster and node list/detail responses expose `is_deleting` when Kubernetes
+has set the resource's deletion timestamp; the field is omitted when false.
+Cluster responses also expose `is_scaling` from current-generation CAPI
+`ScalingUp`/`ScalingDown` conditions. Either true condition means scaling;
+both known false conditions mean no scaling. Missing, unknown or stale
+conditions leave the field omitted. Collection field selection supports
+`is_deleting` and, for clusters, `is_scaling`.
+
 ## HTTP errors
 
 Request validation now returns **422 Unprocessable Entity** instead of 400.

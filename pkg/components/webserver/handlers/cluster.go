@@ -69,6 +69,8 @@ type ClusterConfigResponse struct {
 }
 
 type ClusterInfo struct {
+	IsDeleting                  bool              `json:"is_deleting,omitempty"`
+	IsScaling                   *bool             `json:"is_scaling,omitempty"`
 	IsCordon                    *bool             `json:"is_cordon,omitempty"`
 	IsDraining                  *bool             `json:"is_draining,omitempty" description:"Cordoned node with at least one terminating pod; cluster value means any node"`
 	CreatedByXOUserID           string            `json:"created_by_xo_user_id,omitempty" description:"XO user ID supplied at cluster creation"`
@@ -123,6 +125,7 @@ func NewFromNodeStatus(status strategies.NodeTypeStatus) *NodeStatus {
 }
 
 type ClusterNodeInfo struct {
+	IsDeleting    bool       `json:"is_deleting,omitempty"`
 	ID            *uuid.UUID `json:"id,omitempty"`
 	IsCordon      *bool      `json:"is_cordon,omitempty"`
 	IsDraining    *bool      `json:"is_draining,omitempty" description:"Cordoned node with at least one terminating pod; cluster value means any node"`
@@ -237,6 +240,8 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 	return ClusterInfo{
+		IsDeleting:                  value.IsDeleting,
+		IsScaling:                   value.IsScaling,
 		IsCordon:                    value.IsCordon,
 		IsDraining:                  value.IsDraining,
 		IsUpgrading:                 &value.IsUpgrading,
@@ -263,6 +268,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 
 func toNodeInfo(node strategies.ClusterNodeInfo) ClusterNodeInfo {
 	return ClusterNodeInfo{
+		IsDeleting:    node.IsDeleting,
 		IsCordon:      node.IsCordon,
 		IsDraining:    node.IsDraining,
 		ID:            &node.ID,

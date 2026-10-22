@@ -1475,3 +1475,21 @@ func TestClusterCreatorAnnotationOptional(t *testing.T) {
 		})
 	}
 }
+
+func TestScalingRequiresCurrentKnownConditions(t *testing.T) {
+	cluster := &capiv1.Cluster{ObjectMeta: metav1.ObjectMeta{Generation: 2}}
+	assert.Nil(t, clusterScaling(cluster))
+	cluster.Status.Conditions = []metav1.Condition{
+		{Type: capiv1.ClusterScalingUpCondition, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+		{Type: capiv1.ClusterScalingDownCondition, Status: metav1.ConditionFalse, ObservedGeneration: 2},
+	}
+	assert.Nil(t, clusterScaling(cluster), "stale conditions must not start an operation")
+	cluster.Status.Conditions[0].ObservedGeneration = 2
+	require.NotNil(t, clusterScaling(cluster))
+	assert.True(t, *clusterScaling(cluster))
+	cluster.Status.Conditions[0].Status = metav1.ConditionUnknown
+	assert.Nil(t, clusterScaling(cluster))
+	cluster.Status.Conditions[0].Status = metav1.ConditionFalse
+	require.NotNil(t, clusterScaling(cluster))
+	assert.False(t, *clusterScaling(cluster))
+}

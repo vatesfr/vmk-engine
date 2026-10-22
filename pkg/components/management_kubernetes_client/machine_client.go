@@ -179,6 +179,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 
 	_, paused := machine.Annotations[capiv1.PausedAnnotation]
 	return strategies.ClusterNodeInfo{
+		IsDeleting:    !machine.DeletionTimestamp.IsZero(),
 		ID:            uuids.NodeID(clusterName, machine.Name),
 		Paused:        paused,
 		Name:          machine.Name,

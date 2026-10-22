@@ -145,6 +145,11 @@ func run(opts options) error {
 		workloadClient, workloadClient,
 	)
 	eventManager := eventmanager.NewEventManager()
+	stopEvents, err := eventManager.Start(ctx, management_kubernetes_client.NewEventClient(informerCache, opts.namespace))
+	if err != nil {
+		return fmt.Errorf("observe Kubernetes events: %w", err)
+	}
+	defer stopEvents()
 
 	if err := clusterUpgrader.ResumeClusterUpgrades(ctx); err != nil {
 		return fmt.Errorf("resume cluster upgrades: %w", err)

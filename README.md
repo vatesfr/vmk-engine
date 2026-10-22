@@ -320,7 +320,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/ping` | Checks service health | Working |
 | `GET` | `/kubernetes/clusters` | Lists clusters, or selected cluster fields, in the namespace | Working |
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster by UUID | Working |
-| `GET` | `/kubernetes/events` | Opens the global Kubernetes SSE stream with a ping every five seconds | Heartbeat only |
+| `GET` | `/kubernetes/events` | Streams Kubernetes business transitions and a ping every five seconds | Working |
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
@@ -364,22 +364,212 @@ data: {"ping":1792058400000}
 ```
 
 `ping` is a Unix timestamp in milliseconds, matching `Date.now()` in JavaScript.
-`EventManager` produces the heartbeat through the `ForWatchingKubernetesEvents`
-Strategy; the HTTP handler encodes and flushes the SSE frames. The executable
-creates and injects this component alongside the cluster and version managers.
-This first implementation sends only heartbeats, without event IDs, replay or
-an `init` event. Disconnecting stops the stream and its ticker. No cluster name
-is required, and the stream also works when no clusters exist. Future business
-events for clusters and nodes will share this endpoint and identify the
-affected resource in their payload. The former per-cluster events route has
-been removed.
+`EventManager` produces heartbeats and business transitions through the
+`ForWatchingKubernetesEvents` Strategy; the HTTP handler encodes and flushes
+the SSE frames. `EventClient` observes Cluster, Machine and kubeconfig Secret
+changes through the shared namespace-scoped informer cache. Cluster/node
+creation, deletion, availability, reconciliation pause, tags, description,
+kubeconfig availability, scaling and persisted upgrades are covered. The
+catalogue and payload examples below describe all 26 business events and the ping.
+
+No cluster name is required, and the stream also works when no clusters exist.
+Initial informer lists do not generate creation notifications. Business payloads
+identify resources by their API UUID (`id`) and Kubernetes UID (`uid`); there
+are no SSE event IDs, replay or `init` events. The frontend must load REST state
+on connection/reconnection and coordinate that read with incoming updates.
+Each subscriber has a bounded queue of 128 business events; overflow closes
+that subscriber's stream so it can resynchronize. Other subscribers continue
+receiving events. Disconnecting releases the subscription and its ticker.
+
+Scaling events use current CAPI `ScalingUp`/`ScalingDown` conditions and
+aggregate both control plane and workers (`context.group: "cluster"`). Missing,
+unknown or stale conditions do not imply completion. A completion notification
+also requires convergence of ready/available replica counts. Upgrade events
+follow the service's persisted upgrade operation; an external version change
+without that operation is not classified as a tracked upgrade.
+
+Apply the updated RBAC before deployment: kubeconfig observation needs
+`get/list/watch` on Secrets in the configured namespace. Secret contents and
+internal upgrade error messages are never sent to subscribers. `is_deleting`
+is exposed on clusters/nodes when true; `is_scaling` on clusters is omitted
+when the CAPI signal is unknown. SSE snapshots come from the management cluster
+and do not enrich workload Node cordon/drain states.
 
 Responses use `text/event-stream`, `Cache-Control: no-cache, no-transform`, and
 `X-Accel-Buffering: no`. Proxies must preserve streaming and use compatible idle
 timeouts. When routing through XO, ensure its CAPI path prefix matches this
 service's `/kubernetes` prefix and its proxy forwards the streaming headers.
 The HTTP server's absolute write timeout is disabled so streams can stay open
-beyond Fuego's default 30 seconds; the other server timeouts are unchanged.
+beyond Fuego's default 30 seconds. Each SSE header/frame write has its own
+ten-second deadline, cleared between frames; clients that stop reading cannot
+hold a blocked HTTP handler indefinitely. SSE uses the original response writer
+without Fuego's access-log wrapper, which hides deadline support. Other routes
+keep their existing logging. Each informer registration waits at most 30 seconds
+for initial synchronization; failure aborts startup and removes already
+registered event observers.
+
+#### Event catalogue
+
+All events below are implemented and grouped by business function.
+
+**Cluster lifecycle and availability**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.created` | A Cluster appears after the initial informer list. |
+| `cluster.available` | `is_available` changes from false to true. |
+| `cluster.unavailable` | `is_available` changes from true to false. |
+| `cluster.deleting` | The Cluster acquires a `deletionTimestamp`. |
+| `cluster.deleted` | The Cluster disappears. |
+
+**Node lifecycle and readiness**
+
+| Event | Trigger |
+| --- | --- |
+| `node.created` | A Machine appears after the initial informer list. |
+| `node.ready` | The public node status changes to `Ready`. |
+| `node.not_ready` | The public node status leaves `Ready`, including for `Unknown`. |
+| `node.deleting` | The Machine acquires a `deletionTimestamp`. |
+| `node.deleted` | The Machine disappears. |
+
+**Reconciliation pause and resume**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.reconciliation.paused` | Cluster `spec.paused` becomes true. |
+| `cluster.reconciliation.resumed` | Cluster `spec.paused` becomes false or absent. |
+| `node.reconciliation.paused` | The Machine pause annotation appears. |
+| `node.reconciliation.resumed` | The Machine pause annotation is removed. |
+
+**Tags and description**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.tag.created` | A business tag is added. |
+| `cluster.tag.updated` | An existing business tag changes value. |
+| `cluster.tag.deleted` | A business tag is removed. |
+| `cluster.description.changed` | The description changes or is cleared. |
+
+**Kubeconfig availability**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.kubeconfig.available` | The `<cluster>-kubeconfig` Secret has a nonempty `value` after being absent or empty. |
+| `cluster.kubeconfig.unavailable` | A previously available kubeconfig Secret disappears or its `value` becomes absent/empty. |
+
+**Scaling**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.scaling.started` | A current CAPI condition confirms scaling has started. |
+| `cluster.scaling.progress` | Replica counters or version distributions change during confirmed scaling. |
+| `cluster.scaling.completed` | CAPI confirms scaling has stopped and replica counts have converged. |
+
+**Upgrades**
+
+| Event | Trigger |
+| --- | --- |
+| `cluster.upgrade.started` | A persisted upgrade operation becomes active with its lock held. |
+| `cluster.upgrade.progress` | Replica counters or version distributions change during that operation. |
+| `cluster.upgrade.completed` | The same previously active operation releases its lock and records `completed_at`. |
+
+Only labels prefixed with `tags.vmk.vates.tech/` produce tag events;
+technical metadata changes do not. Tag contexts contain `tag`, `previous_value`
+and `value`: `null` means absent, while `""` is a present, empty value.
+Reconciliation pause leaves VMs and workloads running. Each resource reports
+its own pause; resuming a Machine does not resume its parent Cluster.
+
+Nodes in this stream represent CAPI Machines. A Machine disappearing does not
+prove that its XO VM has disappeared. A resource recreated under the same name
+with a different Kubernetes UID produces deletion followed by creation.
+`deleting` means deletion has started; `deleted` requires observed disappearance,
+not merely an accepted HTTP DELETE.
+
+Kubeconfig events report availability only. Rotating a nonempty kubeconfig does
+not produce an availability event. Availability observations are retained until
+the matching Cluster is observed, regardless of informer arrival order. Initial
+lists seed the availability baseline without notifications. A Secret owned by
+a different Cluster UID is not considered available for a recreated Cluster.
+The ping confirms data reception, not Kubernetes or cluster health.
+
+#### Payloads and frontend use
+
+Business events include the public resource snapshot, except `cluster.deleted`
+and `node.deleted`, which carry identity only. Kubeconfig events carry only
+identity and `context.available`, never a Cluster snapshot: apply them only to
+the kubeconfig availability state, without replacing the Cluster record.
+JSON `id` is the resource's API UUID, **not an SSE replay ID**; `uid` is the Kubernetes UID. Node events also
+include `cluster_id` and `cluster_name`. `observed_at` is the server's observation
+time. Removed optional fields, such as a cleared description or the last tag,
+are omitted from the new snapshot. Read REST if workload cordon/drain enrichment
+is needed. Immediate command errors remain in REST responses.
+
+For example, this is an SSE frame with an abbreviated cluster snapshot:
+
+```text
+event: cluster.tag.created
+data: {"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","id":"0e04c4ca-a211-5ad7-942c-81be590bbf25","name":"demo","uid":"kubernetes-cluster-uid","context":{"tag":"team","previous_value":null,"value":"platform"},"cluster":{"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25","name":"demo","tags":{"team":"platform"}}}
+
+```
+
+The following examples preserve one fictitious payload per event type. They
+represent independent scenarios, not a timeline. Each NDJSON line combines the
+SSE event name with its decoded JSON `data`; this wrapper is not the raw SSE frame.
+
+<details>
+<summary>Payload examples for all 27 event types (NDJSON)</summary>
+
+```ndjson
+{"event":"ping","data":{"ping":1792663200000}}
+{"event":"cluster.created","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Pending","created_at":"2026-10-14T08:00:00Z","is_available":false,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":0,"replicas":0,"ready_replicas":0,"available_replicas":0,"up_to_date_replicas":0,"versions":[]},"worker_status":{"desired_replicas":0,"replicas":0,"ready_replicas":0,"available_replicas":0,"up_to_date_replicas":0,"versions":[]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.available","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.unavailable","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":false,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":1,"available_replicas":1,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.reconciliation.paused","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":true,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.reconciliation.resumed","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.deleting","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_deleting":true,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.deleted","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.created","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Provisioning","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95"},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.ready","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Ready","node_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.not_ready","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"NotReady","node_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.deleted","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.tag.created","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development","team":"platform"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"context":{"tag":"team","previous_value":null,"value":"platform"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.tag.updated","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"production"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"context":{"tag":"environment","previous_value":"development","value":"production"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.tag.deleted","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"context":{"tag":"environment","previous_value":"development","value":null},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.description.changed","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement de l’équipe plateforme","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"context":{"previous_description":"Cluster de développement","description":"Cluster de développement de l’équipe plateforme"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.reconciliation.paused","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Ready","node_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":true,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.reconciliation.resumed","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Ready","node_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.deleting","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Ready","node_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"is_deleting":true,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.kubeconfig.available","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"available":true},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.kubeconfig.unavailable","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"available":false},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.scaling.started","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":2,"ready_replicas":1,"available_replicas":1,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]}},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":true,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":2,"ready_replicas":1,"available_replicas":1,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.scaling.completed","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]}},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.scaling.progress","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":3,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]}},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":true,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":3,"replicas":3,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.upgrade.started","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":0,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"operation_id":"upgrade-operation-example","target_version":"v1.36.9"},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":true,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":0,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.upgrade.progress","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":1,"versions":[{"version":"v1.36.8","replicas":2},{"version":"v1.36.9","replicas":1}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"operation_id":"upgrade-operation-example","target_version":"v1.36.9"},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":true,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":1,"versions":[{"version":"v1.36.8","replicas":2},{"version":"v1.36.9","replicas":1}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"cluster.upgrade.completed","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","context":{"group":"cluster","control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.9","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"operation_id":"upgrade-operation-example","target_version":"v1.36.9"},"cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.9","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+```
+
+</details>
+
+#### Manual verification
+
+Keep `curl -N http://localhost:8080/kubernetes/events` running. In another
+terminal, set a tag on a test cluster, replacing `CLUSTER_UUID` with its API UUID:
+
+```sh
+curl -X PUT http://localhost:8080/kubernetes/clusters/CLUSTER_UUID/tags/sse-test \
+  -H 'Content-Type: application/json' -d '{"value":"demo"}'
+```
+
+An absent tag produces `cluster.tag.created`. Changing its value produces
+`cluster.tag.updated`; repeating the same value produces no new notification.
+Remove it to receive `cluster.tag.deleted`:
+
+```sh
+curl -X DELETE http://localhost:8080/kubernetes/clusters/CLUSTER_UUID/tags/sse-test
+```
+
+Pings continue every five seconds during these transitions.
 
 ### Examples
 

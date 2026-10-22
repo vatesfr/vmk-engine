@@ -74,14 +74,16 @@ func (httpServer HttpServer) newServer(
 	// terminate SSE connections even when heartbeats are being sent.
 	server.WriteTimeout = 0
 
-	// Share routing and OpenAPI while keeping health checks out of request/response logs.
-	healthServer := fuego.NewServer(fuego.WithLoggingMiddleware(fuego.LoggingConfig{
+	// Fuego's logging writer does not expose Unwrap/SetWriteDeadline. Keep
+	// streaming on the original writer so HTTP deadlines and flush errors work.
+	// Health checks also avoid the request/response logging middleware.
+	unwrappedServer := fuego.NewServer(fuego.WithLoggingMiddleware(fuego.LoggingConfig{
 		DisableRequest:  true,
 		DisableResponse: true,
 	}))
-	healthServer.Mux = server.Mux
-	healthServer.Engine = server.Engine
-	fuego.Get(healthServer, "/ping", handlers.HealthCheck,
+	unwrappedServer.Mux = server.Mux
+	unwrappedServer.Engine = server.Engine
+	fuego.Get(unwrappedServer, "/ping", handlers.HealthCheck,
 		fuego.OptionTags("Health"),
 	)
 
@@ -89,6 +91,8 @@ func (httpServer HttpServer) newServer(
 		fuego.OptionTags("Clusters"),
 	)
 	fuego.Use(apiRouter, middlewares.AuthRequired())
+	eventsRouter := fuego.Group(unwrappedServer, "/kubernetes", fuego.OptionTags("Clusters"))
+	fuego.Use(eventsRouter, middlewares.AuthRequired())
 
 	clusterRouter := fuego.Group(
 		apiRouter,
@@ -109,12 +113,12 @@ func (httpServer HttpServer) newServer(
 		decodingResponse(), validationResponse(), notFoundResponse("Cluster not found"),
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster is locked or not ready for upgrade", fuego.Response{Type: fuego.HTTPError{}}),
 	)
-	fuego.GetStd(apiRouter, "/events", eventsHandler.GetKubernetesEvents,
+	fuego.GetStd(eventsRouter, "/events", eventsHandler.GetKubernetesEvents,
 		fuego.OptionSummary("Watch Kubernetes events"),
-		fuego.OptionDescription("Opens the global Kubernetes SSE stream. Sends event: ping with a Unix timestamp in milliseconds every five seconds. No event IDs or replay are provided."),
+		fuego.OptionDescription("Streams Kubernetes business transitions and a ping every five seconds. No event IDs or replay; reload REST state after reconnecting."),
 		func(route *fuego.BaseRoute) {
 			route.Operation.AddResponse(http.StatusOK, openapi3.NewResponse().
-				WithDescription("SSE heartbeat stream").
+				WithDescription("Kubernetes SSE stream").
 				WithContent(openapi3.Content{
 					"text/event-stream": &openapi3.MediaType{Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()}},
 				}))

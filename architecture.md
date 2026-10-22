@@ -41,17 +41,90 @@ the shared Strategy models do not contain transport-specific validation.
 
 The event component under `pkg/components/event_manager` owns global Kubernetes
 event subscriptions. `EventManager` implements `ForWatchingKubernetesEvents`
-and produces a heartbeat every five seconds without depending on cluster
-management. Its contract uses Go values and a context-bound receive-only channel,
-without HTTP, JSON or Kubernetes types. Each subscription currently has its own
-ticker; cancellation closes the channel, including when a consumer is slow.
+and consumes `ForObservingKubernetesResources`, implemented by the management
+component's `EventClient`. The configurator starts one shared observer using the
+existing namespace-scoped informer cache for Cluster, Machine and Secret
+resources. Initial lists seed internal state without notifications, deletion
+tombstones retain identity, and Secret observations expose only kubeconfig availability, never Secret data.
+The adapter has separate typed observers and projections for Cluster, Machine
+and kubeconfig Secret resources. Shared code handles informer registration,
+namespace filtering, initial lists, tombstones and cleanup; resource-specific
+rules live in separate functions within `events.go`. Initial synchronization
+is bounded to 30 seconds per informer; a timeout rolls back registered observers
+and aborts startup. After successful synchronization, the timeout does not limit
+the lifetime of the observer.
+
+Cluster and Secret callbacks join through a mutex-protected identity/availability
+state. A Secret observed before its Cluster is retained as metadata and a boolean,
+then reconsidered when the Cluster arrives. Initial lists seed the baseline
+without announcing existing availability. A Secret with a Cluster owner UID
+must match the current Cluster identity. Deletion drops the linked identity so
+late Secret callbacks cannot recreate it. Kubeconfig events carry only identity
+and availability, never mutable Cluster snapshots read from a faster cache.
+This avoids rolling Cluster state backward across independently ordered informers.
+
+`EventManager` routes observations to dedicated Cluster, Machine and kubeconfig
+transition functions in `event_manager.go`. Helpers return complete events,
+including tag/upgrade context. Scaling tracking is updated directly by the
+scaling transition function and cleared on Cluster deletion or replacement;
+tracking never depends on parsing emitted event names.
+
+`EventManager` derives business transitions and maintains independent bounded
+queues of 128 events. A slow subscriber is disconnected on overflow rather
+than blocking informer callbacks or losing events silently. Each subscription
+also produces a heartbeat every five seconds. Cancellation closes the channel,
+including when a delivery is pending. Contracts use transport-independent Go
+models without HTTP or Kubernetes types.
+
+Scaling is based on the Cluster's current-generation `ScalingUp`/`ScalingDown`
+conditions and aggregate replica convergence. The manager retains pending
+completion across unknown conditions and lagging counters. Upgrade transitions
+come from the existing persisted operation and never infer success from a
+missing lock or annotation. The HTTP component projects shared Cluster/node
+models into existing public DTOs and explicit event context fields.
+
+The scaling signal is known only when the CAPI conditions have the Cluster's
+current `observedGeneration` and a True/False status. Either `ScalingUp` or
+`ScalingDown` being true confirms activity; both must be known false to confirm
+its end. Completion additionally requires positive desired counts and total,
+ready and available replicas equal to the targets for both control plane and
+workers. The manager retains a previously observed active scaling across unknown
+conditions or lagging counters until completion. Deletion clears this tracking
+without announcing success. `is_scaling` reflects the current CAPI signal;
+it does not include this retained completion tracking.
+
+Scaling contexts use `group: "cluster"` with `control_plane_status` and
+`worker_status`; there is no separate tracked operation per MachineDeployment.
+A difference between desired and ready replicas alone does not start an event
+sequence. Initial provisioning may also publish a CAPI scaling signal.
+
+Upgrade transitions follow `vmk.vates.tech/upgrade`, written by the upgrade
+component. A new or reactivated locked operation starts the sequence; changes to
+replica counters or version distributions report progress. Completion requires
+the same operation ID, a previously held lock, its release and a nonempty
+`completed_at`. Missing or malformed operation annotations, mixed versions or
+a missing lock alone never imply success. External version changes without a
+persisted operation are not tracked upgrades. Upgrade contexts contain only
+`operation_id`, `target_version` and aggregate replica statuses, excluding
+internal diagnostics. `is_upgrading` and `is_scaling` are independent and may
+both be true. Reconciliation pause does not announce operation success.
+
+The webserver uses the `EventContext` interface with concrete tag, description,
+kubeconfig, scaling and upgrade context structs. This keeps JSON field types
+explicit while the event manager's shared models remain transport-independent.
+See the [SSE catalogue and examples](README.md#event-catalogue) for the public
+contract and manual verification commands.
 
 The HTTP component's `KubernetesEventsHandler` exposes `/kubernetes/events`,
 consumes this Strategy and owns SSE headers, JSON DTOs, frame encoding and
 flushing. It cancels its subscription
 on client disconnection or write failure. The absolute HTTP write timeout is
-disabled for long-lived streams. Resource observation and business transitions
-remain to be implemented in the event component.
+disabled for long-lived streams, with separate ten-second deadlines for each
+header/frame write and flush. Deadlines are cleared between frames. The SSE
+route uses the original response writer, bypassing Fuego's access-log wrapper
+which does not expose write-deadline support; authentication still applies.
+The frontend must reload REST state after
+reconnection because this stream has neither replay nor event IDs.
 
 An Adapter is a particular kind of Strategy: it translates the required
 interface and delegates the work to another service. Ports & Adapters is in
@@ -79,6 +152,9 @@ flowchart LR
     end
 
     eventport -->|implemented by| events[EventManager — pkg/components/event_manager]
+    events --> observe[ForObservingKubernetesResources]
+    observe --> eventsource[EventClient — management Kubernetes component]
+    eventsource --> cache
 
     subgraph clustercomponent[Cluster management component — pkg/components/cluster_manager]
         manager[ClusterManager]
@@ -146,7 +222,9 @@ The roles from Component + Strategy map to the code as follows:
 | Strategies | `ForManagingClusterResources`, `ForManagingClusterMachines`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
 | Strategies | `ClusterClient`, `MachineClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
 | Configurator | `run` in `cmd/http_server/main.go` | Select Kubernetes configuration, build the informer cache, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
-| Component | `eventmanager.EventManager` | Owns global subscriptions and produces transport-independent heartbeats |
+| Component | `eventmanager.EventManager` | Derives business transitions and fans them out alongside per-subscriber heartbeats |
+| Strategy | `ForObservingKubernetesResources` | Supplies immutable resource snapshots and change notifications |
+| Component implementation | `management_kubernetes_client.EventClient` | Observes shared informers and projects resource changes into Strategy models |
 
 Go's implicit interface satisfaction lets `cluster_manager.ClusterManager`
 satisfy `ForManagingClusters` directly. The HTTP handler converts its validated

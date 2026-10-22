@@ -14,9 +14,19 @@ type ForWatchingKubernetesEvents interface {
 
 const KubernetesEventPing = "ping"
 
-// KubernetesEvent is a transport-independent observation. The heartbeat is the
-// only event currently produced; its timestamp is converted by the HTTP DTO.
+// KubernetesEvent contains an immutable resource snapshot and its transition.
+// The HTTP component owns the JSON representation.
 type KubernetesEvent struct {
 	Type      string
 	Timestamp time.Time
+	Resource  *KubernetesResourceObservation
+	Previous  *KubernetesResourceObservation
+	Tag       *KubernetesTagChange
+	Upgrade   *UpgradeOperation
+}
+
+type KubernetesTagChange struct {
+	Name     string
+	Previous *string
+	Current  *string
 }

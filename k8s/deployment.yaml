@@ -162,13 +162,18 @@ data:
   serviceCIDR: "192.168.0.0/16"
   serviceDomain: "cluster.local"
   cni: "cilium"
+  # Optional YAML list of additional Xen Orchestra tags for all cluster VMs.
+  xoTags: "[]"
+  # Optional Cilium configuration; replacement also requires disabling kube-proxy
+  # in controlPlaneKubeadmConfig.initConfiguration.skipPhases (addon/kube-proxy).
+  cilium: |
+    kubeProxyReplacement: false
   controlPlaneMachineSpec: |
     templateID: 1fc7c1a2-f3c5-5689-a96a-aa8d5097c54c
     poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
-      cloudInit: true
-      kubeVIP: true
+      format: cloudinit
     resourceSet:
       cpus: 4
       memory: 8Gi
@@ -181,8 +186,7 @@ data:
     poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
-      cloudInit: true
-      kubeVIP: true
+      format: cloudinit
     resourceSet:
       cpus: 4
       memory: 8Gi

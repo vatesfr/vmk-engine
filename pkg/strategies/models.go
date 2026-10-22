@@ -30,9 +30,18 @@ type ClusterCreationDefaults struct {
 	WorkerMachineSpec         map[string]any
 	WorkerKubeadmConfig       map[string]any
 	CNI                       string
+	Cilium                    *CiliumConfig
+	XOTags                    []string
 	EndpointPort              int
 	EndpointSubnet            int
 	LoadBalancer              string
+}
+
+// CiliumConfig configures the provider-installed Cilium addon at cluster creation.
+type CiliumConfig struct {
+	KubeProxyReplacement bool   `json:"kubeProxyReplacement,omitempty"`
+	K8sServiceHost       string `json:"k8sServiceHost,omitempty"`
+	K8sServicePort       int32  `json:"k8sServicePort,omitempty"`
 }
 
 // CreateClusterResourceParams describes the resources required by the

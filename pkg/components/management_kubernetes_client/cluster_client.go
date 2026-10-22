@@ -538,6 +538,20 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 		"injectSSHKeys": false,
 		"addons":        map[string]any{cniKey: d.CNI, "ccm": true, "csi": true},
 	}
+	if len(d.XOTags) > 0 {
+		if err := unstructured.SetNestedStringSlice(xoSpec, d.XOTags, "tags"); err != nil {
+			return strategies.ClusterInfo{}, err
+		}
+	}
+	if d.Cilium != nil {
+		config, err := runtime.DefaultUnstructuredConverter.ToUnstructured(d.Cilium)
+		if err != nil {
+			return strategies.ClusterInfo{}, fmt.Errorf("convert Cilium configuration: %w", err)
+		}
+		if err := unstructured.SetNestedMap(xoSpec, config, "addons", ciliumKey); err != nil {
+			return strategies.ClusterInfo{}, err
+		}
+	}
 	if d.LoadBalancer != "" {
 		xoSpec["controlPlaneLB"] = d.LoadBalancer
 	}

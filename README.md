@@ -702,9 +702,71 @@ Required ConfigMap keys:
 | `podCIDR`, `serviceCIDR`, `serviceDomain` | Cluster network |
 | `controlPlaneEndpointPort`, `controlPlaneEndpointSubnet` | Endpoint port and IPv4 prefix length |
 | `controlPlaneLoadBalancer` | `kube-vip` or an explicitly empty string |
-| `cni` | Provider CNI setting, e.g. `cilium` or `none` |
+| `cni` | Provider CNI setting: `cilium` or `none` |
 | `controlPlaneMachineSpec`, `workerMachineSpec` | YAML objects containing the respective XOMachine spec: image, pool, networks, resources |
 | `controlPlaneKubeadmConfig`, `workerKubeadmConfig` | YAML objects containing the respective kubeadm configuration and bootstrap commands |
+
+Optional ConfigMap keys for Vates provider `v1.1.0-rc6`:
+
+| Key | Purpose |
+| --- | --- |
+| `xoTags` | YAML list of additional Xen Orchestra tags applied to every cluster VM; defaults to no additional tags |
+| `cilium` | YAML object with `kubeProxyReplacement`, and optionally `k8sServiceHost` and `k8sServicePort`; defaults to kube-proxy coexistence |
+
+Both keys are strings containing YAML, like the machine configuration blocks.
+Older ConfigMaps without these optional keys remain supported. For example, in
+Helm values:
+
+```yaml
+clusterDefaults:
+  xoTags: |
+    - production
+    - platform-team
+  cilium: |
+    kubeProxyReplacement: false
+```
+
+`xoTags` accepts up to 64 unique tags of 1–255 characters. These are independent
+of the HTTP API's key/value tags, which remain Kubernetes labels. The provider
+adds XO tags; removing a tag from its configuration does not remove it from
+existing VMs. Machine-specific tags can also be set as a `tags` list in each
+machine spec.
+
+To enable Cilium's kube-proxy replacement for a **new** cluster, set
+`cni: cilium` and set `kubeProxyReplacement: true` in the `cilium` YAML block.
+Add `skipPhases: [addon/kube-proxy]` under
+`controlPlaneKubeadmConfig.initConfiguration` so kubeadm does not install
+kube-proxy. Preserve the other bootstrap settings. Cilium uses the control-plane
+endpoint by default; a custom `k8sServiceHost` and `k8sServicePort` must be set
+together and require replacement to be enabled. The endpoint must be reachable
+from every node before Cilium starts. Cilium is installed using `ApplyOnce`;
+upgrading the provider does not upgrade Cilium on existing clusters.
+
+For IPAM, add the following to `controlPlaneMachineSpec` and/or
+`workerMachineSpec`, preserving their other fields:
+
+```yaml
+networkConfig:
+  networks:
+    - networkID: <your-xo-network-uuid>
+  addressesFromPools:
+    - apiGroup: ipam.cluster.x-k8s.io
+      kind: InClusterIPPool
+      name: my-cluster-pool
+```
+
+Install the IPAM provider and create its pools separately. Claimed addresses
+override `networkConfig.guestConfig`; the generated network configuration uses
+`eth0`, so put the address-bearing network first. Keep the control-plane VIP
+outside the allocation pool.
+
+These defaults apply to newly created clusters; changing the ConfigMap does not
+patch existing clusters or roll their nodes. Upgrade the Vates provider's image,
+CRDs and RBAC to RC6 before using the new fields. When using Helm to install the
+provider, explicitly update its CRDs as required by its installation method.
+The HTTP service's RBAC requires no additional permissions for these options.
+Creation, scaling and Kubernetes upgrades remain specific to kubeadm; Talos and
+Vates Kube OS are not supported by this service.
 
 No Kubernetes templates need to be installed beforehand. The service builds
 all resources from the request and ConfigMap, including the per-cluster machine
@@ -712,11 +774,13 @@ and worker bootstrap templates required by CAPI. It does not create or read a
 KubeadmControlPlaneTemplate. Each YAML block contains configuration fields only,
 without `apiVersion`, `kind`, `metadata` or a surrounding `spec`.
 
-The chart defaults use the test cluster's XO VM image, pool and network
-identifiers, with kubeadm, cloud-init and kube-vip enabled in both machine specs.
-Before deploying in another environment, update these identifiers. These are Xen
-Orchestra identifiers, not Kubernetes resource names. The provider also accepts
-`templateName` and `poolName`; omitting the pool uses the template's pool.
+The chart defaults contain placeholders for XO VM image, pool and network
+identifiers. Replace them before deployment. Both machine specs use kubeadm with
+`bootstrap.format: cloudinit`; `controlPlaneLoadBalancer: kube-vip` enables
+kube-vip injection on control-plane nodes. The deprecated `bootstrap.cloudInit`
+and `bootstrap.kubeVIP` flags are no longer used. The image, pool and network
+values are Xen Orchestra identifiers, not Kubernetes resource names. The provider
+also accepts `templateName` and `poolName`; omitting the pool uses the template's pool.
 The service decodes these configuration objects and leaves provider field
 validation to Kubernetes and the Vates provider. The sample kubeadm
 configuration follows the working AlmaLinux/RHEL cluster: it installs the exact

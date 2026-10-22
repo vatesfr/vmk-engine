@@ -233,6 +233,15 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			}
 			defaults, err := parseClusterDefaults(data)
 			require.NoError(t, err)
+			for _, machine := range []map[string]any{defaults.ControlPlaneMachineSpec, defaults.WorkerMachineSpec} {
+				format, _, err := unstructured.NestedString(machine, bootstrapKey, "format")
+				require.NoError(t, err)
+				require.Equal(t, "cloudinit", format)
+				_, legacyCloudInit := machine[bootstrapKey].(map[string]any)["cloudInit"]
+				_, legacyKubeVIP := machine[bootstrapKey].(map[string]any)["kubeVIP"]
+				require.False(t, legacyCloudInit)
+				require.False(t, legacyKubeVIP)
+			}
 			p, _, scheme := newClusterCreationTestSetup(t)
 			p.Defaults = defaults
 			p.Version = "v1.36.2"

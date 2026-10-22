@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -53,6 +54,8 @@ const (
 	workerMachineSpecKey         = "workerMachineSpec"
 	workerKubeadmConfigKey       = "workerKubeadmConfig"
 	cniKey                       = "cni"
+	ciliumKey                    = "cilium"
+	xoTagsKey                    = "xoTags"
 	endpointPortKey              = "controlPlaneEndpointPort"
 	endpointSubnetKey            = "controlPlaneEndpointSubnet"
 	loadBalancerKey              = "controlPlaneLoadBalancer"
@@ -114,11 +117,27 @@ func parseClusterDefaults(data map[string]string) (strategies.ClusterCreationDef
 			return result, fmt.Errorf("invalid %s: expected an object: %w", field.key, err)
 		}
 	}
+	for _, field := range []struct {
+		key    string
+		target any
+	}{
+		{ciliumKey, &d.Cilium},
+		{xoTagsKey, &d.XOTags},
+	} {
+		if raw := strings.TrimSpace(data[field.key]); raw != "" {
+			if err := yaml.UnmarshalStrict([]byte(raw), field.target); err != nil {
+				return result, fmt.Errorf("invalid %s: %w", field.key, err)
+			}
+		}
+	}
 	return result, validateConfigurationObjects(result)
 }
 
 // Check the shape expected by the builder; provider fields are validated by Kubernetes and the provider.
 func validateConfigurationObjects(d strategies.ClusterCreationDefaults) error {
+	if err := validateProviderOptions(d); err != nil {
+		return err
+	}
 	for _, field := range []struct {
 		key   string
 		value map[string]any
@@ -136,6 +155,39 @@ func validateConfigurationObjects(d strategies.ClusterCreationDefaults) error {
 				return fmt.Errorf("%s must contain configuration fields, not a resource manifest", field.key)
 			}
 		}
+	}
+	return nil
+}
+
+func validateProviderOptions(d strategies.ClusterCreationDefaults) error {
+	if len(d.XOTags) > 64 {
+		return fmt.Errorf("%s must contain at most 64 tags", xoTagsKey)
+	}
+	seen := make(map[string]bool, len(d.XOTags))
+	for _, tag := range d.XOTags {
+		if n := utf8.RuneCountInString(tag); n < 1 || n > 255 {
+			return fmt.Errorf("%s tags must contain 1 to 255 characters", xoTagsKey)
+		}
+		if seen[tag] {
+			return fmt.Errorf("%s must contain unique tags", xoTagsKey)
+		}
+		seen[tag] = true
+	}
+	if d.Cilium == nil {
+		return nil
+	}
+	c := d.Cilium
+	if c.KubeProxyReplacement && d.CNI != ciliumKey {
+		return fmt.Errorf("%s.kubeProxyReplacement requires cni to be cilium", ciliumKey)
+	}
+	if (c.K8sServiceHost != "") != (c.K8sServicePort != 0) {
+		return fmt.Errorf("%s.k8sServiceHost and k8sServicePort must be set together", ciliumKey)
+	}
+	if c.K8sServiceHost != "" && !c.KubeProxyReplacement {
+		return fmt.Errorf("%s.k8sServiceHost and k8sServicePort require kubeProxyReplacement", ciliumKey)
+	}
+	if c.K8sServicePort < 0 || c.K8sServicePort > 65535 {
+		return fmt.Errorf("%s.k8sServicePort must be between 1 and 65535 when set", ciliumKey)
 	}
 	return nil
 }

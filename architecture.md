@@ -436,6 +436,12 @@ cluster integration coverage remains necessary to verify provider behavior.
 configuration through `ForGettingClusterCreationDefaults`. No template resources
 are read from Kubernetes. The VM/bootstrap YAML blocks are decoded and checked for the expected object shape
 before creation, then copied into per-cluster resources owned by the Cluster.
+Optional `xoTags` and typed `cilium` defaults configure `XOCluster.spec.tags`
+and `XOCluster.spec.addons.cilium`. They are validated before creating resources.
+Machine-level tags and IPAM `networkConfig.addressesFromPools` pass through the
+machine-spec blocks. XO tags are independent of the HTTP API's Kubernetes label
+tags. Defaults affect new clusters only. Packaged bootstrap settings use the
+RC6 `bootstrap.format: cloudinit` field, with kube-vip driven by cluster policy.
 The Cluster stays paused during assembly and is activated after successful
 creation. Partial failures can be cleaned up through the delete endpoint.
 See README for configuration keys and image prerequisites.

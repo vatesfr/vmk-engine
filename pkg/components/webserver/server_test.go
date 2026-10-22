@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"capv-proxy/pkg/components/cluster_manager"
+	eventmanager "capv-proxy/pkg/components/event_manager"
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver/handlers"
 	uuids "capv-proxy/pkg/helpers/uuids"
@@ -735,7 +736,7 @@ func newTestHandler(
 ) http.Handler {
 	return HttpServer{
 		SwaggerUI: SwaggerUIDisabled,
-	}.Handler(clusterService, nil, versionmanager.NewVersionManager())
+	}.Handler(clusterService, nil, versionmanager.NewVersionManager(), eventmanager.NewEventManager())
 }
 
 func TestClusterTagBodyHTTPDecoding(t *testing.T) {
@@ -863,7 +864,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 
 func TestNodeDeletionOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager(), eventmanager.NewEventManager()).OpenAPI.Description()
 	route := document.Paths.Find("/kubernetes/clusters/{id}/nodes/{nodeID}")
 	require.NotNil(t, route)
 	require.NotNil(t, route.Delete)
@@ -900,7 +901,7 @@ func TestCreateClusterHTTPRejectsInvalidParameters(t *testing.T) {
 				mocks.NewMockForGettingClusterCreationDefaults(ctrl), versions,
 				nil, nil,
 			)
-			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, nil, versions)
+			handler := HttpServer{SwaggerUI: SwaggerUIDisabled}.Handler(manager, nil, versions, eventmanager.NewEventManager())
 			var payload map[string]any
 			require.NoError(t, json.Unmarshal([]byte(createClusterRequestBody), &payload))
 			payload[tc.field] = tc.value
@@ -1017,7 +1018,7 @@ func TestScalingHTTPValidation(t *testing.T) {
 
 func TestScalingOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager(), eventmanager.NewEventManager()).OpenAPI.Description()
 	for _, target := range []string{scalingWorkerTarget, controlPlaneNodeRole} {
 		route := document.Paths.Find("/kubernetes/clusters/{id}/" + target + "/replicas")
 		require.NotNil(t, route)
@@ -1047,7 +1048,7 @@ func TestScalingOpenAPI(t *testing.T) {
 
 func TestPauseOpenAPI(t *testing.T) {
 	service := mocks.NewMockForManagingClusters(gomock.NewController(t))
-	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager()).OpenAPI.Description()
+	document := (HttpServer{SwaggerUI: SwaggerUIDisabled}).newServer(service, nil, versionmanager.NewVersionManager(), eventmanager.NewEventManager()).OpenAPI.Description()
 	for _, base := range []string{"/kubernetes/clusters/{id}", "/kubernetes/clusters/{id}/nodes/{nodeName}"} {
 		for _, endpoint := range []struct {
 			method string
@@ -1254,7 +1255,7 @@ func TestUpgradeHTTP(t *testing.T) {
 			req := httptest.NewRequest(tc.method, getClusterByUUIDPath+"/upgrades", strings.NewReader(tc.body))
 			req.Header.Set(contentTypeHeader, applicationJSON)
 			rec := httptest.NewRecorder()
-			(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager()).ServeHTTP(rec, req)
+			(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager(), eventmanager.NewEventManager()).ServeHTTP(rec, req)
 			require.Equal(t, tc.expected, rec.Code, rec.Body.String())
 			if tc.expected == http.StatusAccepted {
 				assert.Empty(t, rec.Header().Get("Location"))
@@ -1273,7 +1274,7 @@ func TestUpgradeHTTPRejectsInvalidUUID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, clustersPath+"/"+clusterName+"/upgrades", strings.NewReader(upgradeRequestBody))
 	req.Header.Set(contentTypeHeader, applicationJSON)
 	rec := httptest.NewRecorder()
-	(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager()).ServeHTTP(rec, req)
+	(HttpServer{SwaggerUI: SwaggerUIDisabled}).Handler(nil, upgrader, versionmanager.NewVersionManager(), eventmanager.NewEventManager()).ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	// Invalid UUIDs must be rejected before calling the upgrader.
 }

@@ -29,17 +29,26 @@ func IsSwaggerUI(value string) bool {
 	return value == SwaggerUISwagger || value == SwaggerUIStoplight || value == SwaggerUIDisabled
 }
 
-func (httpServer HttpServer) Run(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) error {
-	return httpServer.newServer(clusterService, clusterUpgrader, versionService).Run()
+func (httpServer HttpServer) Run(
+	clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters,
+	versionService strategies.ForManagingVersions, eventService strategies.ForWatchingKubernetesEvents,
+) error {
+	return httpServer.newServer(clusterService, clusterUpgrader, versionService, eventService).Run()
 }
 
 // Handler builds the complete HTTP application without opening a network
 // listener. It is intended for httptest-based tests and embedding.
-func (httpServer HttpServer) Handler(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) http.Handler {
-	return httpServer.newServer(clusterService, clusterUpgrader, versionService).Mux
+func (httpServer HttpServer) Handler(
+	clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters,
+	versionService strategies.ForManagingVersions, eventService strategies.ForWatchingKubernetesEvents,
+) http.Handler {
+	return httpServer.newServer(clusterService, clusterUpgrader, versionService, eventService).Mux
 }
 
-func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters, versionService strategies.ForManagingVersions) *fuego.Server {
+func (httpServer HttpServer) newServer(
+	clusterService strategies.ForManagingClusters, clusterUpgrader strategies.ForUpgradingClusters,
+	versionService strategies.ForManagingVersions, eventService strategies.ForWatchingKubernetesEvents,
+) *fuego.Server {
 	openAPIConfig := fuego.OpenAPIConfig{
 		DisableLocalSave:     true,
 		DisableDefaultServer: true,
@@ -61,6 +70,9 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	server.OpenAPI.Description().Info.Title = "Cluster service"
 	server.OpenAPI.Description().Info.Version = "0.1.0"
 	server.OpenAPI.Description().Info.Description = "REST API for managing kubernetes clusters."
+	// Fuego's default is an absolute 30-second write deadline, which would
+	// terminate SSE connections even when heartbeats are being sent.
+	server.WriteTimeout = 0
 
 	// Share routing and OpenAPI while keeping health checks out of request/response logs.
 	healthServer := fuego.NewServer(fuego.WithLoggingMiddleware(fuego.LoggingConfig{
@@ -84,6 +96,7 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 	)
 	clusterHandler := handlers.NewClusterHandler(clusterService, clusterUpgrader)
 	versionsHandler := handlers.NewVersionsHandler(versionService)
+	eventsHandler := handlers.NewKubernetesEventsHandler(eventService)
 
 	fuego.Get(clusterRouter, "", clusterHandler.GetClusters,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
@@ -95,6 +108,17 @@ func (httpServer HttpServer) newServer(clusterService strategies.ForManagingClus
 		fuego.OptionDefaultStatusCode(http.StatusAccepted),
 		decodingResponse(), validationResponse(), notFoundResponse("Cluster not found"),
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster is locked or not ready for upgrade", fuego.Response{Type: fuego.HTTPError{}}),
+	)
+	fuego.GetStd(apiRouter, "/events", eventsHandler.GetKubernetesEvents,
+		fuego.OptionSummary("Watch Kubernetes events"),
+		fuego.OptionDescription("Opens the global Kubernetes SSE stream. Sends event: ping with a Unix timestamp in milliseconds every five seconds. No event IDs or replay are provided."),
+		func(route *fuego.BaseRoute) {
+			route.Operation.AddResponse(http.StatusOK, openapi3.NewResponse().
+				WithDescription("SSE heartbeat stream").
+				WithContent(openapi3.Content{
+					"text/event-stream": &openapi3.MediaType{Schema: &openapi3.SchemaRef{Value: openapi3.NewStringSchema()}},
+				}))
+		},
 	)
 	fuego.Get(clusterRouter, "/{id}/nodes", clusterHandler.GetClusterNodesInfo,
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),

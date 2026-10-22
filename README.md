@@ -320,6 +320,7 @@ Base URL: `http://localhost:8080`.
 | `GET` | `/ping` | Checks service health | Working |
 | `GET` | `/kubernetes/clusters` | Lists clusters, or selected cluster fields, in the namespace | Working |
 | `GET` | `/kubernetes/clusters/{id}` | Returns one cluster by UUID | Working |
+| `GET` | `/kubernetes/events` | Opens the global Kubernetes SSE stream with a ping every five seconds | Heartbeat only |
 | `POST` | `/kubernetes/clusters` | Creates a CAPI cluster and its associated resources | Requires an available version and configured defaults |
 | `DELETE` | `/kubernetes/clusters/{id}` | Deletes a cluster | Working |
 | `PUT` | `/kubernetes/clusters/{id}/description` | Replaces or clears the cluster description | Returns `204` |
@@ -344,6 +345,41 @@ Base URL: `http://localhost:8080`.
 | `PUT` | `/kubernetes/clusters/{id}/tags/{tag}` | Creates or updates a tag | Working |
 | `DELETE` | `/kubernetes/clusters/{id}/tags/{tag}` | Deletes a tag | Working |
 | `GET` | `/kubernetes/nodes/{id}` | Returns one node by UUID | Working |
+
+### Server-sent events
+
+Open the global stream for the service's configured Kubernetes namespace:
+
+```bash
+curl -N http://localhost:8080/kubernetes/events
+```
+
+The server flushes the response headers immediately, then sends a `ping`
+every five seconds, starting five seconds after the stream opens:
+
+```text
+event: ping
+data: {"ping":1792058400000}
+
+```
+
+`ping` is a Unix timestamp in milliseconds, matching `Date.now()` in JavaScript.
+`EventManager` produces the heartbeat through the `ForWatchingKubernetesEvents`
+Strategy; the HTTP handler encodes and flushes the SSE frames. The executable
+creates and injects this component alongside the cluster and version managers.
+This first implementation sends only heartbeats, without event IDs, replay or
+an `init` event. Disconnecting stops the stream and its ticker. No cluster name
+is required, and the stream also works when no clusters exist. Future business
+events for clusters and nodes will share this endpoint and identify the
+affected resource in their payload. The former per-cluster events route has
+been removed.
+
+Responses use `text/event-stream`, `Cache-Control: no-cache, no-transform`, and
+`X-Accel-Buffering: no`. Proxies must preserve streaming and use compatible idle
+timeouts. When routing through XO, ensure its CAPI path prefix matches this
+service's `/kubernetes` prefix and its proxy forwards the streaming headers.
+The HTTP server's absolute write timeout is disabled so streams can stay open
+beyond Fuego's default 30 seconds; the other server timeouts are unchanged.
 
 ### Examples
 

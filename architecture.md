@@ -39,6 +39,20 @@ Transport concerns remain inside the transport component. In particular, JSON
 metadata and HTTP validation tags belong to DTOs under `components/webserver`;
 the shared Strategy models do not contain transport-specific validation.
 
+The event component under `pkg/components/event_manager` owns global Kubernetes
+event subscriptions. `EventManager` implements `ForWatchingKubernetesEvents`
+and produces a heartbeat every five seconds without depending on cluster
+management. Its contract uses Go values and a context-bound receive-only channel,
+without HTTP, JSON or Kubernetes types. Each subscription currently has its own
+ticker; cancellation closes the channel, including when a consumer is slow.
+
+The HTTP component's `KubernetesEventsHandler` exposes `/kubernetes/events`,
+consumes this Strategy and owns SSE headers, JSON DTOs, frame encoding and
+flushing. It cancels its subscription
+on client disconnection or write failure. The absolute HTTP write timeout is
+disabled for long-lived streams. Resource observation and business transitions
+remain to be implemented in the event component.
+
 An Adapter is a particular kind of Strategy: it translates the required
 interface and delegates the work to another service. Ports & Adapters is in
 turn a specialization of Component + Strategy whose boundary is placed in
@@ -60,7 +74,11 @@ flowchart LR
         handlers -->|starts upgrade| upgraderport[ForUpgradingClusters]
         fuego --> versionhandler[VersionsHandler]
         versionhandler --> versionport[ForManagingVersions]
+        fuego --> eventhandler[KubernetesEventsHandler]
+        eventhandler --> eventport[ForWatchingKubernetesEvents]
     end
+
+    eventport -->|implemented by| events[EventManager — pkg/components/event_manager]
 
     subgraph clustercomponent[Cluster management component — pkg/components/cluster_manager]
         manager[ClusterManager]
@@ -108,6 +126,7 @@ flowchart LR
     configurator -. creates\nRegisterIndexes\nStart\nWaitForCacheSync .-> cache
     configurator -. creates and wires .-> workload
     configurator -. creates and wires .-> upgrader
+    configurator -. creates and wires .-> events
 ```
 
 The roles from Component + Strategy map to the code as follows:
@@ -127,6 +146,7 @@ The roles from Component + Strategy map to the code as follows:
 | Strategies | `ForManagingClusterResources`, `ForManagingClusterMachines`, `ForGettingClusterConfig` | Describe the capabilities required by `ClusterManager` without Kubernetes types |
 | Strategies | `ClusterClient`, `MachineClient`, `SecretClient` | Implement the component's technology-independent required interfaces using Kubernetes |
 | Configurator | `run` in `cmd/http_server/main.go` | Select Kubernetes configuration, build the informer cache, instantiate the Strategies and component, and inject the component into `HttpServer.Run` |
+| Component | `eventmanager.EventManager` | Owns global subscriptions and produces transport-independent heartbeats |
 
 Go's implicit interface satisfaction lets `cluster_manager.ClusterManager`
 satisfy `ForManagingClusters` directly. The HTTP handler converts its validated

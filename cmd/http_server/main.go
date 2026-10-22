@@ -13,6 +13,7 @@ import (
 
 	"capv-proxy/pkg/components/cluster_manager"
 	"capv-proxy/pkg/components/cluster_upgrader"
+	eventmanager "capv-proxy/pkg/components/event_manager"
 	"capv-proxy/pkg/components/management_kubernetes_client"
 	versionmanager "capv-proxy/pkg/components/version_manager"
 	"capv-proxy/pkg/components/webserver"
@@ -143,6 +144,7 @@ func run(opts options) error {
 		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,
 		workloadClient, workloadClient,
 	)
+	eventManager := eventmanager.NewEventManager()
 
 	if err := clusterUpgrader.ResumeClusterUpgrades(ctx); err != nil {
 		return fmt.Errorf("resume cluster upgrades: %w", err)
@@ -153,7 +155,7 @@ func run(opts options) error {
 		Port:      opts.port,
 		SwaggerUI: opts.swaggerUI,
 	}
-	if err := httpServer.Run(clusterManager, clusterUpgrader, versionManager); err != nil {
+	if err := httpServer.Run(clusterManager, clusterUpgrader, versionManager, eventManager); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)
 	}
 

@@ -414,7 +414,7 @@ its own storage technology.
   and provider are still needed.
 - `GetClusterNodesInfo` currently derives its flat node information from CAPI
   Machines. Workload-cluster Node enrichment is not wired yet, although the
-  machine list already exposes the Xen Orchestra VM UUID as `node_id` when a
+  machine list already exposes the Xen Orchestra VM UUID as `vm_id` when a
   valid machine `providerID` is available.
 - Authentication middleware currently lets every request through.
 - Application errors are mapped to HTTP status codes, including validation
@@ -460,7 +460,7 @@ Replica counts are unchanged. HTTP routes, parameters, responses, and applicatio
 errors use node terminology. Node responses expose `id` (the stable UUID used to
 address the node, a UUID v5 of the Machine name under the cluster's UUID),
 `name` (the stable Kubernetes resource name), optional `node_name` (the
-registered Node name from `status.nodeRef.name`), and `node_id` (the provider
+registered Node name from `status.nodeRef.name`), and `vm_id` (the provider
 VM UUID). The `name` and `node_name` fields are descriptive and are not used to
 address deletion requests. Because `id` never depends on `status.nodeRef`, it is
 available as soon as the Machine is created and does not change when the Node

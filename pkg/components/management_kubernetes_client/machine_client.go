@@ -169,12 +169,12 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		status = unknownStatus
 	}
 
-	var machineID *uuid.UUID
+	var vmID *uuid.UUID
 	if machine.Spec.ProviderID != "" {
 		// Silently ignore errors, as the provider ID may not be XenOrchestra,
 		// and we don't want to fail the whole operation because of that.
 		if parsedID, err := xok8scommon.GetVMID(machine.Spec.ProviderID); err == nil {
-			machineID = &parsedID
+			vmID = &parsedID
 		}
 	}
 
@@ -188,7 +188,7 @@ func toClusterNodeInfo(machine *capiv1.Machine) strategies.ClusterNodeInfo {
 		Role:          role,
 		Status:        status,
 		IPs:           machineIPs(machine.Status.Addresses),
-		MachineID:     machineID,
+		VMID:          vmID,
 		ParentCluster: uuids.ClusterID(clusterName),
 		Version:       machineVersion(machine),
 	}

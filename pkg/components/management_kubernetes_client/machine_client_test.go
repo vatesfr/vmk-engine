@@ -210,8 +210,8 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
-		require.NotNil(t, nodes[0].MachineID)
-		assert.Equal(t, vmID, *nodes[0].MachineID)
+		require.NotNil(t, nodes[0].VMID)
+		assert.Equal(t, vmID, *nodes[0].VMID)
 	})
 
 	t.Run("non-xo provider id is ignored", func(t *testing.T) {
@@ -223,7 +223,7 @@ func TestMachineClientGetMachinesByCluster(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
-		assert.Nil(t, nodes[0].MachineID)
+		assert.Nil(t, nodes[0].VMID)
 	})
 }
 

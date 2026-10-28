@@ -135,7 +135,7 @@ type ClusterNodeInfo struct {
 	Role          string     `json:"role,omitempty"`
 	Status        string     `json:"status,omitempty"`
 	IPs           []string   `json:"ips,omitempty" description:"Internal and external IP addresses reported by the CAPI Machine"`
-	NodeID        *uuid.UUID `json:"node_id,omitempty"`
+	VMID          *uuid.UUID `json:"vm_id,omitempty"`
 	ParentCluster *uuid.UUID `json:"$cluster,omitempty"`
 	Version       string     `json:"version,omitempty"`
 }
@@ -279,7 +279,7 @@ func toNodeInfo(node strategies.ClusterNodeInfo) ClusterNodeInfo {
 		Role:          node.Role,
 		Status:        node.Status,
 		IPs:           node.IPs,
-		NodeID:        node.MachineID,
+		VMID:          node.VMID,
 		Version:       node.Version,
 	}
 }

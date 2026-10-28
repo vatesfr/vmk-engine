@@ -841,13 +841,13 @@ func TestDeleteClusterNodeHTTP(t *testing.T) {
 }
 
 func TestNodeHTTPAbstraction(t *testing.T) {
-	nodeID := uuid.Must(uuid.FromString("01234567-89ab-cdef-0123-456789abcdef"))
+	vmID := uuid.Must(uuid.FromString("01234567-89ab-cdef-0123-456789abcdef"))
 	for _, path := range []string{clusterNodesPath, allNodesPath} {
 		t.Run(path, func(t *testing.T) {
 			executeHTTPTestCase(t, httpTestCase{
 				method: http.MethodGet, path: path,
 				setupMock: func(ctx context.Context, service *mocks.MockForManagingClusters) {
-					nodes := []strategies.ClusterNodeInfo{{Name: "node-1", NodeName: "worker-01", MachineID: &nodeID}}
+					nodes := []strategies.ClusterNodeInfo{{Name: "node-1", NodeName: "worker-01", VMID: &vmID}}
 					if path == clusterNodesPath {
 						service.EXPECT().GetClusterNodesInfo(ctx, clusterUUID).Return(nodes, nil)
 					} else {
@@ -856,7 +856,7 @@ func TestNodeHTTPAbstraction(t *testing.T) {
 				},
 				expectedStatus: http.StatusOK,
 				expectedJSON: `[{"id":"00000000-0000-0000-0000-000000000000","is_reconciliation_paused":false,"name":"node-1",` +
-					`"node_name":"worker-01","node_id":"01234567-89ab-cdef-0123-456789abcdef", "$cluster":"00000000-0000-0000-0000-000000000000"}]`,
+					`"node_name":"worker-01","vm_id":"01234567-89ab-cdef-0123-456789abcdef", "$cluster":"00000000-0000-0000-0000-000000000000"}]`,
 			})
 		})
 	}

@@ -7,8 +7,8 @@ import (
 	"github.com/go-fuego/fuego"
 	"github.com/go-playground/validator/v10"
 
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 // toHTTPError translates application errors at the HTTP boundary. Application

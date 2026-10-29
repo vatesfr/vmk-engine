@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"capv-proxy/pkg/components/webserver/handlers"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
+	"github.com/vatesfr/vmk-engine/pkg/components/webserver/handlers"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies/mocks"
 )
 
 func TestGetAvailableVersion(t *testing.T) {

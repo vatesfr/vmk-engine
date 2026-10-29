@@ -1,6 +1,6 @@
 # Architecture
 
-`go-capi-client` is an HTTP component that exposes Cluster API resources from
+VMK Engine is an HTTP component that exposes Cluster API resources from
 one Kubernetes namespace. Its design follows Alistair Cockburn's
 **Component + Strategy** pattern: the HTTP subsystem declares the service it
 requires and receives an implementation of that service when the process
@@ -331,7 +331,7 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `pkg/components/workload_kubernetes_client/` | Workload Node actions, observed states and dynamic client creation |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `pkg/uuids/` | Pure UUID v5 utilities: namespace constants and `ClusterID`/`NodeID` helpers |
-| `charts/go-capi-client/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
+| `charts/vmk-engine/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Workload Node operations
 

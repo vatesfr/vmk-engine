@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/yaml"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -203,7 +203,7 @@ func TestInvalidResourceBlocks(t *testing.T) {
 }
 
 func TestPackagedClusterConfiguration(t *testing.T) {
-	for _, path := range []string{"../../../charts/go-capi-client/values.yaml", "../../../k8s/deployment.yaml"} {
+	for _, path := range []string{"../../../charts/vmk-engine/values.yaml", "../../../k8s/deployment.yaml"} {
 		t.Run(path, func(t *testing.T) {
 			raw, err := os.ReadFile(path)
 			require.NoError(t, err)

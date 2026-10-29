@@ -16,13 +16,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"capv-proxy/pkg/components/cluster_manager"
-	eventmanager "capv-proxy/pkg/components/event_manager"
-	versionmanager "capv-proxy/pkg/components/version_manager"
-	"capv-proxy/pkg/components/webserver/handlers"
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
+	"github.com/vatesfr/vmk-engine/pkg/components/cluster_manager"
+	eventmanager "github.com/vatesfr/vmk-engine/pkg/components/event_manager"
+	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
+	"github.com/vatesfr/vmk-engine/pkg/components/webserver/handlers"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies/mocks"
 )
 
 const (

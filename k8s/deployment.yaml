@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: go-capi-client
+  name: vmk-engine
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: go-capi-client
+  name: vmk-engine
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 rules:
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["machinedeployments"]
@@ -58,37 +58,37 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: go-capi-client
+  name: vmk-engine
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 subjects:
   - kind: ServiceAccount
-    name: go-capi-client
+    name: vmk-engine
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: go-capi-client
+  name: vmk-engine
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: go-capi-client
+  name: vmk-engine
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: go-capi-client
+      app.kubernetes.io/name: vmk-engine
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: go-capi-client
+        app.kubernetes.io/name: vmk-engine
     spec:
-      serviceAccountName: go-capi-client
+      serviceAccountName: vmk-engine
       containers:
-        - name: go-capi-client
-          image: go-capi-client:latest
+        - name: vmk-engine
+          image: vmk-engine:latest
           imagePullPolicy: Never
           args:
             - --kube-client=in-cluster
@@ -133,13 +133,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: go-capi-client
+  name: vmk-engine
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 spec:
   type: NodePort
   selector:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
   ports:
     - name: http
       port: 80
@@ -152,7 +152,7 @@ kind: ConfigMap
 metadata:
   name: cluster-defaults
   labels:
-    app.kubernetes.io/name: go-capi-client
+    app.kubernetes.io/name: vmk-engine
 data:
   workerName: "md-0"
   controlPlaneEndpointPort: "6443"

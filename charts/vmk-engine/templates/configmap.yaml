@@ -2,9 +2,9 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cluster-defaults
-  namespace: {{ include "go-capi-client.targetNamespace" . }}
+  namespace: {{ include "vmk-engine.targetNamespace" . }}
   labels:
-    {{- include "go-capi-client.labels" . | nindent 4 }}
+    {{- include "vmk-engine.labels" . | nindent 4 }}
 data:
   {{- range $key, $value := .Values.clusterDefaults }}
   {{ $key }}: {{ $value | quote }}

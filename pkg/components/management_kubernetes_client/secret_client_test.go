@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	versionmanager "capv-proxy/pkg/components/version_manager"
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
+	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies/mocks"
 )
 
 const (

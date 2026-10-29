@@ -1,4 +1,4 @@
-module capv-proxy
+module github.com/vatesfr/vmk-engine
 
 go 1.26.5
 

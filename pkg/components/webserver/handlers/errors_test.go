@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 func TestToHTTPErrorPreservesValidationDetails(t *testing.T) {

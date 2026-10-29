@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: go-capi-client
+  repository: vmk-engine
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -52,7 +52,7 @@ ingress:
   className: ""
   annotations: {}
   hosts:
-    - host: go-capi-client.local
+    - host: vmk-engine.local
       paths:
         - path: /
           pathType: Prefix

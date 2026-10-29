@@ -1,8 +1,8 @@
-{{- define "go-capi-client.name" -}}
+{{- define "vmk-engine.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{- define "go-capi-client.fullname" -}}
+{{- define "vmk-engine.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -15,28 +15,28 @@
 {{- end }}
 {{- end }}
 
-{{- define "go-capi-client.labels" -}}
+{{- define "vmk-engine.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
-{{ include "go-capi-client.selectorLabels" . }}
+{{ include "vmk-engine.selectorLabels" . }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end }}
 
-{{- define "go-capi-client.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "go-capi-client.name" . }}
+{{- define "vmk-engine.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "vmk-engine.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{- define "go-capi-client.serviceAccountName" -}}
+{{- define "vmk-engine.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "go-capi-client.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "vmk-engine.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
-{{- define "go-capi-client.targetNamespace" -}}
+{{- define "vmk-engine.targetNamespace" -}}
 {{- default .Release.Namespace .Values.config.namespace }}
 {{- end }}

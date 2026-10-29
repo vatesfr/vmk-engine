@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	versionmanager "capv-proxy/pkg/components/version_manager"
+	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
 )
 
 func TestVersionCatalogue(t *testing.T) {

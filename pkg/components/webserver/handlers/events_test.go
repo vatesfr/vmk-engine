@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	eventmanager "capv-proxy/pkg/components/event_manager"
-	"capv-proxy/pkg/strategies"
+	eventmanager "github.com/vatesfr/vmk-engine/pkg/components/event_manager"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 type failedStreamWriter struct {

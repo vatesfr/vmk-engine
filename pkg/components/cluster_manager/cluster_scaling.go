@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofrs/uuid"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 func (c ClusterManager) SetWorkerReplicas(ctx context.Context, id uuid.UUID, replicas int32) error {

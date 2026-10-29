@@ -10,8 +10,8 @@
 package mocks
 
 import (
-	strategies "capv-proxy/pkg/strategies"
 	context "context"
+	strategies "github.com/vatesfr/vmk-engine/pkg/strategies"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"

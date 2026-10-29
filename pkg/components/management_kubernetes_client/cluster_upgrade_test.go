@@ -17,10 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"capv-proxy/pkg/components/cluster_upgrader"
-	versionmanager "capv-proxy/pkg/components/version_manager"
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/components/cluster_upgrader"
+	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	"k8s.io/utils/ptr"
 )

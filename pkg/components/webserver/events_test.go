@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	eventmanager "capv-proxy/pkg/components/event_manager"
-	versionmanager "capv-proxy/pkg/components/version_manager"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
+	eventmanager "github.com/vatesfr/vmk-engine/pkg/components/event_manager"
+	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies/mocks"
 )
 
 const kubernetesEventsPath = "/kubernetes/events"

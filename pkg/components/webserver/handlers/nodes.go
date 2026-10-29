@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-fuego/fuego"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 type DrainNodeParams struct {

@@ -1,4 +1,4 @@
-# go-capi-client
+# VMK Engine
 
 A Go HTTP service that exposes a REST API for viewing and managing
 [Cluster API](https://cluster-api.sigs.k8s.io/) resources in a Kubernetes
@@ -1096,7 +1096,7 @@ Successful cluster and tag deletions, as well as tag creation and updates, retur
 Build the image:
 
 ```bash
-docker build --tag go-capi-client:local .
+docker build --tag vmk-engine:local .
 ```
 
 Run the image with a read-only local kubeconfig mount:
@@ -1104,7 +1104,7 @@ Run the image with a read-only local kubeconfig mount:
 ```bash
 docker run --rm --publish 8080:8080 \
   --volume "$HOME/.kube/config:/config/kubeconfig:ro" \
-  go-capi-client:local \
+  vmk-engine:local \
   --kube-client=kubeconfig \
   --kubeconfig=/config/kubeconfig \
   --namespace=default
@@ -1118,10 +1118,10 @@ unprivileged user `10001`.
 Install the service in the namespace containing the Cluster API resources:
 
 ```bash
-helm upgrade --install go-capi-client ./charts/go-capi-client \
+helm upgrade --install vmk-engine ./charts/vmk-engine \
   --namespace capi-system \
   --create-namespace \
-  --set image.repository=registry.example.com/go-capi-client \
+  --set image.repository=registry.example.com/vmk-engine \
   --set image.tag=0.1.0
 ```
 
@@ -1129,11 +1129,11 @@ If the Cluster API resources are in a namespace other than the Helm release
 namespace, set `config.namespace`:
 
 ```bash
-helm upgrade --install go-capi-client ./charts/go-capi-client \
+helm upgrade --install vmk-engine ./charts/vmk-engine \
   --namespace services \
   --create-namespace \
   --set config.namespace=capi-system \
-  --set image.repository=registry.example.com/go-capi-client \
+  --set image.repository=registry.example.com/vmk-engine \
   --set image.tag=0.1.0
 ```
 
@@ -1146,7 +1146,7 @@ By default, the chart creates a `Role` in the target namespace and a
 | Value | Default | Description |
 | --- | --- | --- |
 | `replicaCount` | `1` | Replica count when autoscaling is disabled |
-| `image.repository` | `go-capi-client` | Image repository |
+| `image.repository` | `vmk-engine` | Image repository |
 | `image.tag` | chart `appVersion` | Image tag |
 | `image.pullPolicy` | `IfNotPresent` | Image pull policy |
 | `config.namespace` | release namespace | Target CAPI namespace |
@@ -1160,13 +1160,13 @@ By default, the chart creates a `Role` in the target namespace and a
 | `ingress.enabled` | `false` | Create an Ingress |
 | `autoscaling.enabled` | `false` | Create an HPA |
 
-See [`charts/go-capi-client/values.yaml`](charts/go-capi-client/values.yaml) for
+See [`charts/vmk-engine/values.yaml`](charts/vmk-engine/values.yaml) for
 all available values.
 
 ### Local access to the Helm service
 
 ```bash
-kubectl --namespace capi-system port-forward service/go-capi-client 8080:80
+kubectl --namespace capi-system port-forward service/vmk-engine 8080:80
 curl http://127.0.0.1:8080/ping
 ```
 
@@ -1274,7 +1274,7 @@ pkg/components/version_manager/ available Kubernetes releases and validation
 pkg/components/management_kubernetes_client/ Management-cluster Kubernetes Strategies
 pkg/components/workload_kubernetes_client/   Workload Nodes, Pods and dynamic connections
 pkg/strategies/             shared contracts and cross-contract models
-charts/go-capi-client/           Helm chart
+charts/vmk-engine/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use
 Dockerfile                       multi-stage image build
 ```

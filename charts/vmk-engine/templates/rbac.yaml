@@ -2,10 +2,10 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "go-capi-client.fullname" . }}
-  namespace: {{ include "go-capi-client.targetNamespace" . }}
+  name: {{ include "vmk-engine.fullname" . }}
+  namespace: {{ include "vmk-engine.targetNamespace" . }}
   labels:
-    {{- include "go-capi-client.labels" . | nindent 4 }}
+    {{- include "vmk-engine.labels" . | nindent 4 }}
 rules:
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["machinedeployments"]
@@ -35,16 +35,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "go-capi-client.fullname" . }}
-  namespace: {{ include "go-capi-client.targetNamespace" . }}
+  name: {{ include "vmk-engine.fullname" . }}
+  namespace: {{ include "vmk-engine.targetNamespace" . }}
   labels:
-    {{- include "go-capi-client.labels" . | nindent 4 }}
+    {{- include "vmk-engine.labels" . | nindent 4 }}
 subjects:
   - kind: ServiceAccount
-    name: {{ include "go-capi-client.serviceAccountName" . }}
+    name: {{ include "vmk-engine.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "go-capi-client.fullname" . }}
+  name: {{ include "vmk-engine.fullname" . }}
 {{- end }}

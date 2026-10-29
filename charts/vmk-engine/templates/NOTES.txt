@@ -1,0 +1,5 @@
+1. Forward the service locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "vmk-engine.fullname" . }} 8080:{{ .Values.service.port }}
+
+2. Check its health:
+  curl http://127.0.0.1:8080/ping

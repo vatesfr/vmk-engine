@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	uuids "capv-proxy/pkg/helpers/uuids"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
 )
 
 // RegisterIndexes registers the UUID field indexes on the informer cache for

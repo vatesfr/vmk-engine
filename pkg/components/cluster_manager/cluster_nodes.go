@@ -7,7 +7,7 @@ import (
 	"github.com/samber/lo"
 	lop "github.com/samber/lo/parallel"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 func (c ClusterManager) resolveNode(ctx context.Context, clusterID, nodeID uuid.UUID) (string, string, error) {

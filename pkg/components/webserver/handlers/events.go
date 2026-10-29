@@ -12,7 +12,7 @@ import (
 	"github.com/go-fuego/fuego"
 	"github.com/gofrs/uuid"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 type KubernetesEventsHandler struct {

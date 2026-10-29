@@ -10,7 +10,7 @@ import (
 
 	"github.com/gofrs/uuid"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	"k8s.io/apimachinery/pkg/util/version"
 )

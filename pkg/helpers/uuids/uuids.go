@@ -15,10 +15,10 @@ const UUIDIndexKey = "uuid"
 // UUID of the cluster they belong to.
 const ClusterUUIDIndexKey = "clusterUUID"
 
-// RootNamespace is the UUID v5 root for all CAPI-proxy resource identifiers.
+// RootNamespace is the UUID v5 root for all VMK Engine resource identifiers.
 // It is derived deterministically from the application's DNS name so no
 // constant needs to be stored or configured.
-var RootNamespace = uuid.NewV5(uuid.NamespaceDNS, "capv-proxy.vates.tech")
+var RootNamespace = uuid.NewV5(uuid.NamespaceDNS, "vmk-engine.vates.tech")
 
 // ErrInvalidFormat is returned when a UUID string cannot be parsed. The
 // gofrs/uuid sentinel is unexported, so Parse wraps it in this exported one

@@ -8,7 +8,7 @@ import (
 	"github.com/gofrs/uuid"
 	lop "github.com/samber/lo/parallel"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 )

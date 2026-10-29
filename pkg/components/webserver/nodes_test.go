@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	eventmanager "capv-proxy/pkg/components/event_manager"
-	"capv-proxy/pkg/strategies"
-	"capv-proxy/pkg/strategies/mocks"
+	eventmanager "github.com/vatesfr/vmk-engine/pkg/components/event_manager"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies/mocks"
 
 	"k8s.io/utils/ptr"
 )

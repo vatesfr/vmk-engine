@@ -4,7 +4,7 @@ import (
 	"github.com/go-fuego/fuego"
 	"github.com/samber/lo"
 
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 type VersionsHandler struct {

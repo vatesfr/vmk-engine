@@ -5,8 +5,8 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/samber/lo"
 
-	uuids "capv-proxy/pkg/helpers/uuids"
-	"capv-proxy/pkg/strategies"
+	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 type ClusterHandler struct {

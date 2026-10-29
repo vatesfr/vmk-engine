@@ -2,13 +2,13 @@
 
 set -Eeuo pipefail
 
-IMAGE="${1:-go-capi-client:latest}"
+IMAGE="${1:-vmk-engine:latest}"
 SSH_LOGIN="${2:-}"
 SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new}"
 
 usage() {
   echo "Usage: $0 [image] user@ip" >&2
-  echo "Example: $0 go-capi-client:latest ubuntu@ip" >&2
+  echo "Example: $0 vmk-engine:latest ubuntu@ip" >&2
 }
 
 if [[ ! "$SSH_LOGIN" =~ ^[^@]+@[^@]+$ ]]; then
@@ -40,7 +40,7 @@ if ((${#NODE_HOSTS[@]} == 0)); then
   exit 1
 fi
 
-ARCHIVE="$(mktemp "${TMPDIR:-/tmp}/go-capi-client-image.XXXXXX.tar")"
+ARCHIVE="$(mktemp "${TMPDIR:-/tmp}/vmk-engine-image.XXXXXX.tar")"
 trap 'rm -f -- "$ARCHIVE"' EXIT
 
 echo "Building $IMAGE..."

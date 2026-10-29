@@ -8,9 +8,9 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-fuego/fuego"
 
-	"capv-proxy/pkg/components/webserver/handlers"
-	"capv-proxy/pkg/components/webserver/middlewares"
-	"capv-proxy/pkg/strategies"
+	"github.com/vatesfr/vmk-engine/pkg/components/webserver/handlers"
+	"github.com/vatesfr/vmk-engine/pkg/components/webserver/middlewares"
+	"github.com/vatesfr/vmk-engine/pkg/strategies"
 )
 
 const (

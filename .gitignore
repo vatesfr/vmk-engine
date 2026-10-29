@@ -1,0 +1,12 @@
+# Local tool directories
+/.agents/
+/.aws/
+/.codex/
+.idea/
+.vscode/
+
+# Build and test outputs
+/bin/
+/http-server
+coverage*
+*.log

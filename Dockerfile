@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/http-server \
     ./cmd/http_server
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates \
     && addgroup -S -g 10001 app \

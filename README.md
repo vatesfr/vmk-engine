@@ -1291,5 +1291,8 @@ Dockerfile                       multi-stage image build
 
 ## License
 
-This repository does not currently include a license file. Add one before
-distributing the project publicly.
+Copyright (C) 2026 VATES SAS.
+
+VMK Engine is licensed under the GNU Affero General Public License, version 3
+or (at your option) any later version (`AGPL-3.0-or-later`).
+See [LICENSE](LICENSE) for the full license text.

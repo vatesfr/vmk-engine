@@ -186,10 +186,8 @@ flowchart LR
     machines -->|writes via| api
     secrets --> api
     defaults --> api
-    manager --> workloadport[ForManagingWorkloadNodes]
-    manager --> stateport[ForGettingWorkloadNodeStates]
-    workloadport --> workload[workload_kubernetes_client.NodeClient]
-    stateport --> workload
+    manager --> workloadport[ForManagingWorkloadResources]
+    workloadport --> workload[workload_kubernetes_client.WorkloadClient]
     workload --> configport
     workload --> target[Workload Kubernetes API]
 
@@ -328,16 +326,17 @@ The same dependency path is used for list, delete, and kubeconfig operations.
 | `pkg/components/cluster_upgrader/` | Validated upgrade execution, persistent locks, recovery and per-operation goroutines |
 | `pkg/components/version_manager/` | Static Kubernetes release catalog and availability checks |
 | `pkg/components/management_kubernetes_client/` | Kubernetes implementations of resource Strategies; informer cache UUID  |
-| `pkg/components/workload_kubernetes_client/` | Workload Node actions, observed states and dynamic client creation |
+| `pkg/components/workload_kubernetes_client/` | Workload Node actions, observed states, PersistentVolumes and dynamic client creation |
 | `pkg/strategies/` | Shared contracts in `for_*.go`; cross-contract models in `models.go` |
 | `pkg/uuids/` | Pure UUID v5 utilities: namespace constants and `ClusterID`/`NodeID` helpers |
 | `charts/vmk-engine/`, `k8s/`, `Dockerfile` | Packaging and deployment; they do not contain application behavior |
 
 ## Workload Node operations
 
-`ClusterManager` consumes separate `ForManagingWorkloadNodes` and
-`ForGettingWorkloadNodeStates` Strategies, both implemented by
-`workload_kubernetes_client.NodeClient`. The workload component consumes
+`ClusterManager` consumes a single `ForManagingWorkloadResources` Strategy,
+implemented by `workload_kubernetes_client.WorkloadClient`. Like the management
+Strategies, it groups reads and writes served by one client: Node actions, Node
+states and PersistentVolumes. The workload component consumes
 `ForGettingClusterConfig`; the configurator injects the management `SecretClient`
 for that contract. There is no concrete dependency between these components.
 
@@ -371,6 +370,24 @@ values survive JSON serialization and field projection; unknown fields are omitt
 Workload permissions are supplied by the retrieved kubeconfig: Nodes get/list/patch,
 Pods list, and pods/eviction create across namespaces. They are independent of the
 management chart's namespace-scoped Role, which already permits Secret reads.
+
+## Workload volumes
+
+`ForManagingWorkloadResources.GetVolumes` uses the same per-operation workload
+connection as Node operations. It lists PersistentVolumes and VolumeAttachments once with
+a five-second deadline and returns a non-nil slice on success. Every source is
+mapped into the shared `WorkloadVolume` model; `VolumeSource.Type` keeps the
+Kubernetes source field name so unsupported sources remain identifiable. Volumes
+from the Xen Orchestra CSI driver also carry an `XOVolume` built from the
+SR, pool and storage type volume attributes. The driver name and attribute keys are
+copied as constants rather than importing the driver module.
+
+Only attached VolumeAttachments contribute Node names. `ClusterManager` resolves
+them to Node UUIDs and VM IDs through `ForManagingClusterMachines`; unresolved
+Nodes keep only their name. `GetClusterVolumes` propagates workload errors so the
+HTTP component returns 503. Cluster enrichment is best effort: `ClusterInfo.Volumes`
+stays nil when the read fails, which the DTO omits, while a non-nil empty slice
+is serialized as `[]`.
 
 ## Configuration and variability
 

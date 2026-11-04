@@ -20,6 +20,7 @@ interface.
 - read a cluster kubeconfig from a Kubernetes `Secret`;
 - cordon, uncordon and drain workload Nodes using dynamically created clients;
 - expose optional cordon and draining states on nodes and clusters;
+- list workload PersistentVolumes, linked to their XO VDI and attached nodes;
 - interactive OpenAPI documentation with Swagger UI or Stoplight;
 - Kubernetes access using a `kubeconfig` or in-cluster configuration;
 - non-root Docker image;
@@ -319,6 +320,61 @@ once per workload cluster, with a five-second deadline per cluster. Reads for
 different clusters run in parallel while preserving response order. Collection
 field selection supports both fields, for example `?fields=name,is_cordon,is_draining`.
 
+## Workload volumes
+
+`GET /kubernetes/clusters/{id}/volumes` lists the PersistentVolumes of the
+workload cluster, whatever their provisioner. Cluster list and detail responses
+embed the same list in `volumes`. The field is omitted when the workload cluster
+cannot be read and is `[]` when it has no PersistentVolume, so field selection
+such as `GET /kubernetes/clusters?fields=name,volumes.name,volumes.source.csi.xo`
+distinguishes both cases. The dedicated route returns `503` instead.
+
+```json
+{
+  "name": "pvc-3f2a",
+  "capacity_bytes": 10737418240,
+  "phase": "Bound",
+  "reclaim_policy": "Delete",
+  "storage_class": "xo",
+  "access_modes": ["ReadWriteOnce"],
+  "volume_mode": "Filesystem",
+  "created_at": "2026-11-04 10:00:00 +0000 UTC",
+  "claim": { "namespace": "app", "name": "data" },
+  "source": {
+    "type": "csi",
+    "csi": {
+      "driver": "csi.xenorchestra.vates.tech",
+      "volume_handle": "aaaaaaaa-0000-0000-0000-000000000010",
+      "xo": { "sr_id": "…", "pool_id": "…", "storage_type": "shared" }
+    }
+  },
+  "attached_nodes": [{ "id": "…", "node_name": "worker-1", "vm_id": "…" }]
+}
+```
+
+`source.type` is the Kubernetes PersistentVolume source field (`csi`, `nfs`,
+`local`, `hostPath`, `iscsi`, `rbd`, …). Details are returned under `csi`, `nfs`
+and `local`; other sources only report their type. For the Xen Orchestra CSI
+driver, `volume_handle` is not the VDI UUID: the driver tags the VDI with
+`k8s:volumeId:<volume_handle>` and `k8s:pvName:<name>`. `source.csi.xo` is
+present for this driver only; `sr_id`, `pool_id` and `storage_type` come from
+the driver's volume attributes. SR and pool names are not exposed because the
+driver records them only at creation; resolve them from the IDs in XO.
+
+A PersistentVolume belongs to the cluster, not to a Node. `attached_nodes` lists
+the Nodes where CSI VolumeAttachments report the volume as attached; for an XO
+volume this is the VM the VDI is plugged into. `id` and `vm_id` are resolved
+from the cluster's Machines and are omitted for Nodes without a Machine.
+`node_affinity` reports the required node affinity, which restricts where the
+volume can be used, for example the Node of a `local` volume or the pool of an
+XO volume.
+
+Each read lists PersistentVolumes and VolumeAttachments once, with a
+five-second deadline, through the same per-operation workload connection as
+Node operations. The workload kubeconfig identity needs `list` on
+`persistentvolumes` and `storage.k8s.io` `volumeattachments`. Cluster responses
+read Node states and volumes concurrently for each cluster.
+
 ## HTTP API
 
 Base URL: `http://localhost:8080`.
@@ -345,6 +401,7 @@ Base URL: `http://localhost:8080`.
 | `POST` | `/kubernetes/clusters/{id}/nodes/{nodeID}/drain` | Cordon, evict pods and wait for drain completion | Returns `204`, leaves Node cordoned |
 | `GET` | `/kubernetes/clusters/{id}/config` | Reads the associated kubeconfig | Convention-based |
 | `GET` | `/kubernetes/clusters/{id}/nodes` | Returns the cluster nodes, or selected node fields, from CAPI Machines | Working |
+| `GET` | `/kubernetes/clusters/{id}/volumes` | Lists the workload PersistentVolumes, or selected volume fields | Returns `503` if the workload cluster is unreachable |
 | `GET` | `/kubernetes/nodes` | Returns all CAPI Machines in the namespace | Working |
 | `GET` | `/kubernetes/versions-available` | Lists available Kubernetes releases grouped by minor version, newest first | Static catalog |
 | `GET` | `/kubernetes/tags` | Lists tags grouped by cluster name | Working |
@@ -1240,6 +1297,7 @@ ClusterManager
     +-- ForManagingClusterResources --> ClusterClient -+-> informer cache (reads, UUID index)
     +-- ForManagingClusterMachines   --> MachineClient -+-> informer cache (reads, UUID index)
     +-- ForGettingClusterConfig     --> SecretClient  --> Kubernetes API
+    +-- ForManagingWorkloadResources --> WorkloadClient --> Workload Kubernetes API
     `-- ForGettingClusterCreationDefaults --> ConfigMapClient --> Kubernetes API
                                                        |
                                           ClusterClient (writes only) --> Kubernetes API
@@ -1272,7 +1330,7 @@ pkg/components/cluster_manager/ cluster-management orchestration
 pkg/components/cluster_upgrader/ upgrade validation, execution and recovery
 pkg/components/version_manager/ available Kubernetes releases and validation
 pkg/components/management_kubernetes_client/ Management-cluster Kubernetes Strategies
-pkg/components/workload_kubernetes_client/   Workload Nodes, Pods and dynamic connections
+pkg/components/workload_kubernetes_client/   Workload Nodes, Pods, volumes and dynamic connections
 pkg/strategies/             shared contracts and cross-contract models
 charts/vmk-engine/           Helm chart
 k8s/deployment.yaml              basic Kubernetes manifest for local use

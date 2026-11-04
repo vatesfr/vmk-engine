@@ -17,6 +17,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+var errOffline = errors.New("offline")
+
 const (
 	cordonAction      = "cordon"
 	nodeActionCluster = "cluster"
@@ -28,10 +30,10 @@ func TestNodeOperationsResolveMachineBeforeCallingWorkload(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			resources := mocks.NewMockForManagingClusterResources(ctrl)
 			machines := mocks.NewMockForManagingClusterMachines(ctrl)
-			workload := mocks.NewMockForManagingWorkloadNodes(ctrl)
+			workload := mocks.NewMockForManagingWorkloadResources(ctrl)
 			resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: nodeActionCluster, ID: clusterUUID}, nil)
 			machines.EXPECT().GetNodeName(gomock.Any(), clusterUUID, deleteNodeUUID).Return("node", nil)
-			manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, workload, nil)
+			manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, workload)
 			if action == "drain" {
 				options := strategies.DrainOptions{Timeout: time.Minute, IgnoreDaemonSets: true}
 				workload.EXPECT().Drain(gomock.Any(), nodeActionCluster, "node", options)
@@ -48,17 +50,17 @@ func TestNodeOperationStopsWhenMachineCannotBeResolved(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
 	machines := mocks.NewMockForManagingClusterMachines(ctrl)
-	workload := mocks.NewMockForManagingWorkloadNodes(ctrl)
+	workload := mocks.NewMockForManagingWorkloadResources(ctrl)
 	resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: nodeActionCluster, ID: clusterUUID}, nil)
 	machines.EXPECT().GetNodeName(gomock.Any(), clusterUUID, deleteNodeUUID).Return("", strategies.ErrNodeNotRegistered)
-	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, workload, nil)
+	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, workload)
 	require.ErrorIs(t, manager.DrainClusterNode(t.Context(), clusterUUID, deleteNodeUUID, strategies.DrainOptions{}), strategies.ErrNodeNotRegistered)
 }
 
 func TestNodeEnrichmentGroupsReadsAndPreservesUnknown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	machines := mocks.NewMockForManagingClusterMachines(ctrl)
-	states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
+	states := mocks.NewMockForManagingWorkloadResources(ctrl)
 	machines.EXPECT().GetAllMachines(gomock.Any()).Return([]strategies.ClusterNodeInfo{
 		{Name: "m1", NodeName: "n1", ParentCluster: uuids.ClusterID(clusterName)},
 		{Name: "m2", NodeName: "n2", ParentCluster: uuids.ClusterID(clusterName)},
@@ -71,7 +73,7 @@ func TestNodeEnrichmentGroupsReadsAndPreservesUnknown(t *testing.T) {
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
 	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(clusterName)).Return(strategies.ClusterInfo{Name: clusterName}, nil)
 	resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(secondClusterName)).Return(strategies.ClusterInfo{Name: secondClusterName}, nil)
-	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, states)
+	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, states)
 	nodes, err := manager.GetAllNodes(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, ptr.To(true), nodes[0].IsDraining)
@@ -95,10 +97,11 @@ func TestClusterStateAggregation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			resources := mocks.NewMockForManagingClusterResources(ctrl)
-			states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
+			states := mocks.NewMockForManagingWorkloadResources(ctrl)
 			resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: nodeActionCluster, ID: clusterUUID}, nil)
 			states.EXPECT().GetNodeStates(gomock.Any(), nodeActionCluster).Return(tc.states, nil)
-			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil, nil, states)
+			states.EXPECT().GetVolumes(gomock.Any(), nodeActionCluster).Return(nil, errOffline).AnyTimes()
+			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil, states)
 			cluster, err := manager.GetClusterByUUID(t.Context(), clusterUUID)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantCordon, cluster.IsCordon)
@@ -110,14 +113,15 @@ func TestClusterStateAggregation(t *testing.T) {
 func TestClusterAggregationOmitsFalseWhenMachineHasNoNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
-	states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
+	states := mocks.NewMockForManagingWorkloadResources(ctrl)
 	machines := mocks.NewMockForManagingClusterMachines(ctrl)
 	resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: nodeActionCluster, ID: clusterUUID}, nil)
 	states.EXPECT().GetNodeStates(gomock.Any(), nodeActionCluster).Return(map[string]strategies.WorkloadNodeState{
 		"node": {IsCordon: ptr.To(false), IsDraining: ptr.To(false)},
 	}, nil)
+	states.EXPECT().GetVolumes(gomock.Any(), nodeActionCluster).Return(nil, errOffline).AnyTimes()
 	machines.EXPECT().GetMachinesByCluster(gomock.Any(), clusterUUID).Return([]strategies.ClusterNodeInfo{{NodeName: "node"}, {Name: "registering"}}, nil)
-	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, states)
+	manager := cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, states)
 	cluster, err := manager.GetClusterByUUID(t.Context(), clusterUUID)
 	require.NoError(t, err)
 	require.Nil(t, cluster.IsCordon)
@@ -131,7 +135,7 @@ func TestEnrichmentReadsClustersConcurrentlyAndPreservesOrder(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			resources := mocks.NewMockForManagingClusterResources(ctrl)
 			machines := mocks.NewMockForManagingClusterMachines(ctrl)
-			states := mocks.NewMockForGettingWorkloadNodeStates(ctrl)
+			states := mocks.NewMockForManagingWorkloadResources(ctrl)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			started := make(chan string, 2)
@@ -152,7 +156,8 @@ func TestEnrichmentReadsClustersConcurrentlyAndPreservesOrder(t *testing.T) {
 			}
 			states.EXPECT().GetNodeStates(gomock.Any(), clusterName).DoAndReturn(read).Times(1)
 			states.EXPECT().GetNodeStates(gomock.Any(), secondClusterName).DoAndReturn(read).Times(1)
-			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil, nil, states)
+			states.EXPECT().GetVolumes(gomock.Any(), gomock.Any()).Return(nil, errOffline).AnyTimes()
+			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil, states)
 			type result struct {
 				names   []string
 				cordons []*bool
@@ -177,7 +182,7 @@ func TestEnrichmentReadsClustersConcurrentlyAndPreservesOrder(t *testing.T) {
 			} else {
 				resources.EXPECT().GetByUUID(gomock.Any(), clusterUUID).Return(strategies.ClusterInfo{Name: clusterName, ID: clusterUUID}, nil)
 				resources.EXPECT().GetByUUID(gomock.Any(), uuids.ClusterID(secondClusterName)).Return(strategies.ClusterInfo{Name: secondClusterName, ID: uuids.ClusterID(secondClusterName)}, nil)
-				manager = cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, nil, states)
+				manager = cluster_manager.NewClusterManager(resources, nil, machines, nil, nil, states)
 				machines.EXPECT().GetAllMachines(ctx).Return([]strategies.ClusterNodeInfo{
 					{Name: "m1", NodeName: "n1", ParentCluster: clusterUUID},
 					{Name: "m2", NodeName: "n1", ParentCluster: uuids.ClusterID(secondClusterName)},

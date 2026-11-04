@@ -128,6 +128,13 @@ func (httpServer HttpServer) newServer(
 		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
 		validationResponse(),
 	)
+	fuego.Get(clusterRouter, "/{id}/volumes", clusterHandler.GetClusterVolumes,
+		fuego.OptionDescription("Lists the workload cluster PersistentVolumes, whatever their provisioner. "+
+			"Xen Orchestra CSI volumes expose the volume ID tagged on their VDI."),
+		fuego.OptionQuery("fields", "Comma-separated JSON fields to return; use * for all fields"),
+		notFoundResponse("Cluster not found"), validationResponse(),
+		fuego.OptionAddResponse(http.StatusServiceUnavailable, "Workload cluster or kubeconfig unavailable", fuego.Response{Type: fuego.HTTPError{}}),
+	)
 	fuego.Get(clusterRouter, "/{id}/config", clusterHandler.GetClusterConfig, notFoundResponse("Cluster not found"), validationResponse())
 	fuego.Post(clusterRouter, "", clusterHandler.CreateCluster,
 		fuego.OptionAddResponse(http.StatusConflict, "Cluster already exists", fuego.Response{Type: fuego.HTTPError{}}),

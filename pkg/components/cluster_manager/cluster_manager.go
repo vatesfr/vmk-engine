@@ -14,8 +14,7 @@ import (
 )
 
 type ClusterManager struct {
-	workloadNodes           strategies.ForManagingWorkloadNodes
-	workloadStates          strategies.ForGettingWorkloadNodeStates
+	workloadResources       strategies.ForManagingWorkloadResources
 	versions                strategies.ForManagingVersions
 	clusterResources        strategies.ForManagingClusterResources
 	clusterConfigs          strategies.ForGettingClusterConfig
@@ -31,13 +30,11 @@ func NewClusterManager(
 	clusterMachines strategies.ForManagingClusterMachines,
 	clusterCreationDefaults strategies.ForGettingClusterCreationDefaults,
 	versions strategies.ForManagingVersions,
-	workloadNodes strategies.ForManagingWorkloadNodes,
-	workloadStates strategies.ForGettingWorkloadNodeStates,
+	workloadResources strategies.ForManagingWorkloadResources,
 ) ClusterManager {
 	return ClusterManager{
 		versions:                versions,
-		workloadNodes:           workloadNodes,
-		workloadStates:          workloadStates,
+		workloadResources:       workloadResources,
 		clusterResources:        clusterResources,
 		clusterConfigs:          clusterConfigs,
 		clusterMachines:         clusterMachines,

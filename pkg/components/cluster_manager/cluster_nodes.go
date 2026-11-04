@@ -30,10 +30,10 @@ func (c ClusterManager) SetClusterNodeCordon(ctx context.Context, clusterID, nod
 	if err != nil {
 		return err
 	}
-	if c.workloadNodes == nil {
+	if c.workloadResources == nil {
 		return strategies.ErrWorkloadUnavailable
 	}
-	return c.workloadNodes.SetCordon(ctx, clusterName, nodeName, cordoned)
+	return c.workloadResources.SetCordon(ctx, clusterName, nodeName, cordoned)
 }
 
 func (c ClusterManager) DrainClusterNode(ctx context.Context, clusterID, nodeID uuid.UUID, options strategies.DrainOptions) error {
@@ -44,10 +44,10 @@ func (c ClusterManager) DrainClusterNode(ctx context.Context, clusterID, nodeID 
 	if err != nil {
 		return err
 	}
-	if c.workloadNodes == nil {
+	if c.workloadResources == nil {
 		return strategies.ErrWorkloadUnavailable
 	}
-	return c.workloadNodes.Drain(ctx, clusterName, nodeName, options)
+	return c.workloadResources.Drain(ctx, clusterName, nodeName, options)
 }
 
 func (c ClusterManager) getNodeStates(ctx context.Context, clusterID uuid.UUID) map[string]strategies.WorkloadNodeState {
@@ -55,13 +55,13 @@ func (c ClusterManager) getNodeStates(ctx context.Context, clusterID uuid.UUID) 
 	if err != nil {
 		return nil
 	}
-	states, _ := c.workloadStates.GetNodeStates(ctx, cluster.Name)
+	states, _ := c.workloadResources.GetNodeStates(ctx, cluster.Name)
 	return states
 }
 
 // Enrichment is best effort: management information remains available during outages.
 func (c ClusterManager) enrichNodes(ctx context.Context, nodes []strategies.ClusterNodeInfo) {
-	if c.workloadStates == nil {
+	if c.workloadResources == nil {
 		return
 	}
 	indicesByCluster := lo.GroupBy(lo.Range(len(nodes)), func(i int) uuid.UUID {
@@ -78,11 +78,20 @@ func (c ClusterManager) enrichNodes(ctx context.Context, nodes []strategies.Clus
 	})
 }
 
+// Node states and volumes write distinct fields, so both reads run concurrently.
 func (c ClusterManager) enrichCluster(ctx context.Context, cluster *strategies.ClusterInfo) {
-	if c.workloadStates == nil {
+	lop.ForEach([]func(context.Context, *strategies.ClusterInfo){
+		c.enrichClusterNodeStates, c.enrichClusterVolumes,
+	}, func(enrich func(context.Context, *strategies.ClusterInfo), _ int) {
+		enrich(ctx, cluster)
+	})
+}
+
+func (c ClusterManager) enrichClusterNodeStates(ctx context.Context, cluster *strategies.ClusterInfo) {
+	if c.workloadResources == nil {
 		return
 	}
-	states, _ := c.workloadStates.GetNodeStates(ctx, cluster.Name)
+	states, _ := c.workloadResources.GetNodeStates(ctx, cluster.Name)
 	if len(states) == 0 {
 		return
 	}

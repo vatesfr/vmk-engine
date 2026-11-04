@@ -11,9 +11,9 @@ package mocks
 
 import (
 	context "context"
-	strategies "github.com/vatesfr/vmk-engine/pkg/strategies"
 	reflect "reflect"
 
+	strategies "github.com/vatesfr/vmk-engine/pkg/strategies"
 	gomock "go.uber.org/mock/gomock"
 )
 

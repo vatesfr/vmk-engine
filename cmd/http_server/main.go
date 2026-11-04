@@ -136,13 +136,13 @@ func run(opts options) error {
 	k8sSecretClient := management_kubernetes_client.NewSecretClient(k8sClient, opts.namespace)
 	k8sMachineClient := management_kubernetes_client.NewMachineClient(k8sClient, informerCache, opts.namespace)
 	k8sConfigMapClient := management_kubernetes_client.NewConfigMapClient(k8sClient, opts.namespace)
-	workloadClient := workload_kubernetes_client.NewNodeClient(k8sSecretClient)
+	workloadClient := workload_kubernetes_client.NewWorkloadClient(k8sSecretClient)
 	versionManager := versionmanager.NewVersionManager()
 	clusterUpgrader := cluster_upgrader.NewClusterUpgrader(ctx, k8sClusterClient, versionManager)
 	defer clusterUpgrader.Stop()
 	clusterManager := cluster_manager.NewClusterManager(
 		k8sClusterClient, k8sSecretClient, k8sMachineClient, k8sConfigMapClient, versionManager,
-		workloadClient, workloadClient,
+		workloadClient,
 	)
 	eventManager := eventmanager.NewEventManager()
 	stopEvents, err := eventManager.Start(ctx, management_kubernetes_client.NewEventClient(informerCache, opts.namespace))

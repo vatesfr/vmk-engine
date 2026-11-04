@@ -90,6 +90,7 @@ type ClusterInfo struct {
 	ControlPlanesStatus         NodeTypeStatus
 	WorkersStatus               NodeTypeStatus
 	Tags                        map[string]string
+	Volumes                     []WorkloadVolume
 }
 
 type NodeTypeStatus struct {
@@ -166,4 +167,82 @@ type UpgradeMachineState struct {
 	Ready          bool
 	Paused         bool
 	Deleting       bool
+}
+
+// WorkloadVolume describes a PersistentVolume of a workload cluster, whatever
+// its provisioner.
+type WorkloadVolume struct {
+	IsDeleting    bool
+	Name          string
+	CapacityBytes int64
+	Phase         string
+	ReclaimPolicy string
+	StorageClass  string
+	AccessModes   []string
+	VolumeMode    string
+	CreatedAt     string
+	Claim         *VolumeClaim
+	Source        VolumeSource
+	// AttachedNodes lists Nodes reported as attached by VolumeAttachments.
+	// Only CSI volumes use VolumeAttachments.
+	AttachedNodes []VolumeNode
+	NodeAffinity  []VolumeNodeSelectorTerm
+}
+
+type VolumeClaim struct {
+	Namespace string
+	Name      string
+}
+
+// VolumeSource keeps the Kubernetes source field name in Type and details for
+// the most common sources.
+type VolumeSource struct {
+	Type  string
+	CSI   *CSIVolumeSource
+	NFS   *NFSVolumeSource
+	Local *LocalVolumeSource
+}
+
+type CSIVolumeSource struct {
+	Driver string
+	// VolumeHandle is not the VDI UUID for Xen Orchestra volumes: the driver
+	// stores it on the VDI as the tag "k8s:volumeId:<VolumeHandle>".
+	VolumeHandle string
+	// XO is set only for volumes provisioned by the Xen Orchestra CSI driver.
+	XO *XOVolume
+}
+
+type XOVolume struct {
+	SRID        string
+	PoolID      string
+	StorageType string
+}
+
+type NFSVolumeSource struct {
+	Server   string
+	Path     string
+	ReadOnly bool
+}
+
+type LocalVolumeSource struct {
+	Path string
+}
+
+// VolumeNode identifies an attached Node; ID and VMID are resolved from the
+// cluster's Machines and stay nil when unknown.
+type VolumeNode struct {
+	NodeName string
+	ID       *uuid.UUID
+	VMID     *uuid.UUID
+}
+
+// VolumeNodeSelectorTerm terms are ORed; their requirements are ANDed.
+type VolumeNodeSelectorTerm struct {
+	MatchExpressions []VolumeNodeSelectorRequirement
+}
+
+type VolumeNodeSelectorRequirement struct {
+	Key      string
+	Operator string
+	Values   []string
 }

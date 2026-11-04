@@ -42,7 +42,7 @@ func TestSetReplicas(t *testing.T) {
 					}
 				}
 				manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil,
-					nil, nil,
+					nil,
 				)
 				var err error
 				if controlPlane {

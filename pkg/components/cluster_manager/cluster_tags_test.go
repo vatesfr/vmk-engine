@@ -33,7 +33,7 @@ func TestClusterManagerGetAllTags(t *testing.T) {
 			t.Parallel()
 			resources := mocks.NewMockForManagingClusterResources(gomock.NewController(t))
 			manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil,
-				nil, nil,
+				nil,
 			)
 			resources.EXPECT().GetAllTags(t.Context()).Return(tc.tags, tc.err)
 
@@ -54,7 +54,7 @@ func TestClusterManagerTags(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
 	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil,
-		nil, nil,
+		nil,
 	)
 
 	resources.EXPECT().GetTags(t.Context(), clusterUUID).Return(map[string]string{ownerTag: platformValue}, nil)
@@ -78,7 +78,7 @@ func TestClusterManagerTagsWrapsResourceErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	resources := mocks.NewMockForManagingClusterResources(ctrl)
 	manager := cluster_manager.NewClusterManager(resources, nil, nil, nil, nil,
-		nil, nil,
+		nil,
 	)
 	errTest := errors.New("test error")
 

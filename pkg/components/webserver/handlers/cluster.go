@@ -7,6 +7,8 @@ import (
 
 	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
 	"github.com/vatesfr/vmk-engine/pkg/strategies"
+
+	"k8s.io/utils/ptr"
 )
 
 type ClusterHandler struct {
@@ -92,6 +94,7 @@ type ClusterInfo struct {
 	ControlPlaneStatus          *NodeStatus       `json:"control_plane_status,omitempty"`
 	WorkerStatus                *NodeStatus       `json:"worker_status,omitempty"`
 	Tags                        map[string]string `json:"tags,omitempty"`
+	Volumes                     *[]ClusterVolume  `json:"volumes,omitempty" description:"Workload PersistentVolumes as in /clusters/{id}/volumes; omitted when the workload cluster cannot be read"`
 }
 
 type NodeStatus struct {
@@ -239,6 +242,10 @@ func toCreateClusterParams(value ClusterCreateParams) strategies.CreateClusterPa
 }
 
 func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
+	var volumes *[]ClusterVolume
+	if value.Volumes != nil {
+		volumes = ptr.To(toClusterVolumes(value.Volumes))
+	}
 	return ClusterInfo{
 		IsDeleting:                  value.IsDeleting,
 		IsScaling:                   value.IsScaling,
@@ -263,6 +270,7 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		ControlPlaneStatus:          NewFromNodeStatus(value.ControlPlanesStatus),
 		WorkerStatus:                NewFromNodeStatus(value.WorkersStatus),
 		Tags:                        value.Tags,
+		Volumes:                     volumes,
 	}
 }
 

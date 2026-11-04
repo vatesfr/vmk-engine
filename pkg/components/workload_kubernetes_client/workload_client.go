@@ -21,19 +21,16 @@ import (
 
 const daemonSetKind = "DaemonSet"
 
-// NodeClient creates a separate connection to the workload cluster for each operation.
-type NodeClient struct {
+// WorkloadClient creates a separate connection to the workload cluster for each operation.
+type WorkloadClient struct {
 	clientFor    func(context.Context, string) (kubernetes.Interface, error)
 	pollInterval time.Duration
 }
 
-var (
-	_ strategies.ForManagingWorkloadNodes     = (*NodeClient)(nil)
-	_ strategies.ForGettingWorkloadNodeStates = (*NodeClient)(nil)
-)
+var _ strategies.ForManagingWorkloadResources = (*WorkloadClient)(nil)
 
-func NewNodeClient(configs strategies.ForGettingClusterConfig) *NodeClient {
-	return &NodeClient{
+func NewWorkloadClient(configs strategies.ForGettingClusterConfig) *WorkloadClient {
+	return &WorkloadClient{
 		pollInterval: time.Second,
 		clientFor: func(ctx context.Context, clusterName string) (kubernetes.Interface, error) {
 			kubeconfig, err := configs.Get(ctx, clusterName)
@@ -54,7 +51,7 @@ func NewNodeClient(configs strategies.ForGettingClusterConfig) *NodeClient {
 	}
 }
 
-func (c *NodeClient) SetCordon(ctx context.Context, clusterName, nodeName string, cordoned bool) error {
+func (c *WorkloadClient) SetCordon(ctx context.Context, clusterName, nodeName string, cordoned bool) error {
 	client, err := c.clientFor(ctx, clusterName)
 	if err != nil {
 		return err
@@ -79,7 +76,7 @@ func setCordon(ctx context.Context, client kubernetes.Interface, name string, co
 }
 
 // GetNodeStates lists each resource once. Failed pod reads preserve known cordon states.
-func (c *NodeClient) GetNodeStates(ctx context.Context, clusterName string) (map[string]strategies.WorkloadNodeState, error) {
+func (c *WorkloadClient) GetNodeStates(ctx context.Context, clusterName string) (map[string]strategies.WorkloadNodeState, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	client, err := c.clientFor(ctx, clusterName)
@@ -118,7 +115,7 @@ func (c *NodeClient) GetNodeStates(ctx context.Context, clusterName string) (map
 
 func boolPointer(value bool) *bool { return &value }
 
-func (c *NodeClient) Drain(ctx context.Context, clusterName, nodeName string, options strategies.DrainOptions) error {
+func (c *WorkloadClient) Drain(ctx context.Context, clusterName, nodeName string, options strategies.DrainOptions) error {
 	if options.Timeout == 0 {
 		options.Timeout = strategies.DefaultDrainTimeout
 	}
@@ -134,7 +131,7 @@ func (c *NodeClient) Drain(ctx context.Context, clusterName, nodeName string, op
 	return err
 }
 
-func (c *NodeClient) drain(ctx context.Context, clusterName, nodeName string, options strategies.DrainOptions) error {
+func (c *WorkloadClient) drain(ctx context.Context, clusterName, nodeName string, options strategies.DrainOptions) error {
 	client, err := c.clientFor(ctx, clusterName)
 	if err != nil {
 		return err

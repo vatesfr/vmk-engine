@@ -11,10 +11,10 @@ package mocks
 
 import (
 	context "context"
-	strategies "github.com/vatesfr/vmk-engine/pkg/strategies"
 	reflect "reflect"
 
 	uuid "github.com/gofrs/uuid"
+	strategies "github.com/vatesfr/vmk-engine/pkg/strategies"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -216,6 +216,21 @@ func (m *MockForManagingClusters) GetClusterTags(ctx context.Context, id uuid.UU
 func (mr *MockForManagingClustersMockRecorder) GetClusterTags(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterTags", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterTags), ctx, id)
+}
+
+// GetClusterVolumes mocks base method.
+func (m *MockForManagingClusters) GetClusterVolumes(ctx context.Context, id uuid.UUID) ([]strategies.WorkloadVolume, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterVolumes", ctx, id)
+	ret0, _ := ret[0].([]strategies.WorkloadVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterVolumes indicates an expected call of GetClusterVolumes.
+func (mr *MockForManagingClustersMockRecorder) GetClusterVolumes(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterVolumes", reflect.TypeOf((*MockForManagingClusters)(nil).GetClusterVolumes), ctx, id)
 }
 
 // GetClusters mocks base method.

@@ -23,8 +23,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func testNodeClient(client kubernetes.Interface) *NodeClient {
-	return &NodeClient{clientFor: func(context.Context, string) (kubernetes.Interface, error) { return client, nil }, pollInterval: time.Millisecond}
+func testWorkloadClient(client kubernetes.Interface) *WorkloadClient {
+	return &WorkloadClient{clientFor: func(context.Context, string) (kubernetes.Interface, error) { return client, nil }, pollInterval: time.Millisecond}
 }
 
 func workloadNode(cordoned bool) *corev1.Node {
@@ -45,7 +45,7 @@ func TestCordonIsIdempotentAndPreservesNode(t *testing.T) {
 	node := workloadNode(false)
 	node.Labels = map[string]string{"keep": "value"}
 	client := fake.NewClientset(node)
-	service := testNodeClient(client)
+	service := testWorkloadClient(client)
 	for _, value := range []bool{true, true, false, false} {
 		require.NoError(t, service.SetCordon(t.Context(), "cluster", "node", value))
 	}
@@ -68,7 +68,7 @@ func TestCordonFailurePreventsEvictions(t *testing.T) {
 	client.PrependReactor("patch", "nodes", func(ktesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "nodes"}, "node", errors.New("denied"))
 	})
-	require.ErrorIs(t, testNodeClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{}), strategies.ErrWorkloadUnavailable)
+	require.ErrorIs(t, testWorkloadClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{}), strategies.ErrWorkloadUnavailable)
 	for _, action := range client.Actions() {
 		require.NotEqual(t, "pods/eviction", action.GetResource().Resource+"/"+action.GetSubresource())
 	}
@@ -90,7 +90,7 @@ func TestDrainEvictsWithUIDAndKeepsCordon(t *testing.T) {
 		require.NoError(t, client.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), "default", "pod"))
 		return true, nil, nil
 	})
-	require.NoError(t, testNodeClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{Timeout: time.Second}))
+	require.NoError(t, testWorkloadClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{Timeout: time.Second}))
 	require.Equal(t, 2, attempts)
 	node, err := client.CoreV1().Nodes().Get(t.Context(), "node", metav1.GetOptions{})
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestDrainPDBTimeoutKeepsCordon(t *testing.T) {
 	client.PrependReactor("create", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewTooManyRequests("PDB", 0)
 	})
-	require.ErrorIs(t, testNodeClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{Timeout: 20 * time.Millisecond}), strategies.ErrDrainTimeout)
+	require.ErrorIs(t, testWorkloadClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{Timeout: 20 * time.Millisecond}), strategies.ErrDrainTimeout)
 	node, err := client.CoreV1().Nodes().Get(t.Context(), "node", metav1.GetOptions{})
 	require.NoError(t, err)
 	require.True(t, node.Spec.Unschedulable)
@@ -115,7 +115,7 @@ func TestDrainWaitsForTerminatingPodAndHonorsCancellation(t *testing.T) {
 	client := fake.NewClientset(workloadNode(true), pod)
 	ctx, cancel := context.WithCancel(t.Context())
 	client.PrependReactor("list", "pods", func(ktesting.Action) (bool, runtime.Object, error) { cancel(); return false, nil, nil })
-	require.ErrorIs(t, testNodeClient(client).Drain(ctx, "cluster", "node", strategies.DrainOptions{}), context.Canceled)
+	require.ErrorIs(t, testWorkloadClient(client).Drain(ctx, "cluster", "node", strategies.DrainOptions{}), context.Canceled)
 	for _, action := range client.Actions() {
 		require.NotEqual(t, "create", action.GetVerb())
 	}
@@ -136,7 +136,7 @@ func TestDrainRejectsUnsafePodsBeforeAnyEviction(t *testing.T) {
 				blocked.OwnerReferences[0].Kind = daemonSetKind
 			}
 			client := fake.NewClientset(workloadNode(false), workloadPod(), blocked)
-			require.ErrorIs(t, testNodeClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{}), strategies.ErrDrainBlocked)
+			require.ErrorIs(t, testWorkloadClient(client).Drain(t.Context(), "cluster", "node", strategies.DrainOptions{}), strategies.ErrDrainBlocked)
 			for _, action := range client.Actions() {
 				require.NotEqual(t, "create", action.GetVerb())
 			}
@@ -176,7 +176,7 @@ func TestNodeStatesAndPartialPodFailure(t *testing.T) {
 			if podFailure {
 				client.PrependReactor("list", "pods", func(ktesting.Action) (bool, runtime.Object, error) { return true, nil, errors.New("unavailable") })
 			}
-			states, err := testNodeClient(client).GetNodeStates(t.Context(), "cluster")
+			states, err := testWorkloadClient(client).GetNodeStates(t.Context(), "cluster")
 			require.Equal(t, podFailure, err != nil)
 			require.Equal(t, ptr.To(true), states["node"].IsCordon)
 			require.Equal(t, ptr.To(false), states["other"].IsCordon)
@@ -214,7 +214,7 @@ current-context: context
 `, host)
 	}
 	source := &configSource{value: config("first.example")}
-	service := NewNodeClient(source)
+	service := NewWorkloadClient(source)
 	first, err := service.clientFor(t.Context(), "cluster")
 	require.NoError(t, err)
 	source.value = config("second.example")

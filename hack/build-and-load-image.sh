@@ -30,9 +30,14 @@ require_command docker
 require_command kubectl
 require_command ssh
 
+# TEMPORARY: ExternalIP is also collected because the Xen Orchestra cloud-controller-manager
+# (v1.2.0) only publishes the VM IP as ExternalIP on Nodes, with no InternalIP, whereas the
+# CAPI provider reports the same IP as InternalIP on Machines. Drop the ExternalIP fallback
+# once the CCM publishes an InternalIP.
+# Fields are separated by "|" rather than tabs so that `read` keeps empty fields.
 mapfile -t NODE_HOSTS < <(
   kubectl get nodes \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.addresses[?(@.type=="InternalIP")]}{.address}{end}{"\n"}{end}'
+    -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{range .status.addresses[?(@.type=="InternalIP")]}{.address}{end}{"|"}{range .status.addresses[?(@.type=="ExternalIP")]}{.address}{end}{"\n"}{end}'
 )
 
 if ((${#NODE_HOSTS[@]} == 0)); then
@@ -50,8 +55,8 @@ echo "Exporting the image..."
 docker image save --output "$ARCHIVE" "$IMAGE"
 
 for node_entry in "${NODE_HOSTS[@]}"; do
-  IFS=$'\t' read -r node_name node_ip <<<"$node_entry"
-  node_host="${node_ip:-$node_name}"
+  IFS='|' read -r node_name node_internal_ip node_external_ip <<<"$node_entry"
+  node_host="${node_internal_ip:-${node_external_ip:-$node_name}}"
   ssh_target="${SSH_USER}@${node_host}"
 
   echo "Loading the image on $node_name ($ssh_target)..."

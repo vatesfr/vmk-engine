@@ -26,20 +26,21 @@ func (c SecretClient) Get(ctx context.Context, clusterName string) (string, erro
 	return string(value), nil
 }
 
+// SecretClient reads Secrets through a client.Reader, usually the informer cache.
 type SecretClient struct {
-	kubernetesClient client.Client
-	namespace        string
+	reader    client.Reader
+	namespace string
 }
 
 var _ strategies.ForGettingClusterConfig = SecretClient{}
 
-func NewSecretClient(kubernetesClient client.Client, namespace string) SecretClient {
-	return SecretClient{kubernetesClient, namespace}
+func NewSecretClient(reader client.Reader, namespace string) SecretClient {
+	return SecretClient{reader, namespace}
 }
 
 func (s SecretClient) GetSecretData(ctx context.Context, name string) (map[string][]byte, error) {
 	kubernetesSecret := &corev1.Secret{}
-	if err := s.kubernetesClient.Get(
+	if err := s.reader.Get(
 		ctx,
 		client.ObjectKey{Namespace: s.namespace, Name: name},
 		kubernetesSecret,

@@ -133,7 +133,7 @@ func run(opts options) error {
 	}
 
 	k8sClusterClient := management_kubernetes_client.NewClusterClient(k8sClient, informerCache, opts.namespace)
-	k8sSecretClient := management_kubernetes_client.NewSecretClient(k8sClient, opts.namespace)
+	k8sSecretClient := management_kubernetes_client.NewSecretClient(informerCache, opts.namespace)
 	k8sMachineClient := management_kubernetes_client.NewMachineClient(k8sClient, informerCache, opts.namespace)
 	k8sConfigMapClient := management_kubernetes_client.NewConfigMapClient(k8sClient, opts.namespace)
 	workloadClient := workload_kubernetes_client.NewWorkloadClient(k8sSecretClient)

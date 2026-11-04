@@ -9,10 +9,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // RegisterIndexes registers the UUID field indexes on the informer cache for
-// Cluster and Machine resources. Must be called before cache.Start().
+// Cluster and Machine resources, and the Secret informer. Must be called before cache.Start().
 func RegisterIndexes(ctx context.Context, c cache.Cache) error {
 	if err := c.IndexField(ctx, &capiv1.Cluster{}, uuids.UUIDIndexKey, clusterUUIDIndexer); err != nil {
 		return fmt.Errorf("register cluster UUID index: %w", err)
@@ -22,6 +24,10 @@ func RegisterIndexes(ctx context.Context, c cache.Cache) error {
 	}
 	if err := c.IndexField(ctx, &capiv1.Machine{}, uuids.ClusterUUIDIndexKey, machineClusterUUIDIndexer); err != nil {
 		return fmt.Errorf("register machine cluster UUID index: %w", err)
+	}
+	// Kubeconfig Secrets are read on every workload request; start their informer with the others.
+	if _, err := c.GetInformer(ctx, &corev1.Secret{}); err != nil {
+		return fmt.Errorf("register secret informer: %w", err)
 	}
 	return nil
 }

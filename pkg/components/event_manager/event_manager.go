@@ -321,22 +321,21 @@ func (m *EventManager) scalingTransitions(before, after *strategies.KubernetesRe
 	if wasScaling {
 		m.scaling[before.UID] = true
 	}
-	if after.Scaling == nil {
-		return nil
-	}
-	if *after.Scaling {
+	if after.Scaling != nil && *after.Scaling {
 		m.scaling[after.UID] = true
 		if !wasScaling {
 			return []strategies.KubernetesEvent{newEvent("cluster.scaling.started", before, after)}
 		}
-		if statusesChanged(before, after) {
-			return []strategies.KubernetesEvent{newEvent("cluster.scaling.progress", before, after)}
-		}
+	} else if !wasScaling {
 		return nil
-	}
-	if wasScaling && converged(after.Cluster.ControlPlanesStatus) && converged(after.Cluster.WorkersStatus) {
+	} else if after.Scaling != nil && converged(after.Cluster.ControlPlanesStatus) && converged(after.Cluster.WorkersStatus) {
 		delete(m.scaling, after.UID)
 		return []strategies.KubernetesEvent{newEvent("cluster.scaling.completed", before, after)}
+	}
+	// CAPI clears ScalingUp/ScalingDown once replicas match the desired count,
+	// before they are ready. Keep reporting progress until the counters converge.
+	if statusesChanged(before, after) {
+		return []strategies.KubernetesEvent{newEvent("cluster.scaling.progress", before, after)}
 	}
 	return nil
 }

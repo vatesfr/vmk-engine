@@ -533,7 +533,7 @@ a specific event is emitted for the same update, `*.updated` is not sent.
 | Event | Trigger |
 | --- | --- |
 | `cluster.scaling.started` | A current CAPI condition confirms scaling has started. |
-| `cluster.scaling.progress` | Replica counters or version distributions change during confirmed scaling. |
+| `cluster.scaling.progress` | Replica counters or version distributions change between `cluster.scaling.started` and `cluster.scaling.completed`, including after CAPI stops reporting scaling while replicas are not yet ready. |
 | `cluster.scaling.completed` | CAPI confirms scaling has stopped and replica counts have converged. |
 
 **Upgrades**

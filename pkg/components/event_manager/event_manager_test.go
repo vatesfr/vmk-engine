@@ -100,6 +100,7 @@ const (
 	testScalingCompletedEvent = "cluster.scaling.completed"
 	testDeletingPhase         = "deleting"
 	testClusterUpdatedEvent   = "cluster.updated"
+	testScalingProgressEvent  = "cluster.scaling.progress"
 	testNodeUpdatedEvent      = "node.updated"
 	testProvisionedPhase      = "Provisioned"
 )
@@ -314,7 +315,7 @@ func TestDoNotInventOperationCompletion(t *testing.T) {
 	after.Scaling = ptr.To(false)
 	after.Cluster.WorkersStatus.ReadyReplicas = 1
 	events := NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after})
-	assert.Equal(t, []string{testClusterUpdatedEvent}, eventTypes(events), "counters change without completing scaling")
+	assert.Equal(t, []string{testScalingProgressEvent}, eventTypes(events), "counters change without completing scaling")
 	before = activeUpgradeObservation()
 	after = clusterObservation()
 	assert.Empty(t, NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after}), "a removed lock is not proof of completion")
@@ -325,6 +326,27 @@ func TestDoNotInventOperationCompletion(t *testing.T) {
 	after.Upgrade = &op
 	after.Deleting = true
 	assert.Equal(t, []string{eventClusterDeleting}, eventTypes(NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after})))
+}
+
+func TestScalingProgressAfterCAPIStopsReportingScaling(t *testing.T) {
+	manager := NewEventManager()
+	idle := clusterObservation()
+	idle.Cluster.WorkersStatus = strategies.NodeTypeStatus{DesiredReplicas: 1}
+	active := clusterObservation()
+	active.Cluster.WorkersStatus = idle.Cluster.WorkersStatus
+	active.Scaling = ptr.To(true)
+	assert.Equal(t, []string{testScalingStartedEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: idle, Current: active})))
+	// Replicas match the desired count, so CAPI reports no scaling, but nothing is ready yet.
+	created := clusterObservation()
+	created.Cluster.WorkersStatus = strategies.NodeTypeStatus{DesiredReplicas: 1, Replicas: 1}
+	assert.Equal(t, []string{testScalingProgressEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: active, Current: created})))
+	ready := clusterObservation()
+	ready.Cluster.WorkersStatus = strategies.NodeTypeStatus{DesiredReplicas: 1, Replicas: 1, ReadyReplicas: 1}
+	assert.Equal(t, []string{testScalingProgressEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: created, Current: ready})))
+	complete := clusterObservation()
+	complete.Cluster.WorkersStatus = strategies.NodeTypeStatus{DesiredReplicas: 1, Replicas: 1, ReadyReplicas: 1, AvailableReplicas: 1}
+	assert.Equal(t, []string{testScalingCompletedEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: ready, Current: complete})))
+	assert.Equal(t, []string{testClusterUpdatedEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: complete, Current: ready})), "no progress after completion")
 }
 
 func TestRetainScalingUntilReplicaConvergence(t *testing.T) {
@@ -348,7 +370,7 @@ func TestScalingEventsAcrossUnknownConditionsAndLaggingCounters(t *testing.T) {
 	unknown := clusterObservation()
 	unknown.Scaling = nil
 	unknown.Cluster.WorkersStatus.ReadyReplicas = 2
-	assert.Equal(t, []string{testClusterUpdatedEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: active, Current: unknown})))
+	assert.Equal(t, []string{testScalingProgressEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: active, Current: unknown})))
 	lagging := clusterObservation()
 	lagging.Cluster.WorkersStatus.ReadyReplicas = 2
 	assert.Empty(t, manager.transitions(strategies.KubernetesResourceChange{Previous: unknown, Current: lagging}))

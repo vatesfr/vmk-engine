@@ -475,7 +475,11 @@ registered event observers.
 
 #### Event catalogue
 
-All events below are implemented and grouped by business function.
+All events below are implemented and grouped by business function. Every
+cluster and node event carries the full current snapshot, so a client can
+replace its local copy on any of them. `*.updated` guarantees that a public
+change is delivered immediately even when no business transition happens; when
+a specific event is emitted for the same update, `*.updated` is not sent.
 
 **Cluster lifecycle and availability**
 
@@ -486,6 +490,7 @@ All events below are implemented and grouped by business function.
 | `cluster.unavailable` | `is_available` changes from true to false. |
 | `cluster.deleting` | The Cluster acquires a `deletionTimestamp`. |
 | `cluster.deleted` | The Cluster disappears. |
+| `cluster.updated` | The public `cluster` snapshot changes (phase, endpoint, replica counters...) and no more specific cluster event covers the update. |
 
 **Node lifecycle and readiness**
 
@@ -496,6 +501,7 @@ All events below are implemented and grouped by business function.
 | `node.not_ready` | The public node status leaves `Ready`, including for `Unknown`. |
 | `node.deleting` | The Machine acquires a `deletionTimestamp`. |
 | `node.deleted` | The Machine disappears. |
+| `node.updated` | The public `node` snapshot changes (`vm_id`, `ips`, `node_name`, `status`, `version`...) and no more specific node event covers the update. |
 
 **Reconciliation pause and resume**
 
@@ -594,6 +600,7 @@ SSE event name with its decoded JSON `data`; this wrapper is not the raw SSE fra
 {"event":"cluster.deleting","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","cluster":{"name":"demo","description":"Cluster de développement","phase":"Provisioned","created_at":"2026-10-14T08:00:00Z","control_plane_endpoint":"https://10.30.138.14:6443","is_available":true,"is_reconciliation_paused":false,"is_deleting":true,"is_scaling":false,"is_upgrading":false,"tags":{"environment":"development"},"control_plane_status":{"desired_replicas":3,"replicas":3,"ready_replicas":3,"available_replicas":3,"up_to_date_replicas":3,"versions":[{"version":"v1.36.8","replicas":3}]},"worker_status":{"desired_replicas":2,"replicas":2,"ready_replicas":2,"available_replicas":2,"up_to_date_replicas":2,"versions":[{"version":"v1.36.8","replicas":2}]},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"},"id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
 {"event":"cluster.deleted","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo","uid":"d16c56df-c370-4cb2-b70f-f04c243e9670","id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
 {"event":"node.created","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Provisioning","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95"},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
+{"event":"node.updated","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Provisioned","vm_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95"},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
 {"event":"node.ready","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"Ready","vm_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
 {"event":"node.not_ready","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","node":{"name":"demo-worker-abc","role":"worker","status":"NotReady","vm_id":"6b4967fc-cab4-4d90-a581-a09c8894c3da","is_reconciliation_paused":false,"$cluster":"0e04c4ca-a211-5ad7-942c-81be590bbf25","id":"8cb11b09-43c5-55eb-b108-33c662179d95","node_name":"worker-01","ips":["10.30.138.21"]},"id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}
 {"event":"node.deleted","data":{"observed_at":"2026-10-22T10:00:00Z","namespace":"capi-system","name":"demo-worker-abc","uid":"7ddf8a66-b40a-4dd0-9fd3-05c49dd62ab8","cluster_name":"demo","id":"8cb11b09-43c5-55eb-b108-33c662179d95","cluster_id":"0e04c4ca-a211-5ad7-942c-81be590bbf25"}}

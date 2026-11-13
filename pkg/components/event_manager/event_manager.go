@@ -134,15 +134,37 @@ func (m *EventManager) transitions(change strategies.KubernetesResourceChange) [
 	if resource == nil {
 		return nil
 	}
+	var prefix string
+	var events []strategies.KubernetesEvent
 	switch resource.Kind {
 	case strategies.ObservedCluster:
-		return m.clusterTransitions(before, after)
+		prefix, events = "cluster", m.clusterTransitions(before, after)
 	case strategies.ObservedNode:
-		return nodeTransitions(before, after)
+		prefix, events = "node", nodeTransitions(before, after)
 	case strategies.ObservedKubeconfig:
 		return kubeconfigTransitions(before, after)
 	default:
 		return nil
+	}
+	// Every event carries the full snapshot. When no specific transition reports
+	// a public change (VM ID, IPs, phase...), emit "<prefix>.updated" so clients do
+	// not wait for an unrelated later transition to see the latest state.
+	if len(events) == 0 && snapshotChanged(before, after) {
+		events = []strategies.KubernetesEvent{newEvent(prefix+".updated", before, after)}
+	}
+	return events
+}
+
+func snapshotChanged(before, after *strategies.KubernetesResourceObservation) bool {
+	switch {
+	case before == nil || after == nil:
+		return false
+	case before.Cluster != nil && after.Cluster != nil:
+		return !reflect.DeepEqual(*before.Cluster, *after.Cluster)
+	case before.Node != nil && after.Node != nil:
+		return !reflect.DeepEqual(*before.Node, *after.Node)
+	default:
+		return false
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -98,6 +99,9 @@ const (
 	testScalingStartedEvent   = "cluster.scaling.started"
 	testScalingCompletedEvent = "cluster.scaling.completed"
 	testDeletingPhase         = "deleting"
+	testClusterUpdatedEvent   = "cluster.updated"
+	testNodeUpdatedEvent      = "node.updated"
+	testProvisionedPhase      = "Provisioned"
 )
 
 func clusterObservation() *strategies.KubernetesResourceObservation {
@@ -187,6 +191,13 @@ func TestBusinessTransitions(t *testing.T) {
 			},
 			func(r *strategies.KubernetesResourceObservation) { r.Node.Paused = false }, "node.reconciliation.resumed",
 		},
+		{"node vm id", nodeObservation, func(r *strategies.KubernetesResourceObservation) { r.Node.VMID = ptr.To(uuid.Must(uuid.NewV4())) }, testNodeUpdatedEvent},
+		{"node ips", nodeObservation, func(r *strategies.KubernetesResourceObservation) { r.Node.IPs = []string{"10.0.0.1"} }, testNodeUpdatedEvent},
+		{"node phase", nodeObservation, func(r *strategies.KubernetesResourceObservation) { r.Node.Status = testProvisionedPhase }, testNodeUpdatedEvent},
+		{"cluster endpoint", clusterObservation, func(r *strategies.KubernetesResourceObservation) {
+			r.Cluster.ControlPlaneEndpoint = "https://10.0.0.1:6443"
+		}, testClusterUpdatedEvent},
+		{"cluster phase", clusterObservation, func(r *strategies.KubernetesResourceObservation) { r.Cluster.Phase = testProvisionedPhase }, testClusterUpdatedEvent},
 		{"delete node", nodeObservation, func(r *strategies.KubernetesResourceObservation) { r.Deleting = true }, "node.deleting"},
 		{"scaling started", clusterObservation, func(r *strategies.KubernetesResourceObservation) { r.Scaling = ptr.To(true) }, testScalingStartedEvent},
 		{
@@ -246,6 +257,20 @@ func TestBusinessTransitions(t *testing.T) {
 	}
 }
 
+func TestUpdatedOnlyWhenNoSpecificTransition(t *testing.T) {
+	before, after := nodeObservation(), nodeObservation()
+	after.Node.Status = nodeReadyStatus
+	after.Node.IPs = []string{"10.0.0.1"}
+	events := NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after})
+	assert.Equal(t, []string{"node.ready"}, eventTypes(events), "the specific event already carries the new snapshot")
+
+	cluster := clusterObservation()
+	cluster.Cluster.Description = "New description"
+	cluster.Cluster.Phase = testProvisionedPhase
+	events = NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: clusterObservation(), Current: cluster})
+	assert.Equal(t, []string{"cluster.description.changed"}, eventTypes(events))
+}
+
 func activeUpgradeObservation() *strategies.KubernetesResourceObservation {
 	r := clusterObservation()
 	r.Upgrade = &strategies.UpgradeOperation{ID: "upgrade-1", Version: "v1.36.5", Locked: true}
@@ -288,7 +313,8 @@ func TestDoNotInventOperationCompletion(t *testing.T) {
 	assert.Empty(t, NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after}))
 	after.Scaling = ptr.To(false)
 	after.Cluster.WorkersStatus.ReadyReplicas = 1
-	assert.Empty(t, NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after}))
+	events := NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after})
+	assert.Equal(t, []string{testClusterUpdatedEvent}, eventTypes(events), "counters change without completing scaling")
 	before = activeUpgradeObservation()
 	after = clusterObservation()
 	assert.Empty(t, NewEventManager().transitions(strategies.KubernetesResourceChange{Previous: before, Current: after}), "a removed lock is not proof of completion")
@@ -322,7 +348,7 @@ func TestScalingEventsAcrossUnknownConditionsAndLaggingCounters(t *testing.T) {
 	unknown := clusterObservation()
 	unknown.Scaling = nil
 	unknown.Cluster.WorkersStatus.ReadyReplicas = 2
-	assert.Empty(t, manager.transitions(strategies.KubernetesResourceChange{Previous: active, Current: unknown}))
+	assert.Equal(t, []string{testClusterUpdatedEvent}, eventTypes(manager.transitions(strategies.KubernetesResourceChange{Previous: active, Current: unknown})))
 	lagging := clusterObservation()
 	lagging.Cluster.WorkersStatus.ReadyReplicas = 2
 	assert.Empty(t, manager.transitions(strategies.KubernetesResourceChange{Previous: unknown, Current: lagging}))

@@ -546,10 +546,14 @@ operation can still be refused (409) by the cluster's current state.
 | --- | --- | --- | --- | --- |
 | `KubeadmControlPlane` v1beta2 | `kubeadmFlavor` (`kubeadm.go`) | `spec.replicas`; even counts only with external etcd. Workers: the single MachineDeployment | yes | CAPI Cluster |
 | `VatesControlPlane` v1alpha1 (Vates Kube OS, experimental) | `vatesKubeOSFlavor` (`vates_kube_os.go`) | `spec.replicas`, odd counts. Workers: the single MachineDeployment | no | CAPI Cluster |
+| `RKEControlPlane` (Rancher) | `rancherFlavor` (`rancher.go`) | `quantity` of the single matching pool of the `provisioning.cattle.io` Cluster; odd counts for etcd pools; workers are pools without the control plane role | no, done from Rancher | Rancher Cluster |
 | any other kind | `unsupportedFlavor` (`flavor.go`) | refused | no | CAPI Cluster |
 
 Unknown kinds are read-only on purpose: their owner may re-render or reject
-direct changes.
+direct changes, as Rancher does with the MachineDeployments it renders.
+Rancher clusters also get their version, CIDRs, DNS domain and per-role replica
+counts from the Rancher Cluster and the Machine role labels, read through the
+informer cache, because their CAPI Cluster does not carry them.
 
 To support a new kind:
 
@@ -561,8 +565,8 @@ To support a new kind:
    replica counts are allowed) and embed `contractFlavor` (`contract.go`), the
    shared base. Override only what the engine does beyond the contract:
    `vatesKubeOSFlavor` adds nothing, `kubeadmFlavor` adds upgrades. If another
-   controller owns and re-renders the CAPI objects, write the flavor from
-   scratch against that controller's object.
+   controller owns and re-renders the CAPI objects (as Rancher does), write the
+   flavor from scratch against that controller's object, as `rancherFlavor` does.
 3. Declare its capabilities in the registry entry, matching what the flavor
    accepts. Upgrades rely on kubeadm resources and stay limited to
    `kubeadmFlavor` until the upgrade steps move into the flavor.

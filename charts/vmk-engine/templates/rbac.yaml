@@ -29,6 +29,10 @@ rules:
   - apiGroups: ["cluster.x-k8s.io"]
     resources: ["machines"]
     verbs: ["get", "list", "watch", "delete", "patch"]
+  # Rancher-managed clusters: read config, scale pools, delete.
+  - apiGroups: ["provisioning.cattle.io"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "watch", "patch", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get"]

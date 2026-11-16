@@ -92,7 +92,7 @@ type ClusterInfo struct {
 	Tags                        map[string]string
 	Volumes                     []WorkloadVolume
 	// ControlPlaneKind is the kind of the Cluster controlPlaneRef, e.g.
-	// KubeadmControlPlane.
+	// KubeadmControlPlane, or RKEControlPlane for Rancher-managed clusters.
 	ControlPlaneKind string
 	Capabilities     ClusterCapabilities
 }

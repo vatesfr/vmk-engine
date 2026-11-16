@@ -696,6 +696,9 @@ func validateScalingObject(obj client.Object, cluster *capiv1.Cluster) error {
 	for _, owner := range obj.GetOwnerReferences() {
 		if owner.Kind == scalingClusterKind {
 			gv, err := schema.ParseGroupVersion(owner.APIVersion)
+			if err == nil && gv.Group == flavor.RancherClusterGVK.Group {
+				continue // Rancher's provisioning Cluster controls the CAPI objects it renders.
+			}
 			if err != nil || gv.Group != capiv1.GroupVersion.Group || owner.Name != cluster.Name || owner.UID != cluster.UID {
 				return scalingConflict("resource has a different Cluster owner")
 			}

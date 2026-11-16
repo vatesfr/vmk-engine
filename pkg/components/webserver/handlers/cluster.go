@@ -88,14 +88,14 @@ type ClusterInfo struct {
 	CreatedAt                   string            `json:"created_at,omitempty"`
 	ControlPlaneEndpoint        string            `json:"control_plane_endpoint,omitempty"`
 	APIServerPort               int32             `json:"api_server_port,omitempty" description:"API server bind port from CAPI clusterNetwork; defaults to 6443"`
-	PodCIDRBlocks               []string          `json:"pod_cidr_blocks,omitempty" description:"Pod network CIDR blocks from CAPI clusterNetwork"`
-	ServiceCIDRBlocks           []string          `json:"service_cidr_blocks,omitempty" description:"Service network CIDR blocks from CAPI clusterNetwork"`
-	ServiceDomain               string            `json:"service_domain,omitempty" description:"Service DNS domain from CAPI clusterNetwork"`
+	PodCIDRBlocks               []string          `json:"pod_cidr_blocks,omitempty" description:"Pod network CIDR blocks from CAPI clusterNetwork, or from the Rancher cluster configuration"`
+	ServiceCIDRBlocks           []string          `json:"service_cidr_blocks,omitempty" description:"Service network CIDR blocks from CAPI clusterNetwork, or from the Rancher cluster configuration"`
+	ServiceDomain               string            `json:"service_domain,omitempty" description:"Service DNS domain from CAPI clusterNetwork, or from the Rancher cluster configuration"`
 	ControlPlaneStatus          *NodeStatus       `json:"control_plane_status,omitempty"`
 	WorkerStatus                *NodeStatus       `json:"worker_status,omitempty"`
 	Tags                        map[string]string `json:"tags,omitempty"`
 	Volumes                     *[]ClusterVolume  `json:"volumes,omitempty" description:"Workload PersistentVolumes as in /clusters/{id}/volumes; omitted when the workload cluster cannot be read"`
-	ControlPlaneKind            string            `json:"control_plane_kind,omitempty" description:"Kind of the cluster control plane, e.g. KubeadmControlPlane"`
+	ControlPlaneKind            string            `json:"control_plane_kind,omitempty" description:"KubeadmControlPlane, or RKEControlPlane for Rancher-managed clusters"`
 	Capabilities                *Capabilities     `json:"capabilities,omitempty" description:"Operations the engine supports for this kind of cluster"`
 }
 

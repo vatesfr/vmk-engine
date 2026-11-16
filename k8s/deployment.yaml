@@ -49,6 +49,10 @@ rules:
       - watch
       - delete
       - patch
+  # Rancher-managed clusters: read config, scale pools, delete.
+  - apiGroups: ["provisioning.cattle.io"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "watch", "patch", "delete"]
   - apiGroups:
       - ""
     resources:

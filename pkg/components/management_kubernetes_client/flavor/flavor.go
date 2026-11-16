@@ -7,8 +7,8 @@
 // in its own file and register it in flavors. When the provider follows the
 // Cluster API control plane contract, embed contractFlavor (contract.go) and
 // override only what the engine does beyond it (vates_kube_os.go adds nothing,
-// kubeadm.go adds upgrades). Otherwise write the flavor from scratch, as when
-// another controller owns and re-renders the CAPI objects.
+// kubeadm.go adds upgrades). Otherwise write the flavor from scratch
+// (rancher.go), as when another controller owns and re-renders the CAPI objects.
 package flavor
 
 import (
@@ -58,6 +58,8 @@ type Host interface {
 	PatchReplicas(ctx context.Context, obj, before client.Object) error
 	ScaleWorkerDeployment(ctx context.Context, cluster *capiv1.Cluster, replicas int32) error
 	DeleteCAPICluster(ctx context.Context, cluster *capiv1.Cluster) error
+	MachineVersion(machine *capiv1.Machine) string
+	MutationWriteError(err error) error
 }
 
 type entry struct {
@@ -75,6 +77,10 @@ var flavors = map[schema.GroupKind]entry{
 	vatesKubeOSContract.gvk.GroupKind(): {
 		capabilities: strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true},
 		build:        func(h Host) Flavor { return vatesKubeOSFlavor{contractFlavor{h, vatesKubeOSContract}} },
+	},
+	{Group: RancherControlPlaneGroup, Kind: RancherControlPlaneKind}: {
+		capabilities: strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true},
+		build:        func(h Host) Flavor { return rancherFlavor{h} },
 	},
 }
 

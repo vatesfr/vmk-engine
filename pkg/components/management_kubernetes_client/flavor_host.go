@@ -41,6 +41,9 @@ func (h flavorHost) DeleteCAPICluster(ctx context.Context, cluster *capiv1.Clust
 	return h.deleteCAPICluster(ctx, cluster)
 }
 
+func (flavorHost) MachineVersion(machine *capiv1.Machine) string { return machineVersion(machine) }
+func (flavorHost) MutationWriteError(err error) error            { return mutationWriteError(err) }
+
 func (c ClusterClient) flavor(cluster *capiv1.Cluster) flavor.Flavor {
 	return flavor.For(flavorHost{c}, cluster)
 }

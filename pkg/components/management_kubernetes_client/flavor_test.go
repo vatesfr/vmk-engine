@@ -53,7 +53,7 @@ func TestUnsupportedFlavor(t *testing.T) {
 	k8s := newFakeClient(t, cluster, md, cp)
 	service := NewClusterClient(k8s, clientAsCache{k8s}, testNamespace)
 
-	// Its owner may re-render the MachineDeployment.
+	// Its owner may re-render the MachineDeployment, as Rancher does.
 	require.ErrorIs(t, service.SetWorkerReplicas(t.Context(), testClusterUUID, 3), strategies.ErrClusterScalingConflict)
 	require.NoError(t, k8s.Get(t.Context(), client.ObjectKeyFromObject(md), md))
 	assert.Equal(t, int32(1), *md.Spec.Replicas)
@@ -73,6 +73,7 @@ func TestFlavorCapabilities(t *testing.T) {
 	}{
 		"kubeadm":        {cpGroup, controlPlaneKind, strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true, Upgrade: true}},
 		"vates kube os":  {cpGroup, flavor.VatesControlPlaneKind, strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true}},
+		"rancher":        {flavor.RancherControlPlaneGroup, flavor.RancherControlPlaneKind, strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true}},
 		"unknown kind":   {"example.com", unknownControlPlaneKind, strategies.ClusterCapabilities{}},
 		"same kind name": {"example.com", controlPlaneKind, strategies.ClusterCapabilities{}},
 	}

@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/vatesfr/vmk-engine/pkg/components/management_kubernetes_client/flavor"
 	uuids "github.com/vatesfr/vmk-engine/pkg/helpers/uuids"
 	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
@@ -94,7 +95,7 @@ func (c ClusterClient) List(ctx context.Context) ([]strategies.ClusterInfo, erro
 
 	result := make([]strategies.ClusterInfo, 0, len(clusters.Items))
 	for i := range clusters.Items {
-		result = append(result, toInfo(&clusters.Items[i]))
+		result = append(result, c.clusterInfo(ctx, &clusters.Items[i]))
 	}
 	return result, nil
 }
@@ -112,7 +113,7 @@ func (c ClusterClient) Get(ctx context.Context, name string) (strategies.Cluster
 		return strategies.ClusterInfo{}, err
 	}
 
-	return toInfo(clusterResource), nil
+	return c.clusterInfo(ctx, clusterResource), nil
 }
 
 func (c ClusterClient) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.ClusterInfo, error) {
@@ -120,7 +121,7 @@ func (c ClusterClient) GetByUUID(ctx context.Context, id uuid.UUID) (strategies.
 	if err != nil {
 		return strategies.ClusterInfo{}, err
 	}
-	return toInfo(cluster), nil
+	return c.clusterInfo(ctx, cluster), nil
 }
 
 // getClusterFromCacheByUUID reads the cache to return a Cluster using its UUID
@@ -173,6 +174,12 @@ func (c ClusterClient) deleteCluster(ctx context.Context, id uuid.UUID) error {
 	if err := ensureNoUpgrade(cluster); err != nil {
 		return err
 	}
+	return c.flavor(cluster).Delete(ctx, cluster)
+}
+
+// deleteCAPICluster deletes the CAPI Cluster, which owns every other resource
+// of the clusters the engine creates.
+func (c ClusterClient) deleteCAPICluster(ctx context.Context, cluster *capiv1.Cluster) error {
 	if err := c.kubernetesClient.Delete(ctx, cluster, client.Preconditions{UID: &cluster.UID, ResourceVersion: &cluster.ResourceVersion}); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("%w: %w", strategies.ErrClusterNotFound, err)
@@ -290,6 +297,8 @@ func toInfo(value *capiv1.Cluster) strategies.ClusterInfo {
 		ServiceDomain:               value.Spec.ClusterNetwork.ServiceDomain,
 		Version:                     value.Spec.Topology.Version,
 		Tags:                        optionalClusterTags(value.Labels),
+		ControlPlaneKind:            value.Spec.ControlPlaneRef.Kind,
+		Capabilities:                flavor.Capabilities(value),
 	}
 	if info.APIServerPort == 0 {
 		info.APIServerPort = 6443
@@ -742,6 +751,11 @@ func (c ClusterClient) setWorkerReplicas(ctx context.Context, id uuid.UUID, repl
 	if err != nil {
 		return err
 	}
+	return c.flavor(cluster).SetWorkerReplicas(ctx, cluster, replicas)
+}
+
+// scaleWorkerDeployment resizes the cluster's single worker MachineDeployment.
+func (c ClusterClient) scaleWorkerDeployment(ctx context.Context, cluster *capiv1.Cluster, replicas int32) error {
 	deployments := &capiv1.MachineDeploymentList{}
 	if err := c.kubernetesClient.List(ctx, deployments, client.InNamespace(c.namespace),
 		client.MatchingLabels{capiv1.ClusterNameLabel: cluster.Name}); err != nil {
@@ -789,40 +803,7 @@ func (c ClusterClient) setControlPlaneReplicas(ctx context.Context, id uuid.UUID
 	if err != nil {
 		return err
 	}
-	ref := cluster.Spec.ControlPlaneRef
-	if ref.Name == "" || ref.APIGroup != cpGroup || ref.Kind != controlPlaneKind {
-		return scalingConflict("a KubeadmControlPlane reference is required")
-	}
-	controlPlane := &unstructured.Unstructured{}
-	controlPlane.SetGroupVersionKind(schema.GroupVersionKind{Group: cpGroup, Version: "v1beta2", Kind: controlPlaneKind})
-	if err := c.kubernetesClient.Get(ctx, client.ObjectKey{Namespace: c.namespace, Name: ref.Name}, controlPlane); err != nil {
-		if apierrors.IsNotFound(err) {
-			return scalingConflict("referenced KubeadmControlPlane is missing")
-		}
-		return fmt.Errorf("get control plane: %w", err)
-	}
-	if err := validateScalingObject(controlPlane, cluster); err != nil {
-		return err
-	}
-	_, externalEtcd, err := unstructured.NestedMap(controlPlane.Object, "spec", "kubeadmConfigSpec", "clusterConfiguration", "etcd", "external")
-	if err != nil {
-		return fmt.Errorf("read control plane etcd configuration: %w", err)
-	}
-	if !externalEtcd && replicas%2 == 0 {
-		return strategies.ErrInvalidControlPlaneReplicas
-	}
-	current, found, err := unstructured.NestedInt64(controlPlane.Object, "spec", "replicas")
-	if err != nil {
-		return fmt.Errorf("read control plane replicas: %w", err)
-	}
-	if found && current == int64(replicas) {
-		return nil
-	}
-	before := controlPlane.DeepCopy()
-	if err := unstructured.SetNestedField(controlPlane.Object, int64(replicas), "spec", "replicas"); err != nil {
-		return err
-	}
-	return c.patchReplicas(ctx, controlPlane, before)
+	return c.flavor(cluster).SetControlPlaneReplicas(ctx, cluster, replicas)
 }
 
 func (c ClusterClient) patchReplicas(ctx context.Context, obj, before client.Object) error {

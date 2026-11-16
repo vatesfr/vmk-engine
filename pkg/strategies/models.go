@@ -91,6 +91,19 @@ type ClusterInfo struct {
 	WorkersStatus               NodeTypeStatus
 	Tags                        map[string]string
 	Volumes                     []WorkloadVolume
+	// ControlPlaneKind is the kind of the Cluster controlPlaneRef, e.g.
+	// KubeadmControlPlane.
+	ControlPlaneKind string
+	Capabilities     ClusterCapabilities
+}
+
+// ClusterCapabilities lists the operations the engine supports for a cluster,
+// which depend on how its control plane is managed. A supported operation can
+// still be refused by the cluster's current state.
+type ClusterCapabilities struct {
+	ScaleControlPlane bool
+	ScaleWorkers      bool
+	Upgrade           bool
 }
 
 type NodeTypeStatus struct {

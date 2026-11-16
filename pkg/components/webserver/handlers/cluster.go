@@ -95,6 +95,14 @@ type ClusterInfo struct {
 	WorkerStatus                *NodeStatus       `json:"worker_status,omitempty"`
 	Tags                        map[string]string `json:"tags,omitempty"`
 	Volumes                     *[]ClusterVolume  `json:"volumes,omitempty" description:"Workload PersistentVolumes as in /clusters/{id}/volumes; omitted when the workload cluster cannot be read"`
+	ControlPlaneKind            string            `json:"control_plane_kind,omitempty" description:"Kind of the cluster control plane, e.g. KubeadmControlPlane"`
+	Capabilities                *Capabilities     `json:"capabilities,omitempty" description:"Operations the engine supports for this kind of cluster"`
+}
+
+type Capabilities struct {
+	ScaleControlPlane bool `json:"scale_control_plane"`
+	ScaleWorkers      bool `json:"scale_workers"`
+	Upgrade           bool `json:"upgrade"`
 }
 
 type NodeStatus struct {
@@ -271,6 +279,8 @@ func toClusterInfo(value strategies.ClusterInfo) ClusterInfo {
 		WorkerStatus:                NewFromNodeStatus(value.WorkersStatus),
 		Tags:                        value.Tags,
 		Volumes:                     volumes,
+		ControlPlaneKind:            value.ControlPlaneKind,
+		Capabilities:                (*Capabilities)(&value.Capabilities),
 	}
 }
 

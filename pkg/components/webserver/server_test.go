@@ -151,9 +151,11 @@ func TestHTTPRoutes(t *testing.T) {
 				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned",
                 "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
 				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
 		},
@@ -180,9 +182,11 @@ func TestHTTPRoutes(t *testing.T) {
 				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":true,"name":"cluster-1","phase":"Provisioned",
                 "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}},
 				{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-2","phase":"Provisioning",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}
 			]`,
 		},
@@ -222,6 +226,7 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":true,"is_reconciliation_paused":false,"name":"cluster-1","is_available":true,
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+				"capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
 		"get cluster": {
@@ -236,6 +241,7 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedJSON: `{"id":"` + clusterUUID.String() + `","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned",
                 "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
 		"get cluster with invalid UUID": {
@@ -275,6 +281,7 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1",
 				"control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":1,
 					"versions":[{"version":"v1.36.0","replicas":1},{"version":"v1.35.0","replicas":2}]},
+				"capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
 				"worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":4,
 					"versions":[{"version":"v1.36.0","replicas":4}]}}`,
 		},
@@ -375,6 +382,7 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","phase":"Provisioned",
                 "control_plane_endpoint":"10.0.0.10",
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
 		"create cluster with tags": {
@@ -389,6 +397,7 @@ func TestHTTPRoutes(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedJSON: `{"id":"00000000-0000-0000-0000-000000000000","is_upgrading":false,"is_reconciliation_paused":false,"is_available":false,"name":"cluster-1","tags":{"environment":"production"},
                 "control_plane_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0},
+                "capabilities":{"scale_control_plane":false,"scale_workers":false,"upgrade":false},
                 "worker_status":{"available_replicas":0,"desired_replicas":0,"ready_replicas":0,"replicas":0,"up_to_date_replicas":0}}`,
 		},
 		"create cluster service error": {
@@ -1164,6 +1173,7 @@ func TestClusterCreatorHTTP(t *testing.T) {
 				response := map[string]any{
 					"id": clusterUUID.String(), "name": clusterName, "is_upgrading": false, "is_reconciliation_paused": false, "is_available": false,
 					"control_plane_status": map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
+					"capabilities":         map[string]bool{"scale_control_plane": false, "scale_workers": false, "upgrade": false},
 					"worker_status":        map[string]int{"available_replicas": 0, "desired_replicas": 0, "ready_replicas": 0, "replicas": 0, "up_to_date_replicas": 0},
 				}
 				if creatorID != "" {

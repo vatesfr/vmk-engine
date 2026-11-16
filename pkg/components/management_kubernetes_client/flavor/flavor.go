@@ -6,7 +6,8 @@
 // To support a new control plane kind, add a flavor type named after the kind
 // in its own file and register it in flavors. When the provider follows the
 // Cluster API control plane contract, embed contractFlavor (contract.go) and
-// override only what the engine does beyond it (kubeadm.go adds upgrades). Otherwise write the flavor from scratch, as when
+// override only what the engine does beyond it (vates_kube_os.go adds nothing,
+// kubeadm.go adds upgrades). Otherwise write the flavor from scratch, as when
 // another controller owns and re-renders the CAPI objects.
 package flavor
 
@@ -70,6 +71,10 @@ var flavors = map[schema.GroupKind]entry{
 	kubeadmContract.gvk.GroupKind(): {
 		capabilities: strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true, Upgrade: true},
 		build:        func(h Host) Flavor { return kubeadmFlavor{contractFlavor{h, kubeadmContract}} },
+	},
+	vatesKubeOSContract.gvk.GroupKind(): {
+		capabilities: strategies.ClusterCapabilities{ScaleControlPlane: true, ScaleWorkers: true},
+		build:        func(h Host) Flavor { return vatesKubeOSFlavor{contractFlavor{h, vatesKubeOSContract}} },
 	},
 }
 

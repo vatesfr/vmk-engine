@@ -511,7 +511,7 @@ clusters, unsupported control-plane providers, missing/ambiguous targets, and wo
 autoscaler annotations yield 409. Invalid counts yield 422; an absent Cluster yields
 404. Infrastructure errors retain their technical causes internally and yield 500.
 The namespace-scoped RBAC grants get/list/patch on MachineDeployments and get/patch
-on each supported control plane kind (KubeadmControlPlane), in
+on each supported control plane kind (KubeadmControlPlane, VatesControlPlane), in
 addition to their existing create permission.
 
 ## Cluster kinds
@@ -545,6 +545,7 @@ operation can still be refused (409) by the cluster's current state.
 | Control plane | Flavor | Resize | Upgrade | Delete |
 | --- | --- | --- | --- | --- |
 | `KubeadmControlPlane` v1beta2 | `kubeadmFlavor` (`kubeadm.go`) | `spec.replicas`; even counts only with external etcd. Workers: the single MachineDeployment | yes | CAPI Cluster |
+| `VatesControlPlane` v1alpha1 (Vates Kube OS, experimental) | `vatesKubeOSFlavor` (`vates_kube_os.go`) | `spec.replicas`, odd counts. Workers: the single MachineDeployment | no | CAPI Cluster |
 | any other kind | `unsupportedFlavor` (`flavor.go`) | refused | no | CAPI Cluster |
 
 Unknown kinds are read-only on purpose: their owner may re-render or reject
@@ -559,7 +560,7 @@ To support a new kind:
    declare its `controlPlaneContract` (GroupVersionKind, and whether even
    replica counts are allowed) and embed `contractFlavor` (`contract.go`), the
    shared base. Override only what the engine does beyond the contract:
-   `kubeadmFlavor` adds upgrades. If another
+   `vatesKubeOSFlavor` adds nothing, `kubeadmFlavor` adds upgrades. If another
    controller owns and re-renders the CAPI objects, write the flavor from
    scratch against that controller's object.
 3. Declare its capabilities in the registry entry, matching what the flavor

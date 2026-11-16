@@ -21,6 +21,10 @@ rules:
   - apiGroups: ["controlplane.cluster.x-k8s.io"]
     resources: ["kubeadmcontrolplanes"]
     verbs: ["create", "get", "patch"]
+  # Vates Kube OS clusters (experimental): scale the control plane.
+  - apiGroups: ["controlplane.cluster.x-k8s.io"]
+    resources: ["vatescontrolplanes"]
+    verbs: ["get", "patch"]
   - apiGroups: ["bootstrap.cluster.x-k8s.io"]
     resources: ["kubeadmconfigtemplates"]
     verbs: ["create", "get"]

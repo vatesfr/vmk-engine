@@ -181,7 +181,7 @@ func (c ClusterClient) GetUpgradeControlPlane(ctx context.Context, snapshot stra
 	if err != nil {
 		return strategies.UpgradeResourceState{}, err
 	}
-	cp, err := c.upgradeControlPlaneResource(ctx, cluster)
+	cp, err := c.flavor(cluster).UpgradeControlPlane(ctx, cluster)
 	if err != nil {
 		return strategies.UpgradeResourceState{}, err
 	}
@@ -259,21 +259,6 @@ func (c ClusterClient) ListActiveUpgrades(ctx context.Context) ([]string, error)
 	return names, nil
 }
 
-func (c ClusterClient) upgradeControlPlaneResource(ctx context.Context, cluster *capiv1.Cluster) (*unstructured.Unstructured, error) {
-	ref := cluster.Spec.ControlPlaneRef
-	if ref.APIGroup != cpGroup || ref.Kind != controlPlaneKind || ref.Name == "" {
-		return nil, upgradeConflict("KubeadmControlPlane reference required")
-	}
-	cp := resource(cpGroup, controlPlaneKind, ref.Name, c.namespace, nil)
-	if err := c.kubernetesClient.Get(ctx, client.ObjectKeyFromObject(cp), cp); err != nil {
-		return nil, err
-	}
-	if err := validateUpgradeMembership(cp, cluster); err != nil {
-		return nil, err
-	}
-	return cp, nil
-}
-
 func configHash(config map[string]any) string {
 	raw, _ := json.Marshal(config) // Kubernetes JSON maps contain only JSON values.
 	sum := sha256.Sum256(raw)
@@ -320,7 +305,7 @@ func (c ClusterClient) BuildControlPlaneUpgradeTarget(ctx context.Context, snaps
 	if err != nil {
 		return strategies.UpgradeTarget{}, err
 	}
-	cp, err := c.upgradeControlPlaneResource(ctx, cluster)
+	cp, err := c.flavor(cluster).UpgradeControlPlane(ctx, cluster)
 	if err != nil {
 		return strategies.UpgradeTarget{}, err
 	}
@@ -447,7 +432,7 @@ func (c ClusterClient) ApplyControlPlaneUpgrade(ctx context.Context, snapshot st
 	if err != nil {
 		return err
 	}
-	cp, err := c.upgradeControlPlaneResource(ctx, cluster)
+	cp, err := c.flavor(cluster).UpgradeControlPlane(ctx, cluster)
 	if err != nil {
 		return err
 	}
@@ -500,7 +485,7 @@ func (c ClusterClient) IsControlPlaneUpgradeReady(ctx context.Context, snapshot 
 	if err != nil {
 		return false, err
 	}
-	cp, err := c.upgradeControlPlaneResource(ctx, cluster)
+	cp, err := c.flavor(cluster).UpgradeControlPlane(ctx, cluster)
 	if err != nil {
 		return false, err
 	}

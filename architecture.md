@@ -495,9 +495,10 @@ Cluster status can lag behind the accepted desired count.
 Handlers validate a required `*int32`, ClusterManager validates the application
 parameters, and ClusterClient resolves and patches a single target. Workers use
 the cluster label plus `spec.clusterName` and require exactly one MachineDeployment.
-Control planes use `spec.controlPlaneRef` and require KubeadmControlPlane v1beta2.
-Existing Cluster owner references must match the current Cluster UID. The existing
-unstructured control-plane representation avoids adding another API dependency.
+Control planes use `spec.controlPlaneRef`; how each kind is resized is described
+in [Cluster kinds](#cluster-kinds). Existing Cluster owner references must match
+the current Cluster UID. The existing unstructured control-plane representation
+avoids adding another API dependency.
 
 Only `spec.replicas` changes, using an optimistic merge patch with resourceVersion.
 Same-value requests skip the write. Concurrent target changes yield 409; there are
@@ -510,7 +511,68 @@ clusters, unsupported control-plane providers, missing/ambiguous targets, and wo
 autoscaler annotations yield 409. Invalid counts yield 422; an absent Cluster yields
 404. Infrastructure errors retain their technical causes internally and yield 500.
 The namespace-scoped RBAC grants get/list/patch on MachineDeployments and get/patch
-on KubeadmControlPlanes in addition to their existing create permission.
+on each supported control plane kind (KubeadmControlPlane, VatesControlPlane), in
+addition to their existing create permission.
+
+## Cluster kinds
+
+The engine creates kubeadm clusters only, but lists and operates any CAPI
+Cluster in its namespace. What differs between clusters is how their control
+plane is managed, so `ClusterClient` selects a **flavor** from
+`spec.controlPlaneRef` (API group and kind). Flavors live in the
+`management_kubernetes_client/flavor` package, one file per kind. Everything
+else (Cluster, Machines, tags, pause, mutation and upgrade locks, node
+operations) is plain Cluster API and shared by every kind.
+
+The package is internal to the management component, not a Strategy: the
+flavor is chosen per cluster on every call, while the configurator injects
+Strategies once at startup. It does not import the management client; it
+declares what it needs as `flavor.Host` (Kubernetes access, shared scaling,
+delete and validation helpers), which `ClusterClient` provides through the
+`flavorHost` adapter in `flavor_host.go` without widening its exported API.
+
+A flavor (`flavor.Flavor`) implements the kind-dependent operations: the
+cluster data the CAPI Cluster does not carry, control plane resize, worker
+resize, delete, and the control plane object an upgrade patches. A flavor
+refuses what its kind does not support itself, with the usual scaling or
+upgrade conflict (409); callers never test the kind. Each registry entry also
+declares static
+`ClusterCapabilities` (`scale_control_plane`, `scale_workers`, `upgrade`),
+returned in every cluster response and event along with `control_plane_kind`,
+so clients can hide unsupported actions without knowing the kinds. A supported
+operation can still be refused (409) by the cluster's current state.
+
+| Control plane | Flavor | Resize | Upgrade | Delete |
+| --- | --- | --- | --- | --- |
+| `KubeadmControlPlane` v1beta2 | `kubeadmFlavor` (`kubeadm.go`) | `spec.replicas`; even counts only with external etcd. Workers: the single MachineDeployment | yes | CAPI Cluster |
+| `VatesControlPlane` v1alpha1 (Vates Kube OS, experimental) | `vatesKubeOSFlavor` (`vates_kube_os.go`) | `spec.replicas`, odd counts. Workers: the single MachineDeployment | no | CAPI Cluster |
+| `RKEControlPlane` (Rancher) | `rancherFlavor` (`rancher.go`) | `quantity` of the single matching pool of the `provisioning.cattle.io` Cluster; odd counts for etcd pools; workers are pools without the control plane role | no, done from Rancher | Rancher Cluster |
+| any other kind | `unsupportedFlavor` (`flavor.go`) | refused | no | CAPI Cluster |
+
+Unknown kinds are read-only on purpose: their owner may re-render or reject
+direct changes, as Rancher does with the MachineDeployments it renders.
+Rancher clusters also get their version, CIDRs, DNS domain and per-role replica
+counts from the Rancher Cluster and the Machine role labels, read through the
+informer cache, because their CAPI Cluster does not carry them.
+
+To support a new kind:
+
+1. Add a flavor type named after the kind, in its own file of the `flavor`
+   package, and register it in `flavors` (`flavor/flavor.go`).
+2. If the provider follows the Cluster API control plane contract
+   (`spec.replicas` on the referenced object, workers as MachineDeployments),
+   declare its `controlPlaneContract` (GroupVersionKind, and whether even
+   replica counts are allowed) and embed `contractFlavor` (`contract.go`), the
+   shared base. Override only what the engine does beyond the contract:
+   `vatesKubeOSFlavor` adds nothing, `kubeadmFlavor` adds upgrades. If another
+   controller owns and re-renders the CAPI objects (as Rancher does), write the
+   flavor from scratch against that controller's object, as `rancherFlavor` does.
+3. Declare its capabilities in the registry entry, matching what the flavor
+   accepts. Upgrades rely on kubeadm resources and stay limited to
+   `kubeadmFlavor` until the upgrade steps move into the flavor.
+4. Grant the namespace-scoped RBAC the flavor needs in
+   `charts/vmk-engine/templates/rbac.yaml` and `k8s/deployment.yaml`.
+5. Add tests built from the provider's real objects.
 
 ## Pause and resume CAPI reconciliation
 

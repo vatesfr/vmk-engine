@@ -244,7 +244,7 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			}
 			p, _, scheme := newClusterCreationTestSetup(t)
 			p.Defaults = defaults
-			p.Version = "v1.36.2"
+			p.Version = testVersion
 			kube := fake.NewClientBuilder().WithScheme(scheme).Build()
 			_, err = NewClusterClient(kube, clientAsCache{kube}, testCreationNamespace).Create(t.Context(), p)
 			require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, commands, target.count)
 				script := strings.Join(commands, "\n")
-				require.Contains(t, script, `FULL="v1.36.2"`)
+				require.Contains(t, script, `FULL="`+testVersion+`"`)
 				require.Contains(t, script, "systemctl enable --now containerd")
 				require.Contains(t, script, "systemctl enable --now kubelet")
 				require.NotContains(t, script, "{{KUBERNETES_VERSION}}")

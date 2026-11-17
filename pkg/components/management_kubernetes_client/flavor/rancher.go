@@ -108,9 +108,7 @@ func rancherCIDRs(value any, fallback string) []string {
 }
 
 func (c rancherFlavor) machinesStatus(machines []capiv1.Machine, desired int) strategies.NodeTypeStatus {
-	status := strategies.NodeTypeStatus{DesiredReplicas: desired, Replicas: len(machines)}
-	versions := map[string]int{}
-	var order []string
+	status := strategies.NodeTypeStatus{DesiredReplicas: desired, Replicas: len(machines), Versions: machineVersions(c.Host, machines)}
 	for i := range machines {
 		conditions := machines[i].Status.Conditions
 		if apimeta.IsStatusConditionTrue(conditions, capiv1.MachineAvailableCondition) {
@@ -122,14 +120,6 @@ func (c rancherFlavor) machinesStatus(machines []capiv1.Machine, desired int) st
 		if apimeta.IsStatusConditionTrue(conditions, capiv1.MachineUpToDateCondition) {
 			status.UpToDateReplicas++
 		}
-		version := c.MachineVersion(&machines[i])
-		if versions[version] == 0 {
-			order = append(order, version)
-		}
-		versions[version]++
-	}
-	for _, version := range order {
-		status.Versions = append(status.Versions, strategies.VersionNodeStatus{Replicas: versions[version], Version: version})
 	}
 	return status
 }

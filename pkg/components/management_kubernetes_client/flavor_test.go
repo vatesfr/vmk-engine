@@ -11,7 +11,9 @@ import (
 	"github.com/vatesfr/vmk-engine/pkg/components/management_kubernetes_client/flavor"
 	"github.com/vatesfr/vmk-engine/pkg/strategies"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -23,7 +25,7 @@ func vatesKubeOSObjects() (*capiv1.Cluster, *capiv1.MachineDeployment, *unstruct
 	cluster, md, cp := scalingObjects()
 	cluster.Spec.ControlPlaneRef.Kind = flavor.VatesControlPlaneKind
 	cp.SetGroupVersionKind(flavor.VatesControlPlaneGVK)
-	cp.Object[specKey] = map[string]any{replicasKey: int64(1), versionKey: "v1.36.2"}
+	cp.Object[specKey] = map[string]any{replicasKey: int64(1), versionKey: testVersion}
 	return cluster, md, cp
 }
 
@@ -45,6 +47,29 @@ func TestContractFlavorVatesKubeOS(t *testing.T) {
 
 	_, err = service.flavor(cluster).UpgradeControlPlane(t.Context(), cluster)
 	require.ErrorIs(t, err, strategies.ErrClusterUpgradeConflict)
+}
+
+func TestVatesKubeOSClusterInfo(t *testing.T) {
+	cluster, md, cp := vatesKubeOSObjects()
+	machine := func(name, version string, controlPlane bool) *capiv1.Machine {
+		m := &capiv1.Machine{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: testNamespace,
+			Labels: map[string]string{capiv1.ClusterNameLabel: cluster.Name},
+		}}
+		if controlPlane {
+			m.Labels[capiv1.MachineControlPlaneLabel] = ""
+		}
+		m.Spec.ClusterName = cluster.Name
+		m.Status.NodeInfo = &corev1.NodeSystemInfo{KubeletVersion: version}
+		return m
+	}
+	k8s := newFakeClient(t, cluster, md, cp,
+		machine("cp-a", testVersion, true), machine("cp-b", testVersion, true), machine("worker", "v1.35.0", false))
+
+	info, err := NewClusterClient(k8s, clientAsCache{k8s}, testNamespace).GetByUUID(t.Context(), testClusterUUID)
+	require.NoError(t, err)
+	assert.Equal(t, testVersion, info.Version)
+	assert.Equal(t, []strategies.VersionNodeStatus{{Replicas: 2, Version: testVersion}}, info.ControlPlanesStatus.Versions)
 }
 
 func TestUnsupportedFlavor(t *testing.T) {

@@ -144,3 +144,21 @@ func unsupportedKindConflict(cluster *capiv1.Cluster) error {
 func unsupportedUpgradeConflict(cluster *capiv1.Cluster) error {
 	return upgradeConflict(fmt.Sprintf("control plane kind %q cannot be upgraded by the engine", groupKind(cluster)))
 }
+
+// machineVersions counts machines per version, in first-seen order.
+func machineVersions(h Host, machines []capiv1.Machine) []strategies.VersionNodeStatus {
+	counts := map[string]int{}
+	var order []string
+	for i := range machines {
+		version := h.MachineVersion(&machines[i])
+		if counts[version] == 0 {
+			order = append(order, version)
+		}
+		counts[version]++
+	}
+	var result []strategies.VersionNodeStatus
+	for _, version := range order {
+		result = append(result, strategies.VersionNodeStatus{Replicas: counts[version], Version: version})
+	}
+	return result
+}

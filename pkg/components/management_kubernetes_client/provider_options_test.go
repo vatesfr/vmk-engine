@@ -55,7 +55,6 @@ networkConfig:
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKeyFromObject(machine), machine))
 	stored, _, err := unstructured.NestedMap(machine.Object, specKey, templateKey, specKey)
 	require.NoError(t, err)
-	delete(stored, namePrefixKey)
 	require.Equal(t, defaults.ControlPlaneMachineSpec, stored)
 
 	cluster := &capiv1.Cluster{}

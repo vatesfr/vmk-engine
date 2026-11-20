@@ -42,7 +42,6 @@ const (
 	templateKey                        = "template"
 	metadataKey                        = "metadata"
 	nameKey                            = "name"
-	namePrefixKey                      = "namePrefix"
 	kubeadmConfigSpecKey               = "kubeadmConfigSpec"
 	clusterConfigurationKey            = "clusterConfiguration"
 	apiServerKey                       = "apiServer"
@@ -497,12 +496,6 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 			return strategies.ClusterInfo{}, err
 		}
 	}
-	prefix := p.VMNamePrefix
-	if prefix == "" {
-		prefix = p.Name
-	}
-	cpMachine[namePrefixKey] = prefix + "-cp"
-	workerMachine[namePrefixKey] = prefix + "-worker"
 	cpSpec["version"] = p.Version
 	cpSpec["replicas"] = int64(*p.ControlPlaneReplicas)
 	if err := unstructured.SetNestedMap(cpSpec, reference(xoGroup, xoMachineTemplateKind, cpName), "machineTemplate", specKey, "infrastructureRef"); err != nil {
@@ -546,6 +539,12 @@ func (c ClusterClient) createResources(ctx context.Context, p strategies.CreateC
 		endpointKey:     map[string]any{"host": p.ControlPlaneIP, "port": int64(d.EndpointPort), "subnet": int64(d.EndpointSubnet)},
 		"injectSSHKeys": false,
 		"addons":        map[string]any{cniKey: d.CNI, "ccm": true, "csi": true},
+		// VM name = prefix + Machine ID, e.g. "<vm_name_prefix><cluster>-cp-k65jm":
+		// the names the removed namePrefix gave.
+		"vmNaming": map[string]any{
+			"controlPlanePrefix": p.VMNamePrefix + p.Name + "-cp-",
+			"workerPrefix":       p.VMNamePrefix + p.Name + "-worker-",
+		},
 	}
 	if len(d.XOTags) > 0 {
 		if err := unstructured.SetNestedStringSlice(xoSpec, d.XOTags, "tags"); err != nil {

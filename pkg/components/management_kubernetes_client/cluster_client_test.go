@@ -60,7 +60,6 @@ const (
 	testVersion              = "v1.36.1"
 	testPodCIDR              = "172.31.0.0/16"
 	testControlPlane         = "demo-cp"
-	testOriginalPrefix       = "original"
 	testServiceCIDR          = "192.168.0.0/16"
 	testDomain               = "cluster.local"
 	testWorkerName           = "md-0"
@@ -893,11 +892,13 @@ func TestClusterResourceCreation(t *testing.T) {
 	require.Contains(t, sans, p.ControlPlaneIP)
 	commands, _, _ := unstructured.NestedStringSlice(cp.Object, specKey, kubeadmConfigSpecKey, commandsKey)
 	require.Equal(t, []string{"echo preserved"}, commands)
+	naming, _, err := unstructured.NestedStringMap(xo.Object, specKey, "vmNaming")
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"controlPlanePrefix": "customdemo-cp-", "workerPrefix": "customdemo-worker-"}, naming)
 	vm := get(xoGroup, xoMachineTemplateKind, testControlPlane)
-	prefix, _, _ := unstructured.NestedString(vm.Object, specKey, templateKey, specKey, namePrefixKey)
-	require.Equal(t, "custom-cp", prefix)
+	_, found, _ = unstructured.NestedString(vm.Object, specKey, templateKey, specKey)
+	require.False(t, found)
 	require.Equal(t, testCluster, vm.GetOwnerReferences()[0].Name)
-	require.Equal(t, testOriginalPrefix, p.Defaults.ControlPlaneMachineSpec[namePrefixKey])
 	md := &capiv1.MachineDeployment{}
 	require.NoError(t, kube.Get(t.Context(), client.ObjectKey{Name: "demo-md-0", Namespace: testCreationNamespace}, md))
 	require.Equal(t, int32(2), *md.Spec.Replicas)
@@ -1012,7 +1013,7 @@ func TestClusterCreateAPIError(t *testing.T) {
 
 func getValidXOMachineSpec() map[string]any {
 	return map[string]any{
-		"templateID": "image", "poolID": "pool", namePrefixKey: testOriginalPrefix,
+		"templateID": "image", "poolID": "pool",
 		"networkConfig": map[string]any{"networks": []any{map[string]any{"networkID": "network"}}},
 	}
 }

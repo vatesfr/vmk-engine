@@ -165,7 +165,6 @@ func TestProviderConfiguration(t *testing.T) {
 			stored, _, err := unstructured.NestedMap(machine.Object, specKey, templateKey, specKey)
 			require.NoError(t, err)
 			expected := runtime.DeepCopyJSON(defaults.ControlPlaneMachineSpec)
-			expected[namePrefixKey] = p.VMNamePrefix + "-cp"
 			require.Equal(t, expected, stored)
 		})
 	}

@@ -24,7 +24,7 @@ type ClusterCreateParams struct {
 	ControlPlaneReplicas int32  `json:"control_plane_replicas" validate:"required,min=1"`
 	WorkerReplicas       int32  `json:"worker_replicas" validate:"required,min=1"`
 	ControlPlaneIP       string `json:"control_plane_ip" validate:"required,ip"`
-	VMNamePrefix         string `json:"vm_name_prefix" validate:"required"`
+	VMNamePrefix         string `json:"vm_name_prefix" validate:"required" description:"VM names: <prefix><name>-cp-<id> or <prefix><name>-worker-<id>; id is the Machine suffix" example:"dev-"`
 	// Kubernetes limits label names and values to 63 characters:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
 	Tags map[string]string `json:"tags,omitempty"`

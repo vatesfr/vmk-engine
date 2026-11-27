@@ -807,7 +807,8 @@ from every node before Cilium starts. Cilium is installed using `ApplyOnce`;
 upgrading the provider does not upgrade Cilium on existing clusters.
 
 For IPAM, add the following to `controlPlaneMachineSpec` and/or
-`workerMachineSpec`, preserving their other fields:
+`workerMachineSpec` in the `xo-infrastructure` ConfigMap (see below),
+preserving their other fields:
 
 ```yaml
 networkConfig:
@@ -838,8 +839,39 @@ and worker bootstrap templates required by CAPI. It does not create or read a
 KubeadmControlPlaneTemplate. Each YAML block contains configuration fields only,
 without `apiVersion`, `kind`, `metadata` or a surrounding `spec`.
 
-The chart defaults contain placeholders for XO VM image, pool and network
-identifiers. Replace them before deployment. Both machine specs use kubeadm with
+#### XO infrastructure ConfigMap
+
+The XO VM template, pool and network identifiers are customer-specific, so they
+are not part of the chart values. They live in the `xo-infrastructure`
+ConfigMap, in the same namespace as `cluster-defaults`. Helm never renders,
+upgrades or deletes it, so `helm upgrade` can replace every chart value without
+losing them. Create it once, before installing or upgrading the chart:
+
+```bash
+cat > cp.yaml <<'EOF'
+templateID: <your-xo-template-uuid>
+poolID: <your-xo-pool-uuid>
+networkConfig:
+  networks:
+    - networkID: <your-xo-network-uuid>
+EOF
+cp cp.yaml worker.yaml
+kubectl --namespace <namespace> create configmap xo-infrastructure \
+  --from-file=controlPlaneMachineSpec=cp.yaml \
+  --from-file=workerMachineSpec=worker.yaml
+```
+
+Both keys are required YAML objects. On each creation they are deep-merged over
+`controlPlaneMachineSpec` and `workerMachineSpec` from `cluster-defaults`: maps
+merge key by key, while lists and scalars replace the chart value (an overlay
+`networkConfig.networks` replaces the whole list). Any machine spec field can be
+overridden this way, for example `resourceSet.memory`. Cluster creation fails
+with an error naming the ConfigMap when it is missing or invalid.
+
+Existing installs that kept these identifiers in the chart values must create
+this ConfigMap with their current values before upgrading to a chart without them.
+
+Both machine specs use kubeadm with
 `bootstrap.format: cloudinit`; `controlPlaneLoadBalancer: kube-vip` enables
 kube-vip injection on control-plane nodes. The deprecated `bootstrap.cloudInit`
 and `bootstrap.kubeVIP` flags are no longer used. The image, pool and network

@@ -56,6 +56,8 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 	type testConfigMapParams struct {
 		data            map[string]string
 		missing         bool
+		infra           map[string]string
+		infraMissing    bool
 		getErr          error
 		updatedData     map[string]string
 		want            strategies.ClusterCreationDefaults
@@ -67,13 +69,18 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 	updated := want
 	updated.WorkerName = "updated-workers"
 	testCases := map[string]testConfigMapParams{
-		"legacy version key is ignored": {data: validConfigMapData(map[string]string{"kubernetesVersion": "invalid"}), want: want},
-		"valid configuration":           {data: validConfigMapData(nil), want: want},
-		"empty load balancer":           {data: validConfigMapData(map[string]string{loadBalancerKey: ""}), want: withoutLoadBalancer},
-		"missing ConfigMap":             {missing: true, wantErrContains: "get cluster defaults ConfigMap"},
-		"empty ConfigMap":               {wantErrContains: workerNameKey},
-		"partial ConfigMap":             {data: map[string]string{workerNameKey: "custom"}, wantErrContains: podCIDRKey},
-		"Kubernetes read error":         {getErr: readErr, wantErr: readErr, wantErrContains: "get cluster defaults ConfigMap"},
+		"legacy version key is ignored":       {data: validConfigMapData(map[string]string{"kubernetesVersion": "invalid"}), want: want},
+		"valid configuration":                 {data: validConfigMapData(nil), want: want},
+		"empty load balancer":                 {data: validConfigMapData(map[string]string{loadBalancerKey: ""}), want: withoutLoadBalancer},
+		"missing ConfigMap":                   {missing: true, wantErrContains: "get cluster defaults ConfigMap"},
+		"empty ConfigMap":                     {wantErrContains: workerNameKey},
+		"partial ConfigMap":                   {data: map[string]string{workerNameKey: "custom"}, wantErrContains: podCIDRKey},
+		"missing XO infrastructure ConfigMap": {data: validConfigMapData(nil), infraMissing: true, wantErrContains: XOInfrastructureConfigMapName},
+		"empty XO infrastructure overlay": {
+			data: validConfigMapData(nil), infra: map[string]string{controlPlaneMachineSpecKey: testInfraYAML},
+			wantErrContains: workerMachineSpecKey,
+		},
+		"Kubernetes read error": {getErr: readErr, wantErr: readErr, wantErrContains: "get cluster defaults ConfigMap"},
 		"reloads defaults on every call": {
 			data: validConfigMapData(nil), want: want,
 			updatedData: validConfigMapData(map[string]string{workerNameKey: updated.WorkerName}),
@@ -107,6 +114,15 @@ func TestConfigMapClientGetClusterCreationDefaults(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(scheme)
 			if !tc.missing {
 				builder = builder.WithObjects(cm)
+			}
+			if !tc.infraMissing {
+				infra := tc.infra
+				if infra == nil {
+					infra = map[string]string{controlPlaneMachineSpecKey: testInfraYAML, workerMachineSpecKey: testInfraYAML}
+				}
+				builder = builder.WithObjects(&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Name: XOInfrastructureConfigMapName, Namespace: testCreationNamespace}, Data: infra,
+				})
 			}
 			if tc.getErr != nil {
 				builder = builder.WithInterceptorFuncs(interceptor.Funcs{Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
@@ -180,6 +196,52 @@ networkConfig:
     - networkID: network
 `
 
+const testInfraYAML = `templateID: image
+`
+
+func TestApplyXOInfrastructure(t *testing.T) {
+	base, err := parseClusterDefaults(validConfigMapData(nil))
+	require.NoError(t, err)
+	overlay := `poolID: customer-pool
+resourceSet:
+  memory: 16Gi
+networkConfig:
+  networks:
+    - networkID: net-a
+    - networkID: net-b
+`
+	got, err := applyXOInfrastructure(base, map[string]string{controlPlaneMachineSpecKey: overlay, workerMachineSpecKey: testInfraYAML})
+	require.NoError(t, err)
+	// Maps merge (resourceSet keeps cpus), lists and scalars replace.
+	want, err := parseConfigurationObject(`templateID: image
+poolID: customer-pool
+resourceSet:
+  cpus: 4
+  memory: 16Gi
+networkConfig:
+  networks:
+    - networkID: net-a
+    - networkID: net-b
+`)
+	require.NoError(t, err)
+	require.Equal(t, want, got.ControlPlaneMachineSpec)
+	require.Equal(t, "pool", got.WorkerMachineSpec["poolID"])
+
+	for name, data := range map[string]map[string]string{
+		"missing worker":    {controlPlaneMachineSpecKey: testInfraYAML},
+		"invalid YAML":      {controlPlaneMachineSpecKey: testInfraYAML, workerMachineSpecKey: "poolID: ["},
+		"not an object":     {controlPlaneMachineSpecKey: testInfraYAML, workerMachineSpecKey: "[]"},
+		"resource manifest": {controlPlaneMachineSpecKey: testInfraYAML, workerMachineSpecKey: "apiVersion: example/v1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			base, err := parseClusterDefaults(validConfigMapData(nil))
+			require.NoError(t, err)
+			_, err = applyXOInfrastructure(base, data)
+			require.ErrorContains(t, err, workerMachineSpecKey)
+		})
+	}
+}
+
 const testBootstrapYAML = `joinConfiguration:
   nodeRegistration:
     kubeletExtraArgs:
@@ -211,11 +273,12 @@ func TestPackagedClusterConfiguration(t *testing.T) {
 			for _, document := range strings.Split(string(raw), "\n---\n") {
 				var config struct {
 					Kind            string            `json:"kind"`
+					Metadata        metav1.ObjectMeta `json:"metadata"`
 					Data            map[string]string `json:"data"`
 					ClusterDefaults map[string]string `json:"clusterDefaults"`
 				}
 				require.NoError(t, yaml.Unmarshal([]byte(document), &config))
-				if config.Kind == "ConfigMap" {
+				if config.Kind == "ConfigMap" && config.Metadata.Name == ClusterDefaultsConfigMapName {
 					data = config.Data
 				}
 				if config.ClusterDefaults != nil {

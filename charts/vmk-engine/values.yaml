@@ -107,9 +107,10 @@ clusterDefaults:
   # in controlPlaneKubeadmConfig.initConfiguration.skipPhases (addon/kube-proxy).
   cilium: |
     kubeProxyReplacement: false
+  # XO templateID, poolID and networks are customer-specific: set them in the
+  # xo-infrastructure ConfigMap (not managed by this chart), whose
+  # overlays are deep-merged over these machine specs.
   controlPlaneMachineSpec: |
-    templateID: <your-xo-template-uuid>
-    poolID: <your-xo-pool-uuid>
     bootstrapProvider: kubeadm
     bootstrap:
       format: cloudinit
@@ -117,12 +118,7 @@ clusterDefaults:
       cpus: 4
       memory: 8Gi
       diskSize: 30Gi
-    networkConfig:
-      networks:
-        - networkID: <your-xo-network-uuid>
   workerMachineSpec: |
-    templateID: <your-xo-template-uuid>
-    poolID: <your-xo-pool-uuid>
     bootstrapProvider: kubeadm
     bootstrap:
       format: cloudinit
@@ -130,9 +126,6 @@ clusterDefaults:
       cpus: 4
       memory: 8Gi
       diskSize: 30Gi
-    networkConfig:
-      networks:
-        - networkID: <your-xo-network-uuid>
   controlPlaneKubeadmConfig: |
     clusterConfiguration:
       apiServer:

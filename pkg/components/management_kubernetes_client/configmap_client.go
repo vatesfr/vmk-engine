@@ -18,6 +18,9 @@ import (
 
 const ClusterDefaultsConfigMapName = "cluster-defaults"
 
+// XOInfrastructureConfigMapName holds customer XO machine spec overlays; Helm never renders it.
+const XOInfrastructureConfigMapName = "xo-infrastructure"
+
 type ConfigMapClient struct {
 	kubernetesClient client.Client
 	namespace        string
@@ -36,8 +39,69 @@ func (c ConfigMapClient) GetClusterCreationDefaults(ctx context.Context) (strate
 	}, configMap); err != nil {
 		return strategies.ClusterCreationDefaults{}, fmt.Errorf("get cluster defaults ConfigMap: %w", err)
 	}
+	defaults, err := parseClusterDefaults(configMap.Data)
+	if err != nil {
+		return defaults, err
+	}
 
-	return parseClusterDefaults(configMap.Data)
+	infrastructure := &corev1.ConfigMap{}
+	if err := c.kubernetesClient.Get(ctx, client.ObjectKey{
+		Namespace: c.namespace, Name: XOInfrastructureConfigMapName,
+	}, infrastructure); err != nil {
+		return strategies.ClusterCreationDefaults{}, fmt.Errorf("get XO infrastructure ConfigMap %q (requires %s and %s): %w",
+			XOInfrastructureConfigMapName, controlPlaneMachineSpecKey, workerMachineSpecKey, err)
+	}
+	return applyXOInfrastructure(defaults, infrastructure.Data)
+}
+
+// applyXOInfrastructure deep-merges the customer overlays over the chart machine specs.
+func applyXOInfrastructure(d strategies.ClusterCreationDefaults, data map[string]string) (strategies.ClusterCreationDefaults, error) {
+	for _, field := range []struct {
+		key    string
+		target *map[string]any
+	}{
+		{controlPlaneMachineSpecKey, &d.ControlPlaneMachineSpec},
+		{workerMachineSpecKey, &d.WorkerMachineSpec},
+	} {
+		if strings.TrimSpace(data[field.key]) == "" {
+			return d, fmt.Errorf("ConfigMap %q is missing required key %q", XOInfrastructureConfigMapName, field.key)
+		}
+		overlay, err := parseConfigurationObject(data[field.key])
+		if err != nil {
+			return d, fmt.Errorf("ConfigMap %q: invalid %s: %w", XOInfrastructureConfigMapName, field.key, err)
+		}
+		*field.target = mergeOverlay(*field.target, overlay)
+	}
+	return d, validateConfigurationObjects(d)
+}
+
+// mergeOverlay merges maps recursively; overlay lists and scalars replace the base value.
+func mergeOverlay(base, overlay map[string]any) map[string]any {
+	if base == nil {
+		base = map[string]any{}
+	}
+	for key, value := range overlay {
+		if o, ok := value.(map[string]any); ok {
+			if b, ok := base[key].(map[string]any); ok {
+				base[key] = mergeOverlay(b, o)
+				continue
+			}
+		}
+		base[key] = value
+	}
+	return base
+}
+
+func parseConfigurationObject(raw string) (map[string]any, error) {
+	jsonRaw, err := yaml.YAMLToJSONStrict([]byte(raw))
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]any
+	if err := json.Unmarshal(jsonRaw, &object); err != nil {
+		return nil, fmt.Errorf("expected an object: %w", err)
+	}
+	return object, nil
 }
 
 func missingConfigMapKeyError(key string) error {
@@ -109,13 +173,11 @@ func parseClusterDefaults(data map[string]string) (strategies.ClusterCreationDef
 		if strings.TrimSpace(data[field.key]) == "" {
 			return result, missingConfigMapKeyError(field.key)
 		}
-		raw, err := yaml.YAMLToJSONStrict([]byte(data[field.key]))
+		object, err := parseConfigurationObject(data[field.key])
 		if err != nil {
 			return result, fmt.Errorf("invalid %s: %w", field.key, err)
 		}
-		if err := json.Unmarshal(raw, field.target); err != nil {
-			return result, fmt.Errorf("invalid %s: expected an object: %w", field.key, err)
-		}
+		*field.target = object
 	}
 	for _, field := range []struct {
 		key    string

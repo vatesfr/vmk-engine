@@ -168,9 +168,10 @@ data:
   # in controlPlaneKubeadmConfig.initConfiguration.skipPhases (addon/kube-proxy).
   cilium: |
     kubeProxyReplacement: false
+  # XO templateID, poolID and networks are customer-specific: set them in the
+  # xo-infrastructure ConfigMap (not managed by this chart), whose
+  # overlays are deep-merged over these machine specs.
   controlPlaneMachineSpec: |
-    templateID: 1fc7c1a2-f3c5-5689-a96a-aa8d5097c54c
-    poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
       format: cloudinit
@@ -178,12 +179,7 @@ data:
       cpus: 4
       memory: 8Gi
       diskSize: 30Gi
-    networkConfig:
-      networks:
-        - networkID: <your-xo-network-uuid>
   workerMachineSpec: |
-    templateID: 1fc7c1a2-f3c5-5689-a96a-aa8d5097c54c
-    poolID: 6e0c5f16-923f-2971-a07d-ad1486f67309
     bootstrapProvider: kubeadm
     bootstrap:
       format: cloudinit
@@ -191,9 +187,6 @@ data:
       cpus: 4
       memory: 8Gi
       diskSize: 30Gi
-    networkConfig:
-      networks:
-        - networkID: <your-xo-network-uuid>
   controlPlaneKubeadmConfig: |
     clusterConfiguration:
       apiServer:
@@ -297,3 +290,24 @@ data:
     - systemctl enable --now containerd
     - systemctl enable --now kubelet
     - arping -I eth0 -c 3 {{CONTROL_PLANE_IP}} 2>/dev/null || true
+---
+# Customer XO infrastructure, merged over the cluster-defaults machine specs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xo-infrastructure
+  labels:
+    app.kubernetes.io/name: vmk-engine
+data:
+  controlPlaneMachineSpec: |
+    templateID: <your-xo-template-uuid>
+    poolID: <your-xo-pool-uuid>
+    networkConfig:
+      networks:
+        - networkID: <your-xo-network-uuid>
+  workerMachineSpec: |
+    templateID: <your-xo-template-uuid>
+    poolID: <your-xo-pool-uuid>
+    networkConfig:
+      networks:
+        - networkID: <your-xo-network-uuid>

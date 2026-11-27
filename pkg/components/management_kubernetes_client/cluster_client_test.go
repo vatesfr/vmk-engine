@@ -1019,10 +1019,10 @@ func getValidXOMachineSpec() map[string]any {
 
 func TestRenderBootstrapCommands(t *testing.T) {
 	config := map[string]any{commandsKey: []any{`FULL="{{KUBERNETES_VERSION}}"; echo "$FULL $(hostname) ${IP}"; arping {{CONTROL_PLANE_IP}}`}}
-	require.NoError(t, renderBootstrapCommands(config, "v1.36.2", "10.0.0.8"))
-	require.Equal(t, []any{`FULL="v1.36.2"; echo "$FULL $(hostname) ${IP}"; arping 10.0.0.8`}, config[commandsKey])
-	require.NoError(t, renderBootstrapCommands(map[string]any{}, "v1.36.2", "10.0.0.8"))
-	require.Error(t, renderBootstrapCommands(map[string]any{commandsKey: []any{int64(1)}}, "v1.36.2", "10.0.0.8"))
+	require.NoError(t, renderBootstrapCommands(config, testVersion, "10.0.0.8"))
+	require.Equal(t, []any{`FULL="` + testVersion + `"; echo "$FULL $(hostname) ${IP}"; arping 10.0.0.8`}, config[commandsKey])
+	require.NoError(t, renderBootstrapCommands(map[string]any{}, testVersion, "10.0.0.8"))
+	require.Error(t, renderBootstrapCommands(map[string]any{commandsKey: []any{int64(1)}}, testVersion, "10.0.0.8"))
 }
 
 func scalingObjects() (*capiv1.Cluster, *capiv1.MachineDeployment, *unstructured.Unstructured) {

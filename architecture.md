@@ -406,7 +406,9 @@ without changing the component.
 Cluster creation defaults are provided by the
 `ForGettingClusterCreationDefaults` Strategy. The `management_kubernetes_client.ConfigMapClient`
 implements this contract and reads `cluster-defaults` in the configured namespace
-on every call. The ConfigMap and the keys documented in the README are required;
+on every call, then deep-merges the customer machine spec overlays from
+`xo-infrastructure` (not managed by Helm) over its machine specs.
+The ConfigMap and the keys documented in the README are required;
 missing keys or decoding errors are propagated instead of being replaced by values built
 into the binary. The configurator injects this client into `ClusterManager`,
 keeping Kubernetes types out of the manager and shared contracts.
@@ -449,7 +451,8 @@ cluster integration coverage remains necessary to verify provider behavior.
 ### Cluster creation
 
 `ClusterClient` builds cluster resources directly from the request and the
-`cluster-defaults` ConfigMap. `ClusterManager` passes network, VM and kubeadm
+`cluster-defaults` ConfigMap, merged with the `xo-infrastructure` overlays.
+`ClusterManager` passes network, VM and kubeadm
 configuration through `ForGettingClusterCreationDefaults`. No template resources
 are read from Kubernetes. The VM/bootstrap YAML blocks are decoded and checked for the expected object shape
 before creation, then copied into per-cluster resources owned by the Cluster.

@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/vatesfr/vmk-engine/pkg/components/cluster_manager"
 	"github.com/vatesfr/vmk-engine/pkg/components/cluster_upgrader"
@@ -29,6 +32,8 @@ import (
 const kubeClientKubeconfig = "kubeconfig"
 
 func main() {
+	// Route controller-runtime logs (e.g. API warnings) through slog instead of its stack-trace fallback.
+	ctrllog.SetLogger(logr.FromSlogHandler(slog.Default().Handler()))
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

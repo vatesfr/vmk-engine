@@ -10,7 +10,7 @@ require (
 	github.com/samber/lo v1.53.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
-	github.com/vatesfr/xenorchestra-go-sdk v1.22.0
+	github.com/vatesfr/xenorchestra-go-sdk v1.22.1
 	github.com/vatesfr/xenorchestra-k8s-common v0.4.0
 	go.uber.org/mock v0.6.0
 	k8s.io/api v0.37.2
@@ -18,7 +18,7 @@ require (
 	k8s.io/client-go v0.37.2
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 	sigs.k8s.io/cluster-api/api v1.14.4
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 	sigs.k8s.io/yaml v1.6.0
 )
 

@@ -156,8 +156,8 @@ github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
 github.com/thejerf/slogassert v0.3.4 h1:VoTsXixRbXMrRSSxDjYTiEDCM4VWbsYPW5rB/hX24kM=
 github.com/thejerf/slogassert v0.3.4/go.mod h1:0zn9ISLVKo1aPMTqcGfG1o6dWwt+Rk574GlUxHD4rs8=
-github.com/vatesfr/xenorchestra-go-sdk v1.22.0 h1:isWAFyoYEdPBYkr++ixNz8hUCBlpJEzMMUU1mA19d4w=
-github.com/vatesfr/xenorchestra-go-sdk v1.22.0/go.mod h1:pOG7n9YM9sxJc4EyE/uPf8JbMi/mEHkVLkQAzhL0jbM=
+github.com/vatesfr/xenorchestra-go-sdk v1.22.1 h1:Oh2Z4hgstkhD9Iw5ik8uFnObIaaglJglWUjL8uaAtJA=
+github.com/vatesfr/xenorchestra-go-sdk v1.22.1/go.mod h1:pOG7n9YM9sxJc4EyE/uPf8JbMi/mEHkVLkQAzhL0jbM=
 github.com/vatesfr/xenorchestra-k8s-common v0.4.0 h1:CdAlU39daS88panIRiFXBwHUwNwHzQ1Vz/iBOzn0fjs=
 github.com/vatesfr/xenorchestra-k8s-common v0.4.0/go.mod h1:LyFnZpWjcM8//1aPn/iJj856qo9JE7joMH1404rcLdc=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
@@ -226,8 +226,8 @@ k8s.io/utils v0.0.0-20260626114624-be93311217bd h1:Ea7fgQ5we8Y9T0OX5o0dAHzQOBRI0
 k8s.io/utils v0.0.0-20260626114624-be93311217bd/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
 sigs.k8s.io/cluster-api/api v1.14.4 h1:8TDHZxuQYa5oKJatmZhiDJgoxHlxtjwHJSFxA2RM5Ew=
 sigs.k8s.io/cluster-api/api v1.14.4/go.mod h1:z3AwenIQGB9MUQdUtGppb4vDNgsdTVOFtyRHAGvnnFA=
-sigs.k8s.io/controller-runtime v0.25.2 h1:bEkK3PVOIVK9X8QWLGVhJgmFc++47vfT6wakSzAOLsQ=
-sigs.k8s.io/controller-runtime v0.25.2/go.mod h1:4QqLdT6z/L6Olj8JJCtvztid4/fnIiYsfaTFScegctc=
+sigs.k8s.io/controller-runtime v0.25.3 h1:b4OcZSY/aKHY8JG+rBlQmQ1xLs574+ZBEjv1dtfLd80=
+sigs.k8s.io/controller-runtime v0.25.3/go.mod h1:4QqLdT6z/L6Olj8JJCtvztid4/fnIiYsfaTFScegctc=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730/go.mod h1:mdzfpAEoE6DHQEN0uh9ZbOCuHbLK5wOm7dK4ctXE9Tg=
 sigs.k8s.io/randfill v1.0.0 h1:JfjMILfT8A6RbawdsK2JXGBR5AQVfd+9TbzrlneTyrU=

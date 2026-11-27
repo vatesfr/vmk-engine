@@ -5,6 +5,7 @@ go 1.26.10
 require (
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-fuego/fuego v0.21.0
+	github.com/go-logr/logr v1.4.4
 	github.com/go-playground/validator/v10 v10.30.6
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/samber/lo v1.53.0
@@ -31,7 +32,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
-	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v1.0.1 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect
 	github.com/go-openapi/swag v0.27.1 // indirect

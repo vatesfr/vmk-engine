@@ -17,12 +17,14 @@ const (
 	SwaggerUISwagger   = "swagger"
 	SwaggerUIStoplight = "stoplight"
 	SwaggerUIDisabled  = "disabled"
+	apiKeyAuthScheme   = "apiKeyAuth"
 )
 
 type HttpServer struct {
 	Address   string
 	Port      uint16
 	SwaggerUI string
+	APIKey    *middlewares.APIKey
 }
 
 func IsSwaggerUI(value string) bool {
@@ -63,6 +65,13 @@ func (httpServer HttpServer) newServer(
 	server := fuego.NewServer(
 		fuego.WithAddr(net.JoinHostPort(httpServer.Address, strconv.Itoa(int(httpServer.Port)))),
 		fuego.WithoutAutoGroupTags(),
+		fuego.WithSecurity(openapi3.SecuritySchemes{
+			apiKeyAuthScheme: &openapi3.SecuritySchemeRef{Value: openapi3.NewSecurityScheme().
+				WithType("apiKey").
+				WithIn(openapi3.ParameterInHeader).
+				WithName(middlewares.APIKeyHeader).
+				WithDescription("API key sent in the `" + middlewares.APIKeyHeader + "` header.")},
+		}),
 		fuego.WithEngineOptions(
 			fuego.WithOpenAPIConfig(openAPIConfig),
 		),
@@ -88,11 +97,13 @@ func (httpServer HttpServer) newServer(
 	)
 
 	apiRouter := fuego.Group(server, "/kubernetes",
-		fuego.OptionTags("Clusters"),
+		fuego.OptionTags("Clusters"), apiKeyAuthOption(), unauthorizedResponse(),
 	)
-	fuego.Use(apiRouter, middlewares.AuthRequired())
-	eventsRouter := fuego.Group(unwrappedServer, "/kubernetes", fuego.OptionTags("Clusters"))
-	fuego.Use(eventsRouter, middlewares.AuthRequired())
+	fuego.Use(apiRouter, middlewares.AuthRequired(httpServer.APIKey))
+	eventsRouter := fuego.Group(unwrappedServer, "/kubernetes",
+		fuego.OptionTags("Clusters"), apiKeyAuthOption(), unauthorizedResponse(),
+	)
+	fuego.Use(eventsRouter, middlewares.AuthRequired(httpServer.APIKey))
 
 	clusterRouter := fuego.Group(
 		apiRouter,
@@ -211,6 +222,18 @@ func (httpServer HttpServer) newServer(
 	fuego.Get(apiRouter, "/versions-available", versionsHandler.GetAvailableVersion)
 
 	return server
+}
+
+func apiKeyAuthOption() fuego.RouteOption {
+	return fuego.OptionSecurity(openapi3.SecurityRequirement{apiKeyAuthScheme: []string{}})
+}
+
+func unauthorizedResponse() fuego.RouteOption {
+	return func(r *fuego.BaseRoute) {
+		r.Operation.AddResponse(http.StatusUnauthorized, openapi3.NewResponse().
+			WithDescription("Missing or invalid API key").
+			WithContent(openapi3.NewContentWithSchema(openapi3.NewStringSchema(), []string{"text/plain"})))
+	}
 }
 
 func validationResponse() fuego.RouteOption {

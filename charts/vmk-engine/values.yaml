@@ -40,6 +40,13 @@ config:
   port: 8080
   swaggerUI: stoplight
 
+# API key required by the /kubernetes routes in the API-Key header.
+# The Secret must exist in the release namespace. Leave existingSecret empty to
+# serve the routes without authentication.
+apiKey:
+  existingSecret: ""
+  secretKey: api-key
+
 service:
   type: ClusterIP
   port: 80

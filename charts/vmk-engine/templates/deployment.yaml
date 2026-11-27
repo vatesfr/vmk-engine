@@ -44,6 +44,14 @@ spec:
             - --address={{ .Values.config.address }}
             - --port={{ .Values.config.port }}
             - --swagger-ui={{ .Values.config.swaggerUI }}
+          {{- with .Values.apiKey.existingSecret }}
+          env:
+            - name: VMK_ENGINE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.apiKey.secretKey }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.config.port }}

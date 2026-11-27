@@ -9,8 +9,9 @@ also provides an OpenAPI specification and a Swagger UI or Stoplight Elements
 interface.
 
 > [!WARNING]
-> This project is currently a prototype. The authentication middleware allows
-> every request. Cluster creation requires a configured `cluster-defaults` ConfigMap. Do not expose the service
+> This project is currently a prototype. The `/kubernetes` routes are protected by
+> a single shared API key when `VMK_ENGINE_API_KEY` is set, and open otherwise; serve them over TLS (for example behind an Ingress)
+> because the key is sent with every request. Cluster creation requires a configured `cluster-defaults` ConfigMap. Do not expose the service
 > publicly as-is.
 
 ## Features
@@ -156,6 +157,7 @@ make pre-commit
 
 ```bash
 go mod download
+export VMK_ENGINE_API_KEY="$(openssl rand -hex 32)"
 go run ./cmd/http_server \
   --kube-client=kubeconfig \
   --kubeconfig="$HOME/.kube/config" \
@@ -170,6 +172,7 @@ Check that the service is running:
 ```bash
 curl http://127.0.0.1:8080/ping
 # {"message":"pong"}
+curl -H "API-Key: $VMK_ENGINE_API_KEY" http://127.0.0.1:8080/kubernetes/clusters
 ```
 
 The OpenAPI interface is available under `/swagger/`, and the JSON
@@ -191,7 +194,17 @@ authority mounted in the pod.
 
 ## Server configuration
 
-All options are exposed as Cobra flags:
+The API key comes from the `VMK_ENGINE_API_KEY` environment variable. It is
+read once at startup, so the server must be restarted to change the key. When
+the variable is missing or empty, the server logs a warning and serves the
+`/kubernetes` routes without authentication. Clients send it in the `API-Key`
+header on every `/kubernetes` route, including the SSE stream. `/ping` and the
+OpenAPI interface under `/swagger/` stay public; the specification declares the
+`apiKeyAuth` scheme, so the OpenAPI interface offers
+an "Authorize" button. Requests without the right key receive
+`401 Unauthorized`.
+
+All other options are exposed as Cobra flags:
 
 | Flag | Default | Description |
 | --- | --- | --- |
@@ -378,6 +391,11 @@ read Node states and volumes concurrently for each cluster.
 ## HTTP API
 
 Base URL: `http://localhost:8080`.
+
+Every `/kubernetes` route requires the API key (see
+[Server configuration](#server-configuration)). For brevity, the `curl`
+examples in this document omit it: add
+`-H "API-Key: $VMK_ENGINE_API_KEY"` to each command.
 
 | Method | Route | Description | Current status |
 | --- | --- | --- | --- |
@@ -1107,8 +1125,7 @@ there is no cross-resource rollback. The Cluster and target state checks are
 reads, not a transaction across resources: another actor can change the Cluster
 or add a worker group between validation and the target patch.
 
-The routes use the existing HTTP middleware; `AuthRequired` currently forwards
-requests without enforcing authentication. RBAC permissions must be upgraded
+The routes use the existing API key middleware. RBAC permissions must be upgraded
 along with the service (see Required RBAC permissions below).
 
 Every cluster and node response includes a stable `id` field: a **UUID v5**
@@ -1179,12 +1196,17 @@ unprivileged user `10001`.
 
 ## Helm installation
 
-Install the service in the namespace containing the Cluster API resources:
+Create the API key Secret, then install the service in the
+namespace containing the Cluster API resources:
 
 ```bash
+kubectl --namespace capi-system create secret generic vmk-engine-api-key \
+  --from-literal=api-key="$(openssl rand -hex 32)"
+
 helm upgrade --install vmk-engine ./charts/vmk-engine \
   --namespace capi-system \
   --create-namespace \
+  --set apiKey.existingSecret=vmk-engine-api-key \
   --set image.repository=registry.example.com/vmk-engine \
   --set image.tag=0.1.0
 ```
@@ -1197,6 +1219,7 @@ helm upgrade --install vmk-engine ./charts/vmk-engine \
   --namespace services \
   --create-namespace \
   --set config.namespace=capi-system \
+  --set apiKey.existingSecret=vmk-engine-api-key \
   --set image.repository=registry.example.com/vmk-engine \
   --set image.tag=0.1.0
 ```
@@ -1217,6 +1240,8 @@ By default, the chart creates a `Role` in the target namespace and a
 | `config.address` | `0.0.0.0` | Listen address |
 | `config.port` | `8080` | Container port |
 | `config.swaggerUI` | `stoplight` | OpenAPI interface |
+| `apiKey.existingSecret` | empty (no authentication) | Secret holding the API key |
+| `apiKey.secretKey` | `api-key` | Key of the API key in that Secret |
 | `service.type` | `ClusterIP` | Service type |
 | `service.port` | `80` | Service port |
 | `rbac.create` | `true` | Create the Role and RoleBinding |
@@ -1346,7 +1371,7 @@ Dockerfile                       multi-stage image build
 
 ## Known limitations and roadmap
 
-- implement proper HTTP authentication and authorization;
+- replace the shared API key with proper authentication and authorization;
 - enrich `/nodes` Machine data with information from Kubernetes Node resources;
 - add server-side defaults and policy for cluster creation;
 - extend the existing HTTP error mapping for additional Kubernetes failure cases;

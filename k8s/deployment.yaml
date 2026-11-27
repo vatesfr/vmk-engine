@@ -94,6 +94,14 @@ spec:
             - --kube-client=in-cluster
             - --address=0.0.0.0
             - --port=8080
+          env:
+            - name: VMK_ENGINE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vmk-engine-api-key
+                  key: api-key
+                  # Without this Secret, the routes are served without authentication.
+                  optional: true
           ports:
             - name: http
               containerPort: 8080

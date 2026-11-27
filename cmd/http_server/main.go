@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/vatesfr/vmk-engine/pkg/components/management_kubernetes_client"
 	versionmanager "github.com/vatesfr/vmk-engine/pkg/components/version_manager"
 	"github.com/vatesfr/vmk-engine/pkg/components/webserver"
+	"github.com/vatesfr/vmk-engine/pkg/components/webserver/middlewares"
 	"github.com/vatesfr/vmk-engine/pkg/components/workload_kubernetes_client"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +28,10 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-const kubeClientKubeconfig = "kubeconfig"
+const (
+	kubeClientKubeconfig = "kubeconfig"
+	apiKeyEnvVar         = "VMK_ENGINE_API_KEY" //nolint:gosec // environment variable name, not a credential
+)
 
 func main() {
 	if err := newRootCommand().Execute(); err != nil {
@@ -103,6 +108,11 @@ func (o options) validate() error {
 }
 
 func run(opts options) error {
+	apiKey, err := loadAPIKey()
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -159,12 +169,28 @@ func run(opts options) error {
 		Address:   opts.address,
 		Port:      opts.port,
 		SwaggerUI: opts.swaggerUI,
+		APIKey:    apiKey,
 	}
 	if err := httpServer.Run(clusterManager, clusterUpgrader, versionManager, eventManager); err != nil {
 		return fmt.Errorf("run HTTP server: %w", err)
 	}
 
 	return nil
+}
+
+// loadAPIKey reads the API key once at startup. Without it, the /kubernetes
+// routes are served without authentication.
+func loadAPIKey() (*middlewares.APIKey, error) {
+	value := os.Getenv(apiKeyEnvVar)
+	if value == "" {
+		slog.Warn(apiKeyEnvVar + " is not set: /kubernetes routes are served without authentication")
+		return nil, nil
+	}
+	apiKey, err := middlewares.NewAPIKey(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", apiKeyEnvVar, err)
+	}
+	return apiKey, nil
 }
 
 func buildRestConfig(clientType, kubeconfig string) (*rest.Config, *runtime.Scheme, error) {
